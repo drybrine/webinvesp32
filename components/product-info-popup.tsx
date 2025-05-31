@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast"
 import { useFirebaseInventory } from "@/hooks/use-firebase"
 import { formatCurrency } from "@/lib/utils"
 import { Package, Truck, MapPin, AlertTriangle, Plus, Minus, Barcode } from "lucide-react"
+import BarcodeComponent from "react-barcode"
 
 interface ProductInfoPopupProps {
   barcode: string
@@ -327,6 +328,22 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
     return (
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row gap-6">
+          {/* Barcode 1D */}
+          <div className="flex flex-col items-center justify-center">
+            <div className="bg-white p-2 rounded border">
+              <BarcodeComponent
+                value={product.barcode ?? ""}
+                format="CODE128"
+                width={2}
+                height={60}
+                displayValue={true}
+                fontSize={16}
+                background="#fff"
+                lineColor="#000"
+              />
+            </div>
+            </div>
+            <span className="text-xs text-gray-400 mt-1">{product.barcode}</span>
           {/* Product image or icon */}
           <div className="flex items-center justify-center w-full md:w-1/3 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-lg p-6">
             <Package className="h-24 w-24 text-blue-500" />

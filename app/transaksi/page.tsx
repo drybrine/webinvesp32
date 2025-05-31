@@ -19,6 +19,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, DollarSign } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useFirebaseInventory } from "@/hooks/use-firebase"
+import { saveAs } from "file-saver";
 
 interface Transaction {
   id: string
@@ -35,6 +37,9 @@ interface Transaction {
 }
 
 export default function TransaksiPage() {
+  // Ambil data inventaris secara realtime
+  const { items: inventory, loading: inventoryLoading } = useFirebaseInventory()
+
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedType, setSelectedType] = useState("all")
@@ -271,6 +276,54 @@ export default function TransaksiPage() {
     return transactionDate.toDateString() === today.toDateString()
   }).length
 
+  // Gunakan inventory untuk menampilkan stok terbaru pada transaksi
+  // Misal, untuk menampilkan stok setelah transaksi:
+  const getCurrentStock = (barcode: string) => {
+    const item = inventory.find((i) => i.barcode === barcode)
+    return item ? item.quantity : "-"
+  }
+
+  // Tambahkan fungsi untuk mengubah data transaksi ke CSV
+  function exportTransactionsToCSV(transactions: Transaction[]) {
+    if (!transactions.length) return
+
+    const header = [
+      "ID",
+      "Jenis",
+      "Nama Produk",
+      "Barcode",
+      "Jumlah",
+      "Harga Satuan",
+      "Total",
+      "Alasan",
+      "Operator",
+      "Waktu",
+      "Catatan",
+    ]
+    const rows = transactions.map((t) => [
+      t.id,
+      t.type,
+      t.productName,
+      t.productBarcode,
+      t.quantity,
+      t.unitPrice,
+      t.totalAmount,
+      t.reason,
+      t.operator,
+      t.timestamp,
+      t.notes ?? "",
+    ])
+
+    const csvContent =
+      [header, ...rows]
+        .map((row) => row.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(","))
+        .join("\r\n")
+
+    // Membuat file blob dan trigger download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    saveAs(blob, `transaksi-${new Date().toISOString().slice(0, 10)}.csv`)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -357,7 +410,11 @@ export default function TransaksiPage() {
                 </Select>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => exportTransactionsToCSV(filteredTransactions)}
+                >
                   <Download className="h-4 w-4 mr-2" />
                   Export
                 </Button>
@@ -477,6 +534,7 @@ export default function TransaksiPage() {
                   <TableHead>Jumlah</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Operator</TableHead>
+                  <TableHead>Stok Saat Ini</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -507,6 +565,9 @@ export default function TransaksiPage() {
                       </span>
                     </TableCell>
                     <TableCell>{transaction.operator}</TableCell>
+                    <TableCell>
+                      {getCurrentStock(transaction.productBarcode)}
+                    </TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" onClick={() => openViewDialog(transaction)}>
                         <Eye className="h-4 w-4" />
