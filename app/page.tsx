@@ -33,11 +33,13 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react"
+import Barcode from "react-barcode"
 
 import QRCodeGenerator from "@/components/qr-code-generator"
 import { useFirebaseInventory, useFirebaseScans, useFirebaseDevices } from "@/hooks/use-firebase"
 import { toast } from "@/hooks/use-toast"
 import { getFirebaseStatus } from "@/lib/firebase"
+import { ScanHistory } from "@/components/scan-history"
 
 interface InventoryItem {
   id: string
@@ -50,10 +52,10 @@ interface InventoryItem {
   price: number
   supplier: string
   location: string
-  lastUpdated: number
+  lastUpdated?: number
 }
 
-export default function InventoryDashboard() {
+export default function TransaksiPage() {
   const {
     items: inventory,
     loading: inventoryLoading,
@@ -237,9 +239,9 @@ export default function InventoryDashboard() {
   const filteredInventory = inventory.filter((item) => {
     const matchesSearch =
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.barcode.includes(searchTerm) ||
+      (item.barcode ?? "").includes(searchTerm) ||
       item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.supplier.toLowerCase().includes(searchTerm.toLowerCase())
+      (item.supplier ?? "").toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategory === "all" || item.category === selectedCategory
     return matchesSearch && matchesCategory
   })
@@ -573,7 +575,19 @@ export default function InventoryDashboard() {
                           <p className="text-sm text-muted-foreground">{item.description}</p>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
                             <span>
-                              <strong>Barcode:</strong> {item.barcode}
+                              <strong>Barcode:</strong>
+                              <span className="font-mono text-xs">{item.barcode}</span>
+                              <div className="bg-white p-1 rounded border inline-block mt-1">
+                                <Barcode
+                                  value={item.barcode ?? ""}
+                                  format="CODE128"
+                                  width={1.5}
+                                  height={40}
+                                  displayValue={false}
+                                  background="#fff"
+                                  lineColor="#000"
+                                />
+                              </div>
                             </span>
                             <span>
                               <strong>Harga:</strong> Rp {item.price.toLocaleString()}
@@ -591,7 +605,13 @@ export default function InventoryDashboard() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setViewingItem(item)}
+                              onClick={() =>
+                                setViewingItem({
+                                  ...item,
+                                  barcode: item.barcode ?? "",
+                                  supplier: item.supplier ?? "",
+                                })
+                              }
                               title="Lihat Detail"
                             >
                               <Eye className="h-4 w-4" />
@@ -599,7 +619,7 @@ export default function InventoryDashboard() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => generateQRCode(item)}
+                              onClick={() => generateQRCode({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })}
                               title="Generate QR Code"
                             >
                               <QrCode className="h-4 w-4" />
@@ -609,7 +629,7 @@ export default function InventoryDashboard() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setStockAdjustment({ item, type: "add", amount: 1 })}
+                              onClick={() => setStockAdjustment({ item: { ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" }, type: "add", amount: 1 })}
                               title="Tambah Stok"
                             >
                               <Plus className="h-4 w-4" />
@@ -617,14 +637,25 @@ export default function InventoryDashboard() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setStockAdjustment({ item, type: "remove", amount: 1 })}
+                              onClick={() => setStockAdjustment({ item: { ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" }, type: "remove", amount: 1 })}
                               title="Kurangi Stok"
                             >
                               <Minus className="h-4 w-4" />
                             </Button>
                           </div>
                           <div className="flex gap-1">
-                            <Button variant="outline" size="sm" onClick={() => setEditingItem(item)} title="Edit Item">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setEditingItem({
+                                  ...item,
+                                  barcode: item.barcode ?? "",
+                                  supplier: item.supplier ?? "",
+                                })
+                              }
+                              title="Edit Item"
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button
@@ -837,6 +868,13 @@ export default function InventoryDashboard() {
                     Rp {(viewingItem.quantity * viewingItem.price).toLocaleString()}
                   </p>
                 </div>
+                {/* Contoh menampilkan lastUpdated (jika ada) */}
+                {viewingItem.lastUpdated && (
+                  <span>
+                    <strong>Update Terakhir:</strong>{" "}
+                    {new Date(viewingItem.lastUpdated).toLocaleString()}
+                  </span>
+                )}
               </div>
             )}
             <DialogFooter>
@@ -916,6 +954,16 @@ export default function InventoryDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Scan History Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Riwayat Scan Terkait Transaksi</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ScanHistory scans={scans} loading={scansLoading} />
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

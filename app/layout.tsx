@@ -5,13 +5,14 @@ import "./globals.css"
 import Navigation from "@/components/navigation"
 import { Toaster } from "@/components/ui/toaster"
 import { RealtimeScanProvider } from "@/components/realtime-scan-provider"
+import { AdminGuard } from "@/components/AdminGuard"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "StokManager - Sistem Manajemen Inventaris",
   description: "Pemindai barcode real-time dengan integrasi ESP32",
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({
@@ -23,9 +24,11 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <RealtimeScanProvider>
-          <Navigation />
-          <main>{children}</main>
-          <Toaster />
+          <AdminGuard>
+            <Navigation />
+            <main>{children}</main>
+            <Toaster />
+          </AdminGuard>
         </RealtimeScanProvider>
       </body>
     </html>
