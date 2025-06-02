@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card" //
-import { Button } from "@/components/ui/button" //
-import { Input } from "@/components/ui/input" //
-import { Label } from "@/components/ui/label" //
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select" //
+import { useState, useEffect, useMemo } from "react" // Ditambahkan useMemo
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -14,13 +14,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog" //
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table" //
-import { Badge } from "@/components/ui/badge" //
-import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, DollarSign } from "lucide-react" //
-import { useToast } from "@/hooks/use-toast" //
-import { useFirebaseInventory } from "@/hooks/use-firebase" //
-import { saveAs } from "file-saver"; //
+} from "@/components/ui/dialog"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, DollarSign } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase" // Diganti
+import { firebaseHelpers } from "@/lib/firebase" // Ditambahkan
+import { saveAs } from "file-saver";
 
 interface Transaction {
   id: string
@@ -32,15 +33,18 @@ interface Transaction {
   totalAmount: number
   reason: string
   operator: string
-  timestamp: string
+  timestamp: string | number // Bisa string (ISO) atau number (epoch)
   notes?: string
 }
 
 export default function TransaksiPage() {
-  // Ambil data inventaris secara realtime
-  const { items: inventory, loading: inventoryLoading } = useFirebaseInventory() //
+  const { items: inventory, loading: inventoryLoading, updateItem: updateInventoryItem } = useFirebaseInventory()
+  const {
+    transactions,
+    loading: transactionsLoading,
+    error: transactionsError,
+  } = useFirebaseTransactions() // Menggunakan hook baru
 
-  const [transactions, setTransactions] = useState<Transaction[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedType, setSelectedType] = useState("all")
   const [selectedPeriod, setSelectedPeriod] = useState("all")
@@ -56,48 +60,45 @@ export default function TransaksiPage() {
     reason: "",
     notes: "",
   })
-  const { toast } = useToast() //
+  const { toast } = useToast()
 
-  // Data transaksi akan dikelola secara lokal atau dari database di masa mendatang.
-  // Untuk saat ini, kita mulai dengan daftar transaksi kosong.
-  useEffect(() => {
-    // Hapus data mock, biarkan kosong atau implementasikan pengambilan data dari Firebase
-    setTransactions([]);
-    // Jika Anda memiliki fungsi untuk mengambil data transaksi dari Firebase, panggil di sini.
-    // Contoh: fetchTransactionsFromFirebase().then(data => setTransactions(data));
-  }, [])
+  // Hapus useEffect lama yang mengatur transactions secara manual
 
-  const filteredTransactions = transactions.filter((transaction) => {
-    const matchesSearch =
-      transaction.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      transaction.productBarcode.includes(searchTerm) ||
-      transaction.operator.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      transaction.reason.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesType = selectedType === "all" || transaction.type === selectedType
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((transaction) => {
+      const matchesSearch =
+        transaction.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.productBarcode.includes(searchTerm) ||
+        transaction.operator.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (transaction.reason && transaction.reason.toLowerCase().includes(searchTerm.toLowerCase()))
+      const matchesType = selectedType === "all" || transaction.type === selectedType
 
-    let matchesPeriod = true
-    if (selectedPeriod !== "all") {
-      const transactionDate = new Date(transaction.timestamp)
-      const now = new Date()
-      const daysDiff = Math.floor((now.getTime() - transactionDate.getTime()) / (1000 * 60 * 60 * 24))
+      let matchesPeriod = true
+      if (selectedPeriod !== "all" && transaction.timestamp) {
+        const transactionTimestamp = typeof transaction.timestamp === 'string'
+          ? new Date(transaction.timestamp).getTime()
+          : transaction.timestamp;
+        const transactionDate = new Date(transactionTimestamp)
+        const now = new Date()
+        const daysDiff = Math.floor((now.getTime() - transactionDate.getTime()) / (1000 * 60 * 60 * 24))
 
-      switch (selectedPeriod) {
-        case "today":
-          matchesPeriod = daysDiff === 0
-          break
-        case "week":
-          matchesPeriod = daysDiff <= 7
-          break
-        case "month":
-          matchesPeriod = daysDiff <= 30
-          break
+        switch (selectedPeriod) {
+          case "today":
+            matchesPeriod = daysDiff === 0 && transactionDate.getDate() === now.getDate() && transactionDate.getMonth() === now.getMonth() && transactionDate.getFullYear() === now.getFullYear();
+            break
+          case "week":
+            matchesPeriod = daysDiff >= 0 && daysDiff <= 7
+            break
+          case "month":
+            matchesPeriod = daysDiff >= 0 && daysDiff <= 30
+            break
+        }
       }
-    }
+      return matchesSearch && matchesType && matchesPeriod
+    })
+  }, [transactions, searchTerm, selectedType, selectedPeriod])
 
-    return matchesSearch && matchesType && matchesPeriod
-  })
-
-  const handleAddTransaction = () => {
+  const handleAddTransaction = async () => {
     if (
       !formData.productBarcode ||
       !formData.productName ||
@@ -106,41 +107,79 @@ export default function TransaksiPage() {
       !formData.reason
     ) {
       toast({
-        title: "Error",
-        description: "Mohon lengkapi semua field yang wajib diisi",
+        title: "Error Validasi",
+        description: "Mohon lengkapi semua field yang wajib diisi (*).",
         variant: "destructive",
       })
       return
     }
 
-    const quantity = Number.parseInt(formData.quantity)
-    const unitPrice = Number.parseFloat(formData.unitPrice)
-    const totalAmount =
-      formData.type === "out" || formData.type === "adjustment" ? -(quantity * unitPrice) : quantity * unitPrice
+    const quantityNum = Number.parseInt(formData.quantity)
+    const unitPriceNum = Number.parseFloat(formData.unitPrice)
 
-    const newTransaction: Transaction = {
-      id: Date.now().toString(),
+    if (isNaN(quantityNum) || isNaN(unitPriceNum)) {
+        toast({ title: "Error Input", description: "Jumlah dan Harga Satuan harus berupa angka.", variant: "destructive" });
+        return;
+    }
+    
+    let finalQuantity = quantityNum;
+    let totalAmount = quantityNum * unitPriceNum;
+
+    if (formData.type === "out") {
+      finalQuantity = -Math.abs(quantityNum); // Pastikan negatif
+      totalAmount = finalQuantity * unitPriceNum;
+    } else if (formData.type === "adjustment") {
+      // finalQuantity bisa positif atau negatif sesuai input pengguna
+      totalAmount = finalQuantity * unitPriceNum;
+    } else { // 'in'
+      finalQuantity = Math.abs(quantityNum); // Pastikan positif
+      totalAmount = finalQuantity * unitPriceNum;
+    }
+
+
+    const newTransactionData = {
       type: formData.type as "in" | "out" | "adjustment",
       productName: formData.productName,
       productBarcode: formData.productBarcode,
-      quantity: formData.type === "out" || formData.type === "adjustment" ? -quantity : quantity,
-      unitPrice,
-      totalAmount,
+      quantity: finalQuantity,
+      unitPrice: unitPriceNum,
+      totalAmount: totalAmount,
       reason: formData.reason,
-      operator: "Admin", // In real app, get from auth
-      timestamp: new Date().toISOString(),
+      operator: "Admin", // TODO: Dapatkan dari sesi login pengguna
       notes: formData.notes,
+      // timestamp akan diatur oleh serverTimestamp di firebaseHelpers
     }
 
-    // TODO: Idealnya, simpan transaksi ini ke Firebase atau backend Anda
-    // Untuk saat ini, hanya menambah ke state lokal
-    setTransactions([newTransaction, ...transactions])
-    setIsAddDialogOpen(false)
-    resetForm()
-    toast({
-      title: "Berhasil",
-      description: "Transaksi berhasil ditambahkan",
-    })
+    try {
+      await firebaseHelpers.addTransaction(newTransactionData);
+
+      const itemToUpdate = inventory.find(item => item.barcode === formData.productBarcode);
+      if (itemToUpdate) {
+        const currentStock = itemToUpdate.quantity || 0;
+        const newStock = currentStock + finalQuantity; // finalQuantity sudah memiliki tanda yang benar
+        await updateInventoryItem(itemToUpdate.id, { quantity: newStock });
+         toast({
+          title: "Berhasil",
+          description: "Transaksi berhasil ditambahkan dan stok inventaris diperbarui.",
+        });
+      } else {
+         toast({
+          title: "Peringatan",
+          description: `Produk dengan barcode ${formData.productBarcode} tidak ditemukan. Transaksi dicatat, namun stok tidak diperbarui.`,
+          variant: "default", // atau "destructive" jika ini adalah error
+        });
+      }
+
+      setIsAddDialogOpen(false)
+      resetForm()
+    } catch (error) {
+      console.error("Error adding transaction or updating inventory:", error);
+      toast({
+        title: "Error",
+        description: "Gagal menambahkan transaksi atau memperbarui inventaris.",
+        variant: "destructive",
+      })
+    }
   }
 
   const resetForm = () => {
@@ -164,10 +203,12 @@ export default function TransaksiPage() {
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
       currency: "IDR",
+      minimumFractionDigits: 0,
     }).format(amount)
   }
 
-  const formatDateTime = (timestamp: string) => {
+  const formatDateTime = (timestamp: string | number) => {
+    if (!timestamp) return "N/A";
     return new Date(timestamp).toLocaleString("id-ID", {
       year: "numeric",
       month: "short",
@@ -179,55 +220,69 @@ export default function TransaksiPage() {
 
   const getTypeLabel = (type: string) => {
     switch (type) {
-      case "in":
-        return "Masuk"
-      case "out":
-        return "Keluar"
-      case "adjustment":
-        return "Penyesuaian"
-      default:
-        return type
+      case "in": return "Masuk";
+      case "out": return "Keluar";
+      case "adjustment": return "Penyesuaian";
+      default: return type;
     }
   }
 
   const getTypeVariant = (type: string) => {
     switch (type) {
-      case "in":
-        return "default" as const
-      case "out":
-        return "secondary" as const
-      case "adjustment":
-        return "destructive" as const
-      default:
-        return "default" as const
+      case "in": return "default" as const;
+      case "out": return "secondary" as const; // Mungkin destructive lebih cocok untuk out?
+      case "adjustment": return "destructive" as const; // Atau outline/secondary
+      default: return "default" as const;
     }
   }
 
-  // Calculate statistics
-  const totalIn = transactions.filter((t) => t.type === "in").reduce((sum, t) => sum + t.totalAmount, 0) //
+  const totalIn = useMemo(() => transactions.filter((t) => t.type === "in").reduce((sum, t) => sum + t.totalAmount, 0), [transactions]);
+  const totalOut = useMemo(() => transactions.filter((t) => t.type === "out").reduce((sum, t) => sum + Math.abs(t.totalAmount), 0), [transactions]);
+  const totalAdjustment = useMemo(() => transactions.filter((t) => t.type === "adjustment").reduce((sum, t) => sum + t.totalAmount, 0), [transactions]);
 
-  const totalOut = transactions.filter((t) => t.type === "out").reduce((sum, t) => sum + Math.abs(t.totalAmount), 0) //
+  const todayTransactionsCount = useMemo(() => {
+    const today = new Date();
+    return transactions.filter((t) => {
+        if (!t.timestamp) return false;
+        const transactionDate = new Date(t.timestamp);
+        return transactionDate.getDate() === today.getDate() &&
+               transactionDate.getMonth() === today.getMonth() &&
+               transactionDate.getFullYear() === today.getFullYear();
+    }).length;
+  }, [transactions]);
 
-  const totalAdjustment = transactions
-    .filter((t) => t.type === "adjustment")
-    .reduce((sum, t) => sum + Math.abs(t.totalAmount), 0) //
-
-  const todayTransactions = transactions.filter((t) => {
-    const transactionDate = new Date(t.timestamp)
-    const today = new Date()
-    return transactionDate.toDateString() === today.toDateString()
-  }).length //
 
   const getCurrentStock = (barcode: string) => {
     const item = inventory.find((i) => i.barcode === barcode)
-    return item ? item.quantity : "-"
+    return item ? item.quantity : "N/A"
+  }
+  
+  if (inventoryLoading || transactionsLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <p className="ml-4 text-gray-600">Memuat data...</p>
+      </div>
+    );
   }
 
-  function exportTransactionsToCSV(transactions: Transaction[]) {
-    if (!transactions.length) return
+  if (transactionsError) {
+    return <div className="p-4 text-red-500">Error memuat transaksi: {transactionsError}</div>;
+  }
+  
+  const exportTransactionsToCSV = (filteredTransactions: Transaction[]) => {
+    if (filteredTransactions.length === 0) {
+      toast({
+        title: "Tidak Ada Data",
+        description: "Tidak ada transaksi untuk diekspor.",
+        variant: "destructive",
+      })
+      return
+    }
 
-    const header = [
-      "ID",
+    const headers = [
+      "ID Transaksi",
+      "Waktu",
       "Jenis",
       "Nama Produk",
       "Barcode",
@@ -236,32 +291,40 @@ export default function TransaksiPage() {
       "Total",
       "Alasan",
       "Operator",
-      "Waktu",
-      "Catatan",
+      "Catatan"
     ]
-    const rows = transactions.map((t) => [
-      t.id,
-      t.type,
-      t.productName,
-      t.productBarcode,
-      t.quantity,
-      t.unitPrice,
-      t.totalAmount,
-      t.reason,
-      t.operator,
-      t.timestamp,
-      t.notes ?? "",
+
+    const csvData = filteredTransactions.map(transaction => [
+      transaction.id,
+      formatDateTime(transaction.timestamp),
+      getTypeLabel(transaction.type),
+      transaction.productName,
+      transaction.productBarcode,
+      transaction.quantity.toString(),
+      transaction.unitPrice.toString(),
+      transaction.totalAmount.toString(),
+      transaction.reason,
+      transaction.operator,
+      transaction.notes || ""
     ])
 
-    const csvContent =
-      [header, ...rows]
-        .map((row) => row.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(","))
-        .join("\r\n")
+    const csvContent = [
+      headers.join(","),
+      ...csvData.map(row => 
+        row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(",")
+      )
+    ].join("\n")
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    saveAs(blob, `transaksi-${new Date().toISOString().slice(0, 10)}.csv`) //
+    const fileName = `transaksi_${new Date().toISOString().split('T')[0]}.csv`
+    
+    saveAs(blob, fileName)
+    
+    toast({
+      title: "Export Berhasil",
+      description: `${filteredTransactions.length} transaksi berhasil diekspor ke ${fileName}`,
+    })
   }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -271,7 +334,7 @@ export default function TransaksiPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Masuk</CardTitle>
@@ -292,7 +355,7 @@ export default function TransaksiPage() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Penyesuaian</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Penyesuaian</CardTitle>
               <DollarSign className="h-4 w-4 text-orange-600" />
             </CardHeader>
             <CardContent>
@@ -305,7 +368,7 @@ export default function TransaksiPage() {
               <Calendar className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{todayTransactions}</div>
+              <div className="text-2xl font-bold text-blue-600">{todayTransactionsCount}</div>
             </CardContent>
           </Card>
         </div>
@@ -353,6 +416,7 @@ export default function TransaksiPage() {
                   size="sm"
                   onClick={() => exportTransactionsToCSV(filteredTransactions)}
                   className="flex-1 sm:flex-initial"
+                  disabled={filteredTransactions.length === 0}
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Export
@@ -391,7 +455,16 @@ export default function TransaksiPage() {
                         <Input
                           id="productBarcode"
                           value={formData.productBarcode}
-                          onChange={(e) => setFormData({ ...formData, productBarcode: e.target.value })}
+                          onChange={(e) => {
+                            const barcode = e.target.value;
+                            setFormData({ ...formData, productBarcode: barcode });
+                            const item = inventory.find(i => i.barcode === barcode);
+                            if (item) {
+                              setFormData(prev => ({ ...prev, productName: item.name, unitPrice: item.price.toString() }));
+                            } else {
+                               setFormData(prev => ({ ...prev, productName: "", unitPrice: "" }));
+                            }
+                          }}
                           placeholder="Scan atau masukkan barcode"
                         />
                       </div>
@@ -402,6 +475,7 @@ export default function TransaksiPage() {
                           value={formData.productName}
                           onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
                           placeholder="Masukkan nama produk"
+                          // readOnly={!!inventory.find(i => i.barcode === formData.productBarcode)} // Optional: make readOnly if barcode found
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -423,6 +497,7 @@ export default function TransaksiPage() {
                             value={formData.unitPrice}
                             onChange={(e) => setFormData({ ...formData, unitPrice: e.target.value })}
                             placeholder="0"
+                            // readOnly={!!inventory.find(i => i.barcode === formData.productBarcode)} // Optional
                           />
                         </div>
                       </div>

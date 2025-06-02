@@ -1,45 +1,21 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  AlertCircle,
-  Package,
-  Scan,
-  TrendingUp,
-  Plus,
-  Edit,
-  Trash2,
-  Search,
-  QrCode,
-  Minus,
-  Eye,
-  Wifi,
-  WifiOff,
-} from "lucide-react"
-import Barcode from "react-barcode"
-
-import QRCodeGenerator from "@/components/qr-code-generator"
-import { useFirebaseInventory, useFirebaseScans, useFirebaseDevices } from "@/hooks/use-firebase"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Package, TrendingUp, TrendingDown, Users, AlertCircle, Search, Plus, Eye, Edit, Trash2, Minus, QrCode, Wifi, WifiOff, Scan, DollarSign } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
-import { getFirebaseStatus } from "@/lib/firebase"
+import { useFirebaseInventory, useFirebaseScans, useFirebaseDevices } from "@/hooks/use-firebase"
+import { getFirebaseStatus, firebaseHelpers } from "@/lib/firebase" // Added firebaseHelpers
 import { ScanHistory } from "@/components/scan-history"
+import BarcodeComponent from "react-barcode"
 
 interface InventoryItem {
   id: string
@@ -73,8 +49,6 @@ export default function TransaksiPage() {
   const [isAddItemOpen, setIsAddItemOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null)
-  const [isQRDialogOpen, setIsQRDialogOpen] = useState(false)
-  const [qrValue, setQrValue] = useState("")
   const [stockAdjustment, setStockAdjustment] = useState<{
     item: InventoryItem
     type: "add" | "remove"
@@ -212,28 +186,34 @@ export default function TransaksiPage() {
 
     try {
       await updateItem(item.id, { ...item, quantity: newQuantity })
+
+      // Create transaction record for the stock adjustment
+      const transactionData = {
+        type: "adjustment" as "in" | "out" | "adjustment",
+        productName: item.name,
+        productBarcode: item.barcode,
+        quantity: type === "add" ? amount : -amount, // Positive for add, negative for remove
+        unitPrice: item.price,
+        totalAmount: (type === "add" ? amount : -amount) * item.price,
+        reason: "Penyesuaian Stok dari Dashboard Inventaris",
+        operator: "Admin", // Replace with actual user if available
+        // timestamp will be added by firebaseHelpers.addTransaction
+      };
+      await firebaseHelpers.addTransaction(transactionData);
+
       setStockAdjustment(null)
       toast({
         title: "Berhasil",
-        description: `Stok ${type === "add" ? "ditambah" : "dikurangi"} sebanyak ${amount}`,
+        description: `Stok ${item.name} ${type === "add" ? "ditambah" : "dikurangi"} sebanyak ${amount}. Transaksi dicatat.`,
       })
     } catch (error) {
+      console.error("Error adjusting stock or recording transaction:", error);
       toast({
         title: "Error",
-        description: "Gagal mengubah stok",
+        description: "Gagal mengubah stok atau mencatat transaksi.",
         variant: "destructive",
       })
     }
-  }
-
-  const generateQRCode = (item: InventoryItem) => {
-    const qrData = JSON.stringify({
-      barcode: item.barcode,
-      name: item.name,
-      id: item.id,
-    })
-    setQrValue(qrData)
-    setIsQRDialogOpen(true)
   }
 
   const filteredInventory = inventory.filter((item) => {
@@ -269,19 +249,8 @@ export default function TransaksiPage() {
             <WifiOff className="h-4 w-4 text-yellow-600" />
           )}
           <AlertDescription>
-            <div className="flex items-center justify-between">
-              <div>
-                <strong>Status Koneksi:</strong>{" "}
-                {firebaseStatus.available ? (
-                  <span className="text-green-700">Terhubung ke Firebase (Real-time sync aktif)</span>
-                ) : (
-                  <span className="text-yellow-700">Mode Offline (Data disimpan lokal)</span>
-                )}
-              </div>
-              <Badge variant={firebaseStatus.available ? "default" : "secondary"}>
-                {firebaseStatus.available ? "Online" : "Offline"}
-              </Badge>
-            </div>
+            <strong>Status Koneksi:</strong>{" "}
+            {firebaseStatus.available ? "Terhubung ke Firebase (Real-time sync aktif)" : "Tidak terhubung"}
           </AlertDescription>
         </Alert>
 
@@ -290,7 +259,7 @@ export default function TransaksiPage() {
           <Alert className="border-red-500 bg-red-50">
             <AlertCircle className="h-4 w-4 text-red-600" />
             <AlertDescription>
-              <p className="font-medium text-red-800">Kesalahan Memuat Data: {inventoryError}</p>
+              <strong>Error:</strong> {inventoryError}
             </AlertDescription>
           </Alert>
         )}
@@ -311,7 +280,7 @@ export default function TransaksiPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Nilai</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">Rp {totalValue.toLocaleString()}</div>
@@ -419,48 +388,52 @@ export default function TransaksiPage() {
                         onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
                         className="col-span-3"
                         placeholder="Deskripsi produk"
-                        rows={2}
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="category" className="text-right">
                         Kategori
                       </Label>
+                      <Select value={newItem.category} onValueChange={(value) => setNewItem({ ...newItem, category: value })}>
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Pilih kategori" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Elektronik">Elektronik</SelectItem>
+                          <SelectItem value="Makanan">Makanan</SelectItem>
+                          <SelectItem value="Minuman">Minuman</SelectItem>
+                          <SelectItem value="Pakaian">Pakaian</SelectItem>
+                          <SelectItem value="Kesehatan">Kesehatan</SelectItem>
+                          <SelectItem value="Rumah Tangga">Rumah Tangga</SelectItem>
+                          <SelectItem value="Lainnya">Lainnya</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="quantity" className="text-right">
+                        Stok Awal
+                      </Label>
                       <Input
-                        id="category"
-                        value={newItem.category}
-                        onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+                        id="quantity"
+                        type="number"
+                        value={newItem.quantity}
+                        onChange={(e) => setNewItem({ ...newItem, quantity: Number(e.target.value) })}
                         className="col-span-3"
-                        placeholder="Elektronik, Furnitur, dll."
+                        placeholder="0"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="quantity" className="text-right col-span-2">
-                          Kuantitas
-                        </Label>
-                        <Input
-                          id="quantity"
-                          type="number"
-                          min="0"
-                          value={newItem.quantity}
-                          onChange={(e) => setNewItem({ ...newItem, quantity: Number.parseInt(e.target.value) || 0 })}
-                          className="col-span-2"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="minStock" className="text-right col-span-2">
-                          Stok Minimum
-                        </Label>
-                        <Input
-                          id="minStock"
-                          type="number"
-                          min="0"
-                          value={newItem.minStock}
-                          onChange={(e) => setNewItem({ ...newItem, minStock: Number.parseInt(e.target.value) || 0 })}
-                          className="col-span-2"
-                        />
-                      </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="minStock" className="text-right">
+                        Stok Minimum
+                      </Label>
+                      <Input
+                        id="minStock"
+                        type="number"
+                        value={newItem.minStock}
+                        onChange={(e) => setNewItem({ ...newItem, minStock: Number(e.target.value) })}
+                        className="col-span-3"
+                        placeholder="5"
+                      />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="price" className="text-right">
@@ -469,11 +442,10 @@ export default function TransaksiPage() {
                       <Input
                         id="price"
                         type="number"
-                        min="0"
                         value={newItem.price}
-                        onChange={(e) => setNewItem({ ...newItem, price: Number.parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => setNewItem({ ...newItem, price: Number(e.target.value) })}
                         className="col-span-3"
-                        placeholder="15000000"
+                        placeholder="0"
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
@@ -497,14 +469,11 @@ export default function TransaksiPage() {
                         value={newItem.location}
                         onChange={(e) => setNewItem({ ...newItem, location: e.target.value })}
                         className="col-span-3"
-                        placeholder="Gudang A-1"
+                        placeholder="Lokasi penyimpanan"
                       />
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsAddItemOpen(false)}>
-                      Batal
-                    </Button>
                     <Button onClick={addInventoryItem}>Tambah Item</Button>
                   </DialogFooter>
                 </DialogContent>
@@ -512,165 +481,144 @@ export default function TransaksiPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Search and Filter */}
-            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-              <div className="flex gap-2 flex-1 w-full">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Cari nama, barcode, atau pemasok..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Kategori" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Kategori</SelectItem>
-                    {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Cari produk, barcode, atau pemasok..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
               </div>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Kategori" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Kategori</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Inventory List */}
-            <div className="grid gap-4">
+            <div className="space-y-4">
               {filteredInventory.length === 0 ? (
                 <div className="text-center py-8">
-                  <Package className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                  <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                   <p className="text-gray-500">
-                    {inventory.length === 0 ? "Belum ada item inventaris" : "Tidak ada item yang sesuai filter"}
-                  </p>
-                  <p className="text-sm text-gray-400">
-                    {inventory.length === 0
-                      ? "Tambahkan item pertama Anda untuk memulai"
-                      : "Coba ubah kata kunci pencarian atau filter kategori"}
+                    {inventory.length === 0 ? "Belum ada item dalam inventaris" : "Tidak ada item yang sesuai dengan pencarian"}
                   </p>
                 </div>
               ) : (
                 filteredInventory.map((item) => (
-                  <Card key={item.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-2 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-semibold text-lg">{item.name}</h3>
-                            <Badge variant={item.quantity <= item.minStock ? "destructive" : "secondary"}>
-                              {item.quantity} stok
+                  <div key={item.id} className="border rounded-lg p-4 bg-white">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold text-lg">{item.name}</h3>
+                          <Badge variant={item.quantity <= item.minStock ? "destructive" : "secondary"}>
+                            {item.quantity} stok
+                          </Badge>
+                          {item.category && <Badge variant="outline">{item.category}</Badge>}
+                          {item.quantity <= item.minStock && (
+                            <Badge variant="destructive" className="animate-pulse">
+                              Stok Rendah
                             </Badge>
-                            {item.category && <Badge variant="outline">{item.category}</Badge>}
-                            {item.quantity <= item.minStock && (
-                              <Badge variant="destructive" className="animate-pulse">
-                                Stok Rendah
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">{item.description}</p>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
-                            <span>
-                              <strong>Barcode:</strong>
-                              <span className="font-mono text-xs">{item.barcode}</span>
-                              <div className="bg-white p-1 rounded border inline-block mt-1">
-                                <Barcode
-                                  value={item.barcode ?? ""}
-                                  format="CODE128"
-                                  width={1.5}
-                                  height={40}
-                                  displayValue={false}
-                                  background="#fff"
-                                  lineColor="#000"
-                                />
-                              </div>
-                            </span>
-                            <span>
-                              <strong>Harga:</strong> Rp {item.price.toLocaleString()}
-                            </span>
-                            <span>
-                              <strong>Lokasi:</strong> {item.location}
-                            </span>
-                            <span>
-                              <strong>Pemasok:</strong> {item.supplier || "-"}
-                            </span>
-                          </div>
+                          )}
                         </div>
-                        <div className="flex flex-col gap-2 ml-4">
-                          <div className="flex gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setViewingItem({
-                                  ...item,
-                                  barcode: item.barcode ?? "",
-                                  supplier: item.supplier ?? "",
-                                })
-                              }
-                              title="Lihat Detail"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => generateQRCode({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })}
-                              title="Generate QR Code"
-                            >
-                              <QrCode className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setStockAdjustment({ item: { ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" }, type: "add", amount: 1 })}
-                              title="Tambah Stok"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setStockAdjustment({ item: { ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" }, type: "remove", amount: 1 })}
-                              title="Kurangi Stok"
-                            >
-                              <Minus className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setEditingItem({
-                                  ...item,
-                                  barcode: item.barcode ?? "",
-                                  supplier: item.supplier ?? "",
-                                })
-                              }
-                              title="Edit Item"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => deleteInventoryItem(item.id, item.name)}
-                              title="Hapus Item"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                        <p className="text-sm text-muted-foreground">{item.description}</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
+                          <span>
+                            <strong>Barcode:</strong>
+                            <span className="font-mono text-xs">{item.barcode}</span>
+                            <div className="bg-white p-1 rounded border inline-block mt-1">
+                              <BarcodeComponent
+                                value={item.barcode ?? ""}
+                                format="CODE128"
+                                width={1.5}
+                                height={40}
+                                displayValue={false}
+                                background="#fff"
+                                lineColor="#000"
+                              />
+                            </div>
+                          </span>
+                          <span>
+                            <strong>Harga:</strong> Rp {item.price.toLocaleString()}
+                          </span>
+                          <span>
+                            <strong>Lokasi:</strong> {item.location}
+                          </span>
+                          <span>
+                            <strong>Pemasok:</strong> {item.supplier || "-"}
+                          </span>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
+                      <div className="flex flex-col gap-2 ml-4">
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setViewingItem({
+                                ...item,
+                                barcode: item.barcode ?? "",
+                                supplier: item.supplier ?? "",
+                              })
+                            }
+                            title="Lihat Detail"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setEditingItem({
+                                ...item,
+                                barcode: item.barcode ?? "",
+                                supplier: item.supplier ?? "",
+                              })
+                            }
+                            title="Edit Item"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => deleteInventoryItem(item.id, item.name)}
+                            title="Hapus Item"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setStockAdjustment({ item: { ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" }, type: "add", amount: 1 })}
+                            title="Tambah Stok"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setStockAdjustment({ item: { ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" }, type: "remove", amount: 1 })}
+                            title="Kurangi Stok"
+                          >
+                            <Minus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 ))
               )}
             </div>
@@ -717,51 +665,53 @@ export default function TransaksiPage() {
                     value={editingItem.description}
                     onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
                     className="col-span-3"
-                    rows={2}
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-category" className="text-right">
                     Kategori
                   </Label>
-                  <Input
-                    id="edit-category"
+                  <Select
                     value={editingItem.category}
-                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
+                    onValueChange={(value) => setEditingItem({ ...editingItem, category: value })}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Elektronik">Elektronik</SelectItem>
+                      <SelectItem value="Makanan">Makanan</SelectItem>
+                      <SelectItem value="Minuman">Minuman</SelectItem>
+                      <SelectItem value="Pakaian">Pakaian</SelectItem>
+                      <SelectItem value="Kesehatan">Kesehatan</SelectItem>
+                      <SelectItem value="Rumah Tangga">Rumah Tangga</SelectItem>
+                      <SelectItem value="Lainnya">Lainnya</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-quantity" className="text-right">
+                    Stok
+                  </Label>
+                  <Input
+                    id="edit-quantity"
+                    type="number"
+                    value={editingItem.quantity}
+                    onChange={(e) => setEditingItem({ ...editingItem, quantity: Number(e.target.value) })}
                     className="col-span-3"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="edit-quantity" className="text-right col-span-2">
-                      Kuantitas
-                    </Label>
-                    <Input
-                      id="edit-quantity"
-                      type="number"
-                      min="0"
-                      value={editingItem.quantity}
-                      onChange={(e) =>
-                        setEditingItem({ ...editingItem, quantity: Number.parseInt(e.target.value) || 0 })
-                      }
-                      className="col-span-2"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="edit-minStock" className="text-right col-span-2">
-                      Stok Minimum
-                    </Label>
-                    <Input
-                      id="edit-minStock"
-                      type="number"
-                      min="0"
-                      value={editingItem.minStock}
-                      onChange={(e) =>
-                        setEditingItem({ ...editingItem, minStock: Number.parseInt(e.target.value) || 0 })
-                      }
-                      className="col-span-2"
-                    />
-                  </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-minStock" className="text-right">
+                    Stok Minimum
+                  </Label>
+                  <Input
+                    id="edit-minStock"
+                    type="number"
+                    value={editingItem.minStock}
+                    onChange={(e) => setEditingItem({ ...editingItem, minStock: Number(e.target.value) })}
+                    className="col-span-3"
+                  />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-price" className="text-right">
@@ -770,9 +720,8 @@ export default function TransaksiPage() {
                   <Input
                     id="edit-price"
                     type="number"
-                    min="0"
                     value={editingItem.price}
-                    onChange={(e) => setEditingItem({ ...editingItem, price: Number.parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setEditingItem({ ...editingItem, price: Number(e.target.value) })}
                     className="col-span-3"
                   />
                 </div>
@@ -801,58 +750,45 @@ export default function TransaksiPage() {
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setEditingItem(null)}>
-                Batal
-              </Button>
-              <Button onClick={updateInventoryItem}>Perbarui Item</Button>
+              <Button onClick={updateInventoryItem}>Simpan Perubahan</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
         {/* View Item Dialog */}
         <Dialog open={!!viewingItem} onOpenChange={() => setViewingItem(null)}>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Detail Item</DialogTitle>
-              <DialogDescription>Informasi lengkap item inventaris</DialogDescription>
+              <DialogDescription>Informasi lengkap item inventaris.</DialogDescription>
             </DialogHeader>
             {viewingItem && (
-              <div className="space-y-4 py-4">
+              <div className="py-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Nama</Label>
                     <p className="text-lg font-semibold">{viewingItem.name}</p>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium text-gray-500">Barcode</Label>
-                    <p className="font-mono">{viewingItem.barcode}</p>
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-500">Deskripsi</Label>
-                  <p>{viewingItem.description || "-"}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
                     <Label className="text-sm font-medium text-gray-500">Kategori</Label>
-                    <p>{viewingItem.category || "-"}</p>
+                    <p>{viewingItem.category}</p>
                   </div>
-                  <div>
-                    <Label className="text-sm font-medium text-gray-500">Harga</Label>
-                    <p className="text-lg font-semibold text-green-600">Rp {viewingItem.price.toLocaleString()}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Stok Saat Ini</Label>
-                    <p className="text-2xl font-bold">{viewingItem.quantity}</p>
+                    <p className="text-2xl font-bold text-blue-600">{viewingItem.quantity}</p>
                   </div>
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Stok Minimum</Label>
-                    <p className="text-lg">{viewingItem.minStock}</p>
+                    <p>{viewingItem.minStock}</p>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium text-gray-500">Harga</Label>
+                    <p className="text-lg font-semibold">Rp {viewingItem.price.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-500">Barcode</Label>
+                    <p className="font-mono">{viewingItem.barcode}</p>
+                  </div>
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Pemasok</Label>
                     <p>{viewingItem.supplier || "-"}</p>
@@ -878,7 +814,9 @@ export default function TransaksiPage() {
               </div>
             )}
             <DialogFooter>
-              <Button onClick={() => setViewingItem(null)}>Tutup</Button>
+              <Button variant="outline" onClick={() => setViewingItem(null)}>
+                Tutup
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -887,42 +825,31 @@ export default function TransaksiPage() {
         <Dialog open={!!stockAdjustment} onOpenChange={() => setStockAdjustment(null)}>
           <DialogContent className="sm:max-w-[400px]">
             <DialogHeader>
-              <DialogTitle>{stockAdjustment?.type === "add" ? "Tambah Stok" : "Kurangi Stok"}</DialogTitle>
+              <DialogTitle>Penyesuaian Stok</DialogTitle>
               <DialogDescription>
-                {stockAdjustment?.type === "add" ? "Tambahkan stok untuk item ini" : "Kurangi stok untuk item ini"}
+                {stockAdjustment?.type === "add" ? "Tambah" : "Kurangi"} stok untuk{" "}
+                {stockAdjustment?.item.name}
               </DialogDescription>
             </DialogHeader>
             {stockAdjustment && (
-              <div className="space-y-4 py-4">
+              <div className="py-4 space-y-4">
                 <div>
-                  <Label className="text-sm font-medium text-gray-500">Item</Label>
-                  <p className="font-semibold">{stockAdjustment.item.name}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-500">Stok Saat Ini</Label>
-                  <p className="text-2xl font-bold">{stockAdjustment.item.quantity}</p>
-                </div>
-                <div>
-                  <Label htmlFor="adjustment-amount">
-                    Jumlah {stockAdjustment.type === "add" ? "Penambahan" : "Pengurangan"}
-                  </Label>
+                  <Label>Jumlah</Label>
                   <Input
-                    id="adjustment-amount"
                     type="number"
-                    min="1"
                     value={stockAdjustment.amount}
                     onChange={(e) =>
-                      setStockAdjustment({
-                        ...stockAdjustment,
-                        amount: Number.parseInt(e.target.value) || 1,
-                      })
+                      setStockAdjustment({ ...stockAdjustment, amount: Number(e.target.value) })
                     }
-                    className="mt-1"
+                    min="1"
                   />
                 </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-500">Stok Setelah Perubahan</Label>
-                  <p className="text-xl font-semibold">
+                <div className="bg-gray-50 p-3 rounded">
+                  <p className="text-sm">
+                    <strong>Stok saat ini:</strong> {stockAdjustment.item.quantity}
+                  </p>
+                  <p className="text-sm">
+                    <strong>Stok setelah penyesuaian:</strong>{" "}
                     {stockAdjustment.type === "add"
                       ? stockAdjustment.item.quantity + stockAdjustment.amount
                       : stockAdjustment.item.quantity - stockAdjustment.amount}
@@ -938,32 +865,6 @@ export default function TransaksiPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        {/* QR Code Dialog */}
-        <Dialog open={isQRDialogOpen} onOpenChange={setIsQRDialogOpen}>
-          <DialogContent className="sm:max-w-[400px]">
-            <DialogHeader>
-              <DialogTitle>QR Code</DialogTitle>
-              <DialogDescription>QR code untuk item inventaris ini</DialogDescription>
-            </DialogHeader>
-            <div className="flex justify-center py-4">
-              <QRCodeGenerator value={qrValue} size={200} />
-            </div>
-            <DialogFooter>
-              <Button onClick={() => setIsQRDialogOpen(false)}>Tutup</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Scan History Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Riwayat Scan Terkait Transaksi</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ScanHistory scans={scans} loading={scansLoading} />
-          </CardContent>
-        </Card>
       </div>
     </div>
   )
