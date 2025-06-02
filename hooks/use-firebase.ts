@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { onValue, off, ref, remove, type DataSnapshot } from "firebase/database"
-import { database, firebaseHelpers, isFirebaseConfigured } from "@/lib/firebase"
+import { useState, useEffect, useMemo } from "react"; // Add useMemo
+import { ref, onValue, DataSnapshot, query, orderByChild, off, Unsubscribe } from "firebase/database"; // Added Unsubscribe, off
+import { firebaseHelpers, isFirebaseConfigured, database, dbRefs } from "@/lib/firebase"; // Ensure all are imported
 
 interface InventoryItem {
   id: string
@@ -41,11 +41,28 @@ interface DeviceStatus {
   freeHeap?: number
 }
 
+// Definisikan interface Transaction jika belum ada secara global
+// (Struktur disesuaikan dengan yang ada di app/transaksi/page.tsx)
+interface Transaction {
+  id: string;
+  type: "in" | "out" | "adjustment";
+  productName: string;
+  productBarcode: string;
+  quantity: number; // Bisa positif (in) atau negatif (out)
+  unitPrice: number;
+  totalAmount: number; // quantity * unitPrice, bisa negatif
+  reason: string;
+  operator: string;
+  timestamp: any; // Sebaiknya number (epoch) atau string ISO
+  notes?: string;
+}
+
 // Local storage keys
 const STORAGE_KEYS = {
   INVENTORY: "inventory_items",
   SCANS: "scan_records",
   DEVICES: "device_status",
+  TRANSACTIONS: "transaction_records", // Ditambahkan
 }
 
 // Helper functions for local storage
@@ -70,182 +87,123 @@ const saveToStorage = (key: string, data: any) => {
 }
 
 export function useFirebaseInventory() {
-  const [items, setItems] = useState<InventoryItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [itemsData, setItemsData] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if Firebase is configured and available
-    if (!isFirebaseConfigured() || !database) {
-      console.log("Firebase not available, using local storage")
+    let unsubscribe: Unsubscribe | undefined;
 
-      // Load from local storage or use mock data
-      const storedItems = getFromStorage(STORAGE_KEYS.INVENTORY)
-
-      if (storedItems && storedItems.length > 0) {
-        setItems(storedItems)
-      } else {
-        // Create initial mock data
-        const mockItems: InventoryItem[] = [
-          {
-            id: "mock_1",
-            name: "Laptop ASUS ROG",
-            barcode: "1234567890123",
-            category: "Elektronik",
-            quantity: 15,
-            minStock: 5,
-            price: 18000000,
-            description: "Laptop gaming ASUS ROG Strix dengan RTX 4060",
-            location: "Gudang A-1",
-            supplier: "ASUS Indonesia",
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-          {
-            id: "mock_2",
-            name: "Mouse Gaming Logitech",
-            barcode: "9876543210987",
-            category: "Elektronik",
-            quantity: 3,
-            minStock: 5,
-            price: 850000,
-            description: "Mouse gaming wireless dengan sensor presisi tinggi",
-            location: "Gudang A-2",
-            supplier: "Logitech",
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-          {
-            id: "mock_3",
-            name: "Kursi Kantor Ergonomis",
-            barcode: "5555666677778",
-            category: "Furnitur",
-            quantity: 8,
-            minStock: 3,
-            price: 2500000,
-            description: "Kursi kantor dengan penyangga lumbar dan armrest adjustable",
-            location: "Gudang B-1",
-            supplier: "Herman Miller",
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ]
-        setItems(mockItems)
-        saveToStorage(STORAGE_KEYS.INVENTORY, mockItems)
-      }
-
-      setError(null)
-      setLoading(false)
-      return
+    if (typeof window === "undefined") {
+      setLoading(false);
+      return;
     }
 
-    // Firebase is available, use real-time data
-    const inventoryRef = ref(database, "inventory")
+    if (!isFirebaseConfigured() || !database) {
+      console.log("Firebase not available, using local storage for inventory");
+      const storedItems = getFromStorage(STORAGE_KEYS.INVENTORY);
+      setItemsData(storedItems && storedItems.length > 0 ? storedItems : []);
+      setError(null);
+      setLoading(false);
+      return;
+    }
 
-    const unsubscribe = onValue(
+    const inventoryRef = ref(database, "inventory");
+    unsubscribe = onValue(
       inventoryRef,
       (snapshot: DataSnapshot) => {
         try {
-          const data = snapshot.val()
-          if (data) {
-            const itemsArray = Object.keys(data).map((key) => ({
-              id: key,
-              ...data[key],
-            }))
-            setItems(itemsArray)
-            // Also save to local storage as backup
-            saveToStorage(STORAGE_KEYS.INVENTORY, itemsArray)
-          } else {
-            setItems([])
-          }
-          setError(null)
-          setLoading(false)
-        } catch (err) {
-          console.error("Error processing inventory data:", err)
-          setError("Failed to load inventory data")
-          setLoading(false)
+          const data = snapshot.val();
+          const loadedItems: InventoryItem[] = data
+            ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
+            : [];
+          setItemsData(loadedItems);
+          setError(null);
+        } catch (err: any) {
+          console.error("Error processing inventory snapshot:", err);
+          setError(err.message || "Failed to parse inventory data");
         }
+        setLoading(false);
       },
-      (error) => {
-        console.error("Firebase inventory error:", error)
-        setError(error.message)
-        setLoading(false)
-      },
-    )
+      (err) => {
+        console.error("Firebase inventory error:", err);
+        setError(err.message);
+        setLoading(false);
+      }
+    );
 
     return () => {
-      if (inventoryRef && unsubscribe) {
-        off(inventoryRef, "value", unsubscribe)
+      if (unsubscribe) {
+        unsubscribe();
       }
-    }
-  }, [])
+    };
+  }, []);
 
-  const addItem = async (item: Omit<InventoryItem, "id" | "createdAt" | "updatedAt">) => {
+  const addItem = async (item: Omit<InventoryItem, "id" | "createdAt" | "updatedAt">): Promise<string | undefined> => {
     if (!isFirebaseConfigured()) {
-      // Local storage implementation
       const newItem: InventoryItem = {
         ...item,
         id: `local_${Date.now()}`,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      }
-      const updatedItems = [...items, newItem]
-      setItems(updatedItems)
-      saveToStorage(STORAGE_KEYS.INVENTORY, updatedItems)
-      return
+      };
+      const updatedItems = [...itemsData, newItem];
+      setItemsData(updatedItems);
+      saveToStorage(STORAGE_KEYS.INVENTORY, updatedItems);
+      return newItem.id;
     }
 
     try {
-      await firebaseHelpers.addInventoryItem(item)
+      return await firebaseHelpers.addInventoryItem(item);
     } catch (err) {
-      console.error("Error adding item:", err)
-      throw new Error("Failed to add item")
+      console.error("Error adding item:", err);
+      const message = err instanceof Error ? err.message : "Failed to add item";
+      throw new Error(message);
     }
-  }
+  };
 
   const updateItem = async (id: string, updates: Partial<InventoryItem>) => {
     if (!isFirebaseConfigured()) {
-      // Local storage implementation
-      const updatedItems = items.map((item) => (item.id === id ? { ...item, ...updates, updatedAt: Date.now() } : item))
-      setItems(updatedItems)
-      saveToStorage(STORAGE_KEYS.INVENTORY, updatedItems)
-      return
+      const updatedItems = itemsData.map((itemData) =>
+        itemData.id === id ? { ...itemData, ...updates, updatedAt: Date.now() } : itemData
+      );
+      setItemsData(updatedItems);
+      saveToStorage(STORAGE_KEYS.INVENTORY, updatedItems);
+      return;
     }
 
     try {
-      const currentItem = items.find((item) => item.id === id)
-      if (!currentItem) {
-        throw new Error("Item not found")
-      }
-
-      const updatedItem = { ...currentItem, ...updates }
-      await firebaseHelpers.updateInventoryItem(id, updatedItem)
+      await firebaseHelpers.updateInventoryItem(id, updates);
     } catch (err) {
-      console.error("Error updating item:", err)
-      throw new Error("Failed to update item")
+      console.error("Error updating item:", err);
+      const message = err instanceof Error ? err.message : "Failed to update item";
+      throw new Error(message);
     }
-  }
+  };
 
   const deleteItem = async (id: string) => {
     if (!isFirebaseConfigured()) {
-      // Local storage implementation
-      const updatedItems = items.filter((item) => item.id !== id)
-      setItems(updatedItems)
-      saveToStorage(STORAGE_KEYS.INVENTORY, updatedItems)
-      return
+      const updatedItems = itemsData.map(itemData =>
+        itemData.id === id ? { ...itemData, deleted: true, updatedAt: Date.now() } : itemData
+      );
+      setItemsData(updatedItems); // Keep deleted items in local state but filter in activeItems
+      saveToStorage(STORAGE_KEYS.INVENTORY, updatedItems.filter(i => !i.deleted)); // Save only non-deleted to localStorage
+      return;
     }
 
     try {
-      const itemRef = ref(database, `inventory/${id}`)
-      await remove(itemRef)
+      await firebaseHelpers.updateInventoryItem(id, { deleted: true });
     } catch (err) {
-      console.error("Error deleting item:", err)
-      throw new Error("Failed to delete item")
+      console.error("Error deleting item:", err);
+      const message = err instanceof Error ? err.message : "Failed to delete item";
+      throw new Error(message);
     }
-  }
+  };
+
+  const activeItems = useMemo(() => itemsData.filter((item) => !item.deleted), [itemsData]);
 
   return {
-    items: items.filter((item) => !item.deleted),
+    items: activeItems,
     loading,
     error,
     addItem,
@@ -256,12 +214,14 @@ export function useFirebaseInventory() {
 }
 
 export function useFirebaseScans() {
-  const [scans, setScans] = useState<ScanRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [scans, setScans] = useState<ScanRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let unsubscribe: Unsubscribe | undefined;
     if (!isFirebaseConfigured() || !database) {
+      console.log("Firebase not available, using local storage for scans");
       // Load from local storage or use mock data
       const storedScans = getFromStorage(STORAGE_KEYS.SCANS)
 
@@ -298,55 +258,39 @@ export function useFirebaseScans() {
       return
     }
 
-    const scansRef = ref(database, "scans")
-
-    const unsubscribe = onValue(
+    const scansRef = ref(database, "scans");
+    unsubscribe = onValue(
       scansRef,
       (snapshot: DataSnapshot) => {
-        try {
-          const data = snapshot.val()
-          if (data) {
-            const scansArray = Object.keys(data)
-              .map((key) => ({
-                id: key,
-                ...data[key],
-              }))
-              .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-              .slice(0, 100)
-            setScans(scansArray)
-            saveToStorage(STORAGE_KEYS.SCANS, scansArray)
-          } else {
-            setScans([])
-          }
-          setError(null)
-          setLoading(false)
-        } catch (err) {
-          console.error("Error processing scans data:", err)
-          setError("Failed to load scans data")
-          setLoading(false)
-        }
+        const data = snapshot.val();
+        const loadedScans: ScanRecord[] = data
+          ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
+          : [];
+        setScans(loadedScans.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+        setError(null);
+        setLoading(false);
       },
-      (error) => {
-        console.error("Firebase scans error:", error)
-        setError(error.message)
-        setLoading(false)
-      },
-    )
-
-    return () => {
-      if (scansRef && unsubscribe) {
-        off(scansRef, "value", unsubscribe)
+      (err) => {
+        console.error("Firebase scans error:", err);
+        setError(err.message);
+        setLoading(false);
       }
-    }
-  }, [])
+    );
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
 
-  const addScan = async (scanData: Omit<ScanRecord, "id" | "timestamp">) => {
+  const addScan = async (scanData: Omit<ScanRecord, "id" | "timestamp" | "processed">) => {
     if (!isFirebaseConfigured()) {
       // Local storage implementation
       const newScan: ScanRecord = {
         ...scanData,
         id: `scan_${Date.now()}`,
         timestamp: Date.now(),
+        processed: false
       }
       const updatedScans = [newScan, ...scans.slice(0, 99)]
       setScans(updatedScans)
@@ -371,12 +315,14 @@ export function useFirebaseScans() {
   }
 }
 
+
 export function useFirebaseDevices() {
-  const [devices, setDevices] = useState<DeviceStatus[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [devices, setDevices] = useState<DeviceStatus[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let unsubscribe: Unsubscribe | undefined;
     if (!isFirebaseConfigured() || !database) {
       // Load from local storage or use mock data
       const storedDevices = getFromStorage(STORAGE_KEYS.DEVICES)
@@ -405,44 +351,30 @@ export function useFirebaseDevices() {
       return
     }
 
-    const devicesRef = ref(database, "devices")
-
-    const unsubscribe = onValue(
+    const devicesRef = ref(database, "devices");
+    unsubscribe = onValue(
       devicesRef,
       (snapshot: DataSnapshot) => {
-        try {
-          const data = snapshot.val()
-          if (data) {
-            const devicesArray = Object.keys(data).map((key) => ({
-              deviceId: key,
-              ...data[key],
-            }))
-            setDevices(devicesArray)
-            saveToStorage(STORAGE_KEYS.DEVICES, devicesArray)
-          } else {
-            setDevices([])
-          }
-          setError(null)
-          setLoading(false)
-        } catch (err) {
-          console.error("Error processing devices data:", err)
-          setError("Failed to load devices data")
-          setLoading(false)
-        }
+        const data = snapshot.val();
+        const loadedDevices: DeviceStatus[] = data
+          ? Object.keys(data).map((key) => ({ ...data[key], deviceId: key })) // Assuming deviceId is the key
+          : [];
+        setDevices(loadedDevices);
+        setError(null);
+        setLoading(false);
       },
-      (error) => {
-        console.error("Firebase devices error:", error)
-        setError(error.message)
-        setLoading(false)
-      },
-    )
-
-    return () => {
-      if (devicesRef && unsubscribe) {
-        off(devicesRef, "value", unsubscribe)
+      (err) => {
+        console.error("Firebase devices error:", err);
+        setError(err.message);
+        setLoading(false);
       }
-    }
-  }, [])
+    );
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
 
   const updateDeviceStatus = async (deviceId: string, status: Partial<DeviceStatus>) => {
     if (!isFirebaseConfigured()) {
@@ -468,4 +400,65 @@ export function useFirebaseDevices() {
     updateDeviceStatus,
     isConfigured: isFirebaseConfigured(),
   }
+}
+
+export function useFirebaseTransactions() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let unsubscribe: Unsubscribe | undefined;
+    if (typeof window === "undefined") {
+      setLoading(false);
+      return;
+    }
+
+    if (!isFirebaseConfigured() || !database || !dbRefs || !dbRefs.transactions) {
+      console.warn("Firebase not configured or transactions ref not available for useFirebaseTransactions.");
+      const storedTransactions = getFromStorage(STORAGE_KEYS.TRANSACTIONS);
+      if (storedTransactions && storedTransactions.length > 0) {
+        setTransactions(storedTransactions.map((t: any) => ({ ...t, timestamp: t.timestamp || Date.now() })));
+      } else {
+        setTransactions([]);
+      }
+      setLoading(false);
+      return;
+    }
+
+    const transactionsQuery = query(dbRefs.transactions, orderByChild('timestamp'));
+    unsubscribe = onValue(
+      transactionsQuery,
+      (snapshot: DataSnapshot) => {
+        const data = snapshot.val();
+        const loadedTransactions: Transaction[] = data
+          ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
+          : [];
+        // Reverse sort to show newest first, or sort as needed
+        setTransactions(loadedTransactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+        setError(null);
+        setLoading(false);
+      },
+      (errorObject: Error) => {
+        console.error("Firebase transactions error:", errorObject);
+        setError(errorObject.message);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []); // dbRefs might be a dependency if it can change, but typically it's stable after init.
+
+  // addTransaction is usually done via firebaseHelpers, not part of this read-hook.
+
+  return {
+    transactions,
+    loading,
+    error,
+    isConfigured: isFirebaseConfigured(),
+  };
 }
