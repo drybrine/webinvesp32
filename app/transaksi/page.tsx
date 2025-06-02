@@ -1,11 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card" //
+import { Button } from "@/components/ui/button" //
+import { Input } from "@/components/ui/input" //
+import { Label } from "@/components/ui/label" //
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select" //
 import {
   Dialog,
   DialogContent,
@@ -14,13 +14,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, DollarSign } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { useFirebaseInventory } from "@/hooks/use-firebase"
-import { saveAs } from "file-saver";
+} from "@/components/ui/dialog" //
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table" //
+import { Badge } from "@/components/ui/badge" //
+import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, DollarSign } from "lucide-react" //
+import { useToast } from "@/hooks/use-toast" //
+import { useFirebaseInventory } from "@/hooks/use-firebase" //
+import { saveAs } from "file-saver"; //
 
 interface Transaction {
   id: string
@@ -38,7 +38,7 @@ interface Transaction {
 
 export default function TransaksiPage() {
   // Ambil data inventaris secara realtime
-  const { items: inventory, loading: inventoryLoading } = useFirebaseInventory()
+  const { items: inventory, loading: inventoryLoading } = useFirebaseInventory() //
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -56,75 +56,15 @@ export default function TransaksiPage() {
     reason: "",
     notes: "",
   })
-  const { toast } = useToast()
+  const { toast } = useToast() //
 
-  // Mock data
+  // Data transaksi akan dikelola secara lokal atau dari database di masa mendatang.
+  // Untuk saat ini, kita mulai dengan daftar transaksi kosong.
   useEffect(() => {
-    const mockTransactions: Transaction[] = [
-      {
-        id: "1",
-        type: "in",
-        productName: "Laptop ASUS ROG",
-        productBarcode: "1234567890123",
-        quantity: 5,
-        unitPrice: 15000000,
-        totalAmount: 75000000,
-        reason: "Pembelian dari supplier",
-        operator: "Admin",
-        timestamp: "2024-01-20T10:30:00Z",
-        notes: "Pembelian rutin bulanan",
-      },
-      {
-        id: "2",
-        type: "out",
-        productName: "Mouse Wireless Logitech",
-        productBarcode: "2345678901234",
-        quantity: 2,
-        unitPrice: 250000,
-        totalAmount: 500000,
-        reason: "Penjualan ke customer",
-        operator: "Kasir 1",
-        timestamp: "2024-01-20T14:15:00Z",
-      },
-      {
-        id: "3",
-        type: "adjustment",
-        productName: "Keyboard Mechanical",
-        productBarcode: "3456789012345",
-        quantity: -1,
-        unitPrice: 800000,
-        totalAmount: -800000,
-        reason: "Barang rusak",
-        operator: "Admin",
-        timestamp: "2024-01-19T16:45:00Z",
-        notes: "Keyboard rusak saat pengiriman",
-      },
-      {
-        id: "4",
-        type: "in",
-        productName: "Monitor 24 inch",
-        productBarcode: "4567890123456",
-        quantity: 3,
-        unitPrice: 2500000,
-        totalAmount: 7500000,
-        reason: "Restok inventory",
-        operator: "Admin",
-        timestamp: "2024-01-18T09:20:00Z",
-      },
-      {
-        id: "5",
-        type: "out",
-        productName: "Laptop ASUS ROG",
-        productBarcode: "1234567890123",
-        quantity: 1,
-        unitPrice: 15000000,
-        totalAmount: 15000000,
-        reason: "Penjualan online",
-        operator: "Admin",
-        timestamp: "2024-01-17T11:30:00Z",
-      },
-    ]
-    setTransactions(mockTransactions)
+    // Hapus data mock, biarkan kosong atau implementasikan pengambilan data dari Firebase
+    setTransactions([]);
+    // Jika Anda memiliki fungsi untuk mengambil data transaksi dari Firebase, panggil di sini.
+    // Contoh: fetchTransactionsFromFirebase().then(data => setTransactions(data));
   }, [])
 
   const filteredTransactions = transactions.filter((transaction) => {
@@ -192,6 +132,8 @@ export default function TransaksiPage() {
       notes: formData.notes,
     }
 
+    // TODO: Idealnya, simpan transaksi ini ke Firebase atau backend Anda
+    // Untuk saat ini, hanya menambah ke state lokal
     setTransactions([newTransaction, ...transactions])
     setIsAddDialogOpen(false)
     resetForm()
@@ -262,28 +204,25 @@ export default function TransaksiPage() {
   }
 
   // Calculate statistics
-  const totalIn = transactions.filter((t) => t.type === "in").reduce((sum, t) => sum + t.totalAmount, 0)
+  const totalIn = transactions.filter((t) => t.type === "in").reduce((sum, t) => sum + t.totalAmount, 0) //
 
-  const totalOut = transactions.filter((t) => t.type === "out").reduce((sum, t) => sum + Math.abs(t.totalAmount), 0)
+  const totalOut = transactions.filter((t) => t.type === "out").reduce((sum, t) => sum + Math.abs(t.totalAmount), 0) //
 
   const totalAdjustment = transactions
     .filter((t) => t.type === "adjustment")
-    .reduce((sum, t) => sum + Math.abs(t.totalAmount), 0)
+    .reduce((sum, t) => sum + Math.abs(t.totalAmount), 0) //
 
   const todayTransactions = transactions.filter((t) => {
     const transactionDate = new Date(t.timestamp)
     const today = new Date()
     return transactionDate.toDateString() === today.toDateString()
-  }).length
+  }).length //
 
-  // Gunakan inventory untuk menampilkan stok terbaru pada transaksi
-  // Misal, untuk menampilkan stok setelah transaksi:
   const getCurrentStock = (barcode: string) => {
     const item = inventory.find((i) => i.barcode === barcode)
     return item ? item.quantity : "-"
   }
 
-  // Tambahkan fungsi untuk mengubah data transaksi ke CSV
   function exportTransactionsToCSV(transactions: Transaction[]) {
     if (!transactions.length) return
 
@@ -319,9 +258,8 @@ export default function TransaksiPage() {
         .map((row) => row.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(","))
         .join("\r\n")
 
-    // Membuat file blob dan trigger download
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    saveAs(blob, `transaksi-${new Date().toISOString().slice(0, 10)}.csv`)
+    saveAs(blob, `transaksi-${new Date().toISOString().slice(0, 10)}.csv`) //
   }
 
   return (
@@ -387,7 +325,7 @@ export default function TransaksiPage() {
                   />
                 </div>
                 <Select value={selectedType} onValueChange={setSelectedType}>
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="Jenis Transaksi" />
                   </SelectTrigger>
                   <SelectContent>
@@ -398,7 +336,7 @@ export default function TransaksiPage() {
                   </SelectContent>
                 </Select>
                 <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-                  <SelectTrigger className="w-[150px]">
+                  <SelectTrigger className="w-full sm:w-[150px]">
                     <SelectValue placeholder="Periode" />
                   </SelectTrigger>
                   <SelectContent>
@@ -409,18 +347,19 @@ export default function TransaksiPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full sm:w-auto">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => exportTransactionsToCSV(filteredTransactions)}
+                  className="flex-1 sm:flex-initial"
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Export
                 </Button>
                 <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button size="sm">
+                    <Button size="sm" className="flex-1 sm:flex-initial">
                       <Plus className="h-4 w-4 mr-2" />
                       Tambah Transaksi
                     </Button>
@@ -430,7 +369,7 @@ export default function TransaksiPage() {
                       <DialogTitle>Tambah Transaksi Baru</DialogTitle>
                       <DialogDescription>Catat transaksi stok masuk, keluar, atau penyesuaian</DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
+                    <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
                       <div className="space-y-2">
                         <Label htmlFor="type">Jenis Transaksi *</Label>
                         <Select
@@ -525,58 +464,68 @@ export default function TransaksiPage() {
             <CardTitle>Riwayat Transaksi ({filteredTransactions.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Waktu</TableHead>
-                  <TableHead>Jenis</TableHead>
-                  <TableHead>Produk</TableHead>
-                  <TableHead>Jumlah</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Operator</TableHead>
-                  <TableHead>Stok Saat Ini</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTransactions.map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell>
-                      <div className="text-sm">{formatDateTime(transaction.timestamp)}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getTypeVariant(transaction.type)}>{getTypeLabel(transaction.type)}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{transaction.productName}</div>
-                        <div className="text-sm text-gray-500">{transaction.productBarcode}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className={transaction.quantity < 0 ? "text-red-600" : "text-green-600"}>
-                        {transaction.quantity > 0 ? "+" : ""}
-                        {transaction.quantity}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className={transaction.totalAmount < 0 ? "text-red-600" : "text-green-600"}>
-                        {formatCurrency(transaction.totalAmount)}
-                      </span>
-                    </TableCell>
-                    <TableCell>{transaction.operator}</TableCell>
-                    <TableCell>
-                      {getCurrentStock(transaction.productBarcode)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => openViewDialog(transaction)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[150px]">Waktu</TableHead>
+                    <TableHead className="min-w-[120px]">Jenis</TableHead>
+                    <TableHead className="min-w-[200px]">Produk</TableHead>
+                    <TableHead className="text-center min-w-[80px]">Jumlah</TableHead>
+                    <TableHead className="text-right min-w-[150px]">Total</TableHead>
+                    <TableHead className="min-w-[100px]">Operator</TableHead>
+                    <TableHead className="text-center min-w-[100px]">Stok Saat Ini</TableHead>
+                    <TableHead className="text-right min-w-[80px]">Aksi</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransactions.length === 0 ? (
+                     <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8">
+                           <p className="text-gray-500">Tidak ada transaksi yang sesuai dengan filter.</p>
+                        </TableCell>
+                     </TableRow>
+                  ) : (
+                    filteredTransactions.map((transaction) => (
+                      <TableRow key={transaction.id}>
+                        <TableCell>
+                          <div className="text-sm">{formatDateTime(transaction.timestamp)}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getTypeVariant(transaction.type)}>{getTypeLabel(transaction.type)}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{transaction.productName}</div>
+                            <div className="text-sm text-gray-500 font-mono">{transaction.productBarcode}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className={transaction.quantity < 0 ? "text-red-600" : "text-green-600"}>
+                            {transaction.quantity > 0 ? "+" : ""}
+                            {transaction.quantity}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className={transaction.totalAmount < 0 ? "text-red-600" : "text-green-600"}>
+                            {formatCurrency(transaction.totalAmount)}
+                          </span>
+                        </TableCell>
+                        <TableCell>{transaction.operator}</TableCell>
+                        <TableCell className="text-center">
+                          {getCurrentStock(transaction.productBarcode)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm" onClick={() => openViewDialog(transaction)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
@@ -587,28 +536,32 @@ export default function TransaksiPage() {
               <DialogTitle>Detail Transaksi</DialogTitle>
             </DialogHeader>
             {selectedTransaction && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-500">ID Transaksi</Label>
+              <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-500">ID Transaksi</Label>
                     <p className="text-sm font-mono">{selectedTransaction.id}</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-500">Jenis</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-500">Jenis</Label>
                     <Badge variant={getTypeVariant(selectedTransaction.type)}>
                       {getTypeLabel(selectedTransaction.type)}
                     </Badge>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-500">Produk</Label>
-                    <p className="text-sm">{selectedTransaction.productName}</p>
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs font-medium text-gray-500">Produk</Label>
+                    <p className="text-sm font-semibold">{selectedTransaction.productName}</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-500">Barcode</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-500">Barcode</Label>
                     <p className="text-sm font-mono">{selectedTransaction.productBarcode}</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-500">Jumlah</Label>
+                   <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-500">Waktu Transaksi</Label>
+                    <p className="text-sm">{formatDateTime(selectedTransaction.timestamp)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-500">Jumlah</Label>
                     <p
                       className={`text-sm font-semibold ${selectedTransaction.quantity < 0 ? "text-red-600" : "text-green-600"}`}
                     >
@@ -616,36 +569,32 @@ export default function TransaksiPage() {
                       {selectedTransaction.quantity} unit
                     </p>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-500">Harga Satuan</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-500">Harga Satuan</Label>
                     <p className="text-sm">{formatCurrency(selectedTransaction.unitPrice)}</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-500">Total</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-500">Total</Label>
                     <p
                       className={`text-sm font-semibold ${selectedTransaction.totalAmount < 0 ? "text-red-600" : "text-green-600"}`}
                     >
                       {formatCurrency(selectedTransaction.totalAmount)}
                     </p>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-500">Operator</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-500">Operator</Label>
                     <p className="text-sm">{selectedTransaction.operator}</p>
                   </div>
-                  <div className="col-span-2 space-y-2">
-                    <Label className="text-sm font-medium text-gray-500">Alasan</Label>
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs font-medium text-gray-500">Alasan</Label>
                     <p className="text-sm">{selectedTransaction.reason}</p>
                   </div>
                   {selectedTransaction.notes && (
-                    <div className="col-span-2 space-y-2">
-                      <Label className="text-sm font-medium text-gray-500">Catatan</Label>
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-xs font-medium text-gray-500">Catatan</Label>
                       <p className="text-sm">{selectedTransaction.notes}</p>
                     </div>
                   )}
-                  <div className="col-span-2 space-y-2">
-                    <Label className="text-sm font-medium text-gray-500">Waktu Transaksi</Label>
-                    <p className="text-sm">{formatDateTime(selectedTransaction.timestamp)}</p>
-                  </div>
                 </div>
               </div>
             )}
