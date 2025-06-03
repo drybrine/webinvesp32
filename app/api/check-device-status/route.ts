@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
       const device = devices[deviceId]
       const lastSeen = device.lastSeen
       
-      // Jika device belum pernah kirim heartbeat atau terakhir kirim > 30 detik
-      if (!lastSeen || (now - lastSeen) > 30000) {
+      // Jika device belum pernah kirim heartbeat atau terakhir kirim > 60 detik
+      if (!lastSeen || (now - lastSeen) > 60000) {
         if (device.status !== "offline") {
           updates[`${deviceId}/status`] = "offline"
           updatedCount++

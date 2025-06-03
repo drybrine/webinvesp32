@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/check-device-status",
-      "schedule": "*/30 * * * * *"
+      "schedule": "* * * * *"
     }
   ]
 }
