@@ -136,7 +136,7 @@ export default function TransaksiPage() {
   const onlineDevices = useMemo(() => {
     if (devicesLoading || !devices) return 0;
     return devices.filter(
-      (d) => d.lastSeen && Date.now() - new Date(d.lastSeen).getTime() < 30 * 1000 // Ubah dari 5 menit ke 30 detik
+      (d) => d.lastSeen && Date.now() - new Date(d.lastSeen).getTime() < 60 * 1000 // Change to 60 seconds
     ).length;
   }, [devices, devicesLoading]);
 
