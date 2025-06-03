@@ -1,37 +1,93 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect, useMemo, useRef } from "react" // Added useRef
+import { useRouter } from "next/navigation"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Package, TrendingUp, TrendingDown, Users, AlertCircle, Search, Plus, Eye, Edit, Trash2, Minus, QrCode, Wifi, WifiOff, Scan, DollarSign } from "lucide-react"
-import { toast } from "@/hooks/use-toast"
-import { useFirebaseInventory, useFirebaseScans, useFirebaseDevices } from "@/hooks/use-firebase"
-import { getFirebaseStatus, firebaseHelpers } from "@/lib/firebase" // Added firebaseHelpers
-import { ScanHistory } from "@/components/scan-history"
+import { Badge } from "@/components/ui/badge"
+import {
+  Package,
+  DollarSign,
+  AlertCircle,
+  Scan,
+  Plus,
+  Search,
+  Eye,
+  Edit,
+  Trash2,
+  Minus,
+  Filter,
+  Download,
+  ChevronDown,
+  ChevronUp,
+  Barcode as BarcodeIcon,
+  Wifi,
+  WifiOff,
+  Settings,
+  Smartphone,
+} from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import {
+  useFirebaseInventory,
+  useFirebaseScans,
+  useFirebaseDevices,
+  InventoryItem,
+  // ScanRecord, // Not used directly in this component's state/props
+  // DeviceStatus as FirebaseDeviceStatus, // Not used directly
+} from "@/hooks/use-firebase"
+import { getFirebaseStatus, firebaseHelpers } from "@/lib/firebase"
+// import { ScanHistory } from "@/components/scan-history" // Not used in this file
 import BarcodeComponent from "react-barcode"
 
-interface InventoryItem {
-  id: string
-  barcode: string
-  name: string
-  description: string
-  category: string
-  quantity: number
-  minStock: number
-  price: number
-  supplier: string
-  location: string
-  lastUpdated?: number
+// Interface InventoryItem is already defined in use-firebase, re-declaring here might be redundant
+// interface InventoryItem {
+//   id: string
+//   barcode: string | null // Allow null
+//   name: string
+//   description: string
+//   category: string
+//   quantity: number
+//   minStock: number
+//   price: number
+//   supplier: string | null // Allow null
+//   location: string
+//   lastUpdated?: number // Optional: timestamp of last update
+// }
+
+interface StockAdjustment {
+  itemId: string
+  itemName: string
+  currentQuantity: number
+  type: "add" | "subtract"
+  amount: number
 }
 
 export default function TransaksiPage() {
+  const router = useRouter()
   const {
     items: inventory,
     loading: inventoryLoading,
@@ -39,23 +95,23 @@ export default function TransaksiPage() {
     addItem,
     updateItem,
     deleteItem,
-    isConfigured,
   } = useFirebaseInventory()
-  const { scans, loading: scansLoading } = useFirebaseScans()
-  const { devices, loading: devicesLoading } = useFirebaseDevices()
+  const { scans, loading: scansLoading, error: scansError } = useFirebaseScans()
+  const { devices, loading: devicesLoading, error: devicesError } = useFirebaseDevices()
 
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("all")
   const [isAddItemOpen, setIsAddItemOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null)
-  const [stockAdjustment, setStockAdjustment] = useState<{
-    item: InventoryItem
-    type: "add" | "remove"
-    amount: number
-  } | null>(null)
+  const [stockAdjustment, setStockAdjustment] = useState<StockAdjustment | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterCategory, setFilterCategory] = useState("all")
+  const [sortOrder, setSortOrder] = useState("name-asc")
+  // const [showBarcodeScanner, setShowBarcodeScanner] = useState(false) // Not used
+  // const [scannedBarcode, setScannedBarcode] = useState<string | null>(null) // Not used
 
-  const [newItem, setNewItem] = useState({
+  const { toast } = useToast()
+
+  const [newItem, setNewItem] = useState<Omit<InventoryItem, "id" | "createdAt" | "updatedAt">>({
     barcode: "",
     name: "",
     description: "",
@@ -65,12 +121,64 @@ export default function TransaksiPage() {
     price: 0,
     supplier: "",
     location: "",
+    lastUpdated: Date.now(),
   })
 
-  // Get Firebase status
+  const categories = useMemo(() => {
+    if (inventoryLoading || !inventory) {
+      return ["all"];
+    }
+    return ["all", ...new Set(inventory.map((item) => item.category).filter(cat => typeof cat === 'string' && cat.trim() !== ''))]
+  }, [inventory, inventoryLoading]);
+
   const firebaseStatus = getFirebaseStatus()
 
-  // Show loading state
+  const onlineDevices = useMemo(() => {
+    if (devicesLoading || !devices) return 0;
+    return devices.filter(
+      (d) => d.lastSeen && Date.now() - new Date(d.lastSeen).getTime() < 30 * 1000 // Ubah dari 5 menit ke 30 detik
+    ).length;
+  }, [devices, devicesLoading]);
+
+  const prevOnlineDevicesRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!devicesLoading) { // Only show toasts after initial device load
+      const currentOnlineDevices = onlineDevices;
+      const prevOnlineDevices = prevOnlineDevicesRef.current;
+
+      if (prevOnlineDevices !== undefined) { // Avoid toast on initial render
+        if (currentOnlineDevices > 0 && prevOnlineDevices === 0) {
+          toast({
+            title: "Pemindai Terhubung",
+            description: "Satu atau lebih pemindai ESP32 kini aktif.",
+            variant: "default",
+          });
+        } else if (currentOnlineDevices === 0 && prevOnlineDevices > 0) {
+          toast({
+            title: "Pemindai Terputus",
+            description: "Semua pemindai ESP32 kini tidak aktif.",
+            variant: "destructive",
+          });
+        } else if (currentOnlineDevices > prevOnlineDevices) {
+           toast({
+            title: "Pemindai Baru Terhubung",
+            description: `Jumlah pemindai aktif bertambah menjadi ${currentOnlineDevices}.`,
+            variant: "default",
+          });
+        } else if (currentOnlineDevices < prevOnlineDevices && currentOnlineDevices > 0) {
+           toast({
+            title: "Satu Pemindai Terputus",
+            description: `Jumlah pemindai aktif berkurang menjadi ${currentOnlineDevices}.`,
+            variant: "default", // Or "destructive" if preferred
+          });
+        }
+      }
+      prevOnlineDevicesRef.current = currentOnlineDevices;
+    }
+  }, [onlineDevices, devicesLoading, toast]);
+
+
   if (inventoryLoading || scansLoading || devicesLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
@@ -92,16 +200,26 @@ export default function TransaksiPage() {
       return
     }
 
-    // Check if barcode already exists
-    const existingItem = inventory.find((item) => item.barcode === newItem.barcode)
-    if (existingItem) {
+    const existingItemByBarcode = inventory.find((item) => item.barcode && item.barcode === newItem.barcode && newItem.barcode !== "");
+    if (existingItemByBarcode) {
       toast({
         title: "Barcode Sudah Ada",
-        description: `Barcode ${newItem.barcode} sudah digunakan untuk ${existingItem.name}`,
+        description: `Barcode ${newItem.barcode} sudah digunakan untuk ${existingItemByBarcode.name}`,
         variant: "destructive",
       })
       return
     }
+    
+    const existingItemByName = inventory.find((item) => item.name.toLowerCase() === newItem.name.toLowerCase());
+    if (existingItemByName) {
+      toast({
+        title: "Nama Item Sudah Ada",
+        description: `Item dengan nama ${newItem.name} sudah ada.`,
+        variant: "destructive",
+      })
+      return
+    }
+
 
     try {
       await addItem(newItem)
@@ -115,6 +233,7 @@ export default function TransaksiPage() {
         price: 0,
         supplier: "",
         location: "",
+        lastUpdated: Date.now(),
       })
       setIsAddItemOpen(false)
       toast({
@@ -132,6 +251,34 @@ export default function TransaksiPage() {
 
   const updateInventoryItem = async () => {
     if (!editingItem) return
+
+    // Check if barcode is being changed to one that already exists (excluding itself)
+    if (editingItem.barcode) {
+      const otherItemWithSameBarcode = inventory.find(
+        (item) => item.id !== editingItem.id && item.barcode === editingItem.barcode
+      );
+      if (otherItemWithSameBarcode) {
+        toast({
+          title: "Barcode Sudah Ada",
+          description: `Barcode ${editingItem.barcode} sudah digunakan untuk item ${otherItemWithSameBarcode.name}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    // Check if name is being changed to one that already exists (excluding itself)
+    const otherItemWithSameName = inventory.find(
+        (item) => item.id !== editingItem.id && item.name.toLowerCase() === editingItem.name.toLowerCase()
+    );
+    if (otherItemWithSameName) {
+        toast({
+            title: "Nama Item Sudah Ada",
+            description: `Item dengan nama ${editingItem.name} sudah ada.`,
+            variant: "destructive",
+        });
+        return;
+    }
+
 
     try {
       await updateItem(editingItem.id, editingItem)
@@ -169,32 +316,32 @@ export default function TransaksiPage() {
     }
   }
 
-  const adjustStock = async () => {
+  const handleStockAdjustment = async () => {
     if (!stockAdjustment) return
 
-    const { item, type, amount } = stockAdjustment
-    const newQuantity = type === "add" ? item.quantity + amount : item.quantity - amount
+    const { itemId, amount, type, currentQuantity, itemName } = stockAdjustment
+    const newQuantity = type === "add" ? currentQuantity + amount : currentQuantity - amount
 
     if (newQuantity < 0) {
       toast({
         title: "Error",
-        description: "Stok tidak boleh kurang dari 0",
+        description: "Stok tidak boleh kurang dari nol.",
         variant: "destructive",
       })
       return
     }
 
     try {
-      await updateItem(item.id, { ...item, quantity: newQuantity })
-
-      // Create transaction record for the stock adjustment
+      await updateItem(itemId, { quantity: newQuantity } as Partial<InventoryItem>)
+      
+      // Record transaction
       const transactionData = {
-        type: "adjustment" as "in" | "out" | "adjustment",
-        productName: item.name,
-        productBarcode: item.barcode,
-        quantity: type === "add" ? amount : -amount, // Positive for add, negative for remove
-        unitPrice: item.price,
-        totalAmount: (type === "add" ? amount : -amount) * item.price,
+        type: type === "add" ? "in" : "out", // Or 'adjustment'
+        productBarcode: inventory.find(i => i.id === itemId)?.barcode || "N/A",
+        productName: itemName,
+        quantity: type === "add" ? amount : -amount,
+        unitPrice: inventory.find(i => i.id === itemId)?.price || 0, // Assuming price is needed
+        totalAmount: (type === "add" ? amount : -amount) * (inventory.find(i => i.id === itemId)?.price || 0),
         reason: "Penyesuaian Stok dari Dashboard Inventaris",
         operator: "Admin", // Replace with actual user if available
         // timestamp will be added by firebaseHelpers.addTransaction
@@ -204,7 +351,7 @@ export default function TransaksiPage() {
       setStockAdjustment(null)
       toast({
         title: "Berhasil",
-        description: `Stok ${item.name} ${type === "add" ? "ditambah" : "dikurangi"} sebanyak ${amount}. Transaksi dicatat.`,
+        description: `Stok ${itemName} ${type === "add" ? "ditambah" : "dikurangi"} sebanyak ${amount}. Transaksi dicatat.`,
       })
     } catch (error) {
       console.error("Error adjusting stock or recording transaction:", error);
@@ -221,62 +368,114 @@ export default function TransaksiPage() {
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (item.barcode ?? "").includes(searchTerm) ||
       item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.supplier ?? "").toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === "all" || item.category === selectedCategory
+      item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.supplier ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.location.toLowerCase().includes(searchTerm.toLowerCase())
+
+    const matchesCategory = filterCategory === "all" || item.category === filterCategory
+
     return matchesSearch && matchesCategory
+  }).sort((a, b) => {
+    const [key, order] = sortOrder.split("-")
+    let comparison = 0
+    
+    const valA = key === 'name' ? a.name.toLowerCase() : key === 'quantity' ? a.quantity : key === 'price' ? a.price : key === 'category' ? a.category.toLowerCase() : 0;
+    const valB = key === 'name' ? b.name.toLowerCase() : key === 'quantity' ? b.quantity : key === 'price' ? b.price : key === 'category' ? b.category.toLowerCase() : 0;
+
+    if (valA > valB) {
+      comparison = 1
+    } else if (valA < valB) {
+      comparison = -1
+    }
+    return order === "asc" ? comparison : comparison * -1
   })
 
-  const categories = [...new Set(inventory.map((item) => item.category))].filter(Boolean)
-  const lowStockItems = inventory.filter((item) => item.quantity <= item.minStock)
+  const totalItems = inventory.length
   const totalValue = inventory.reduce((sum, item) => sum + item.quantity * item.price, 0)
-  const totalItems = inventory.reduce((sum, item) => sum + item.quantity, 0)
-  const onlineDevices = devices.filter((d) => d.status === "online").length
+  const lowStockItems = inventory.filter((item) => item.quantity <= item.minStock)
+  // onlineDevices is now a useMemo hook above
+
+  const exportToCSV = () => {
+    const csvRows = [];
+    const headers = ["ID", "Barcode", "Nama", "Deskripsi", "Kategori", "Kuantitas", "Stok Min", "Harga", "Pemasok", "Lokasi", "Update Terakhir"];
+    csvRows.push(headers.join(','));
+
+    for (const item of filteredInventory) {
+        const values = [
+            item.id,
+            item.barcode || "",
+            `"${item.name.replace(/"/g, '""')}"`,
+            `"${item.description.replace(/"/g, '""')}"`,
+            item.category,
+            item.quantity,
+            item.minStock,
+            item.price,
+            `"${(item.supplier || "").replace(/"/g, '""')}"`,
+            `"${item.location.replace(/"/g, '""')}"`,
+            item.lastUpdated ? new Date(item.lastUpdated).toLocaleString() : ""
+        ];
+        csvRows.push(values.join(','));
+    }
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const fileName = `inventaris_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    const link = document.createElement("a");
+    if (link.download !== undefined) { 
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    toast({ title: "Export Berhasil", description: `${filteredInventory.length} item diexport ke ${fileName}` });
+  };
+
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8 text-center md:text-left">
           <h1 className="text-4xl font-bold text-gray-900">📦 Dashboard Inventaris</h1>
           <p className="text-gray-600">Kelola stok barang dengan mudah dan efisien</p>
         </div>
 
-        {/* Connection Status */}
-        <Alert className={firebaseStatus.available ? "border-green-500 bg-green-50" : "border-yellow-500 bg-yellow-50"}>
+        <Alert className={`mb-6 ${firebaseStatus.available ? "border-green-500 bg-green-50" : "border-yellow-500 bg-yellow-50"}`}>
           {firebaseStatus.available ? (
             <Wifi className="h-4 w-4 text-green-600" />
           ) : (
             <WifiOff className="h-4 w-4 text-yellow-600" />
           )}
           <AlertDescription>
-            <strong>Status Koneksi:</strong>{" "}
-            {firebaseStatus.available ? "Terhubung ke Firebase (Real-time sync aktif)" : "Tidak terhubung"}
+            <strong>Status Koneksi Backend:</strong>{" "}
+            {firebaseStatus.available ? "Terhubung (Real-time sync aktif)" : "Tidak terhubung ke Firebase"}
           </AlertDescription>
         </Alert>
 
-        {/* Show errors if any */}
-        {inventoryError && (
-          <Alert className="border-red-500 bg-red-50">
-            <AlertCircle className="h-4 w-4 text-red-600" />
+        {(inventoryError || scansError || devicesError) && (
+          <Alert variant="destructive" className="mb-6 border-red-500 bg-red-50">
+            <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Error:</strong> {inventoryError}
+              <strong>Error:</strong> {inventoryError || scansError || devicesError || "Gagal memuat data."}
             </AlertDescription>
           </Alert>
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Item</CardTitle>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{totalItems.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">{inventory.length} produk unik</p>
+              <div className="text-2xl font-bold">{totalItems}</div>
+              <p className="text-xs text-muted-foreground">Jenis barang unik</p>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Nilai</CardTitle>
@@ -287,7 +486,6 @@ export default function TransaksiPage() {
               <p className="text-xs text-muted-foreground">Nilai inventaris saat ini</p>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Stok Rendah</CardTitle>
@@ -298,7 +496,6 @@ export default function TransaksiPage() {
               <p className="text-xs text-muted-foreground">Item perlu diisi ulang</p>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Pemindai Aktif</CardTitle>
@@ -309,203 +506,100 @@ export default function TransaksiPage() {
               <p className="text-xs text-muted-foreground">Perangkat ESP32 online</p>
             </CardContent>
           </Card>
+           {/* Simplified ESP32 Scanner Status Card */}
+           <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Status Pemindai ESP32</CardTitle>
+              {onlineDevices > 0 ? <Wifi className="h-4 w-4 text-green-600" /> : <WifiOff className="h-4 w-4 text-red-600" />}
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${onlineDevices > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {onlineDevices > 0 ? "Terhubung" : "Terputus"}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {onlineDevices > 0 ? `${onlineDevices} perangkat aktif terdeteksi` : "Tidak ada perangkat aktif"}
+              </p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-3 w-full" 
+                onClick={() => router.push('/pengaturan?tab=devices')}
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Kelola Perangkat
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Low Stock Alert */}
         {lowStockItems.length > 0 && (
-          <Alert>
+          <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>{lowStockItems.length} item</strong> kehabisan stok dan perlu diisi ulang:
-              <div className="mt-2 flex flex-wrap gap-2">
-                {lowStockItems.slice(0, 5).map((item) => (
-                  <Badge key={item.id} variant="destructive" className="text-xs">
-                    {item.name} ({item.quantity})
-                  </Badge>
-                ))}
-                {lowStockItems.length > 5 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{lowStockItems.length - 5} lainnya
-                  </Badge>
-                )}
-              </div>
+              <strong>Perhatian Stok Rendah:</strong> {lowStockItems.length} item perlu segera diisi ulang.
+              <ul className="list-disc list-inside ml-4 mt-1">
+                {lowStockItems.slice(0, 5).map(item => <li key={item.id}>{item.name} (Sisa: {item.quantity})</li>)}
+              </ul>
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Inventory Management */}
+        {/* Inventory Table and Controls */}
         <Card>
           <CardHeader>
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-              <div>
-                <CardTitle>Manajemen Inventaris</CardTitle>
-                <CardDescription>Kelola stok barang, harga, dan informasi produk</CardDescription>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <CardTitle>Daftar Inventaris ({filteredInventory.length})</CardTitle>
+              <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                <Button onClick={() => setIsAddItemOpen(true)} className="w-full sm:w-auto">
+                  <Plus className="mr-2 h-4 w-4" /> Tambah Item
+                </Button>
+                <Button variant="outline" onClick={exportToCSV} className="w-full sm:w-auto">
+                  <Download className="mr-2 h-4 w-4" /> Export CSV
+                </Button>
               </div>
-              <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Tambah Item
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Tambah Item Baru</DialogTitle>
-                    <DialogDescription>Tambahkan item baru ke inventaris Anda.</DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="barcode" className="text-right">
-                        Barcode *
-                      </Label>
-                      <Input
-                        id="barcode"
-                        value={newItem.barcode}
-                        onChange={(e) => setNewItem({ ...newItem, barcode: e.target.value })}
-                        className="col-span-3"
-                        placeholder="1234567890123"
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="name" className="text-right">
-                        Nama *
-                      </Label>
-                      <Input
-                        id="name"
-                        value={newItem.name}
-                        onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                        className="col-span-3"
-                        placeholder="Nama produk"
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="description" className="text-right">
-                        Deskripsi
-                      </Label>
-                      <Textarea
-                        id="description"
-                        value={newItem.description}
-                        onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                        className="col-span-3"
-                        placeholder="Deskripsi produk"
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="category" className="text-right">
-                        Kategori
-                      </Label>
-                      <Select value={newItem.category} onValueChange={(value) => setNewItem({ ...newItem, category: value })}>
-                        <SelectTrigger className="col-span-3">
-                          <SelectValue placeholder="Pilih kategori" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Elektronik">Elektronik</SelectItem>
-                          <SelectItem value="Makanan">Makanan</SelectItem>
-                          <SelectItem value="Minuman">Minuman</SelectItem>
-                          <SelectItem value="Pakaian">Pakaian</SelectItem>
-                          <SelectItem value="Kesehatan">Kesehatan</SelectItem>
-                          <SelectItem value="Rumah Tangga">Rumah Tangga</SelectItem>
-                          <SelectItem value="Lainnya">Lainnya</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="quantity" className="text-right">
-                        Stok Awal
-                      </Label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        value={newItem.quantity}
-                        onChange={(e) => setNewItem({ ...newItem, quantity: Number(e.target.value) })}
-                        className="col-span-3"
-                        placeholder="0"
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="minStock" className="text-right">
-                        Stok Minimum
-                      </Label>
-                      <Input
-                        id="minStock"
-                        type="number"
-                        value={newItem.minStock}
-                        onChange={(e) => setNewItem({ ...newItem, minStock: Number(e.target.value) })}
-                        className="col-span-3"
-                        placeholder="5"
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="price" className="text-right">
-                        Harga (Rp)
-                      </Label>
-                      <Input
-                        id="price"
-                        type="number"
-                        value={newItem.price}
-                        onChange={(e) => setNewItem({ ...newItem, price: Number(e.target.value) })}
-                        className="col-span-3"
-                        placeholder="0"
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="supplier" className="text-right">
-                        Pemasok
-                      </Label>
-                      <Input
-                        id="supplier"
-                        value={newItem.supplier}
-                        onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })}
-                        className="col-span-3"
-                        placeholder="Nama pemasok"
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="location" className="text-right">
-                        Lokasi
-                      </Label>
-                      <Input
-                        id="location"
-                        value={newItem.location}
-                        onChange={(e) => setNewItem({ ...newItem, location: e.target.value })}
-                        className="col-span-3"
-                        placeholder="Lokasi penyimpanan"
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button onClick={addInventoryItem}>Tambah Item</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <div className="mt-4 flex flex-col md:flex-row gap-4">
+              <div className="relative flex-grow">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Cari produk, barcode, atau pemasok..."
+                  placeholder="Cari item (nama, barcode, kategori...)"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-9 w-full"
                 />
               </div>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Kategori</SelectItem>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-4">
+                <Select value={filterCategory} onValueChange={setFilterCategory}>
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Filter Kategori" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat === "all" ? "Semua Kategori" : cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={sortOrder} onValueChange={setSortOrder}>
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Urutkan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name-asc">Nama (A-Z)</SelectItem>
+                    <SelectItem value="name-desc">Nama (Z-A)</SelectItem>
+                    <SelectItem value="quantity-asc">Stok (Sedikit-Banyak)</SelectItem>
+                    <SelectItem value="quantity-desc">Stok (Banyak-Sedikit)</SelectItem>
+                    <SelectItem value="price-asc">Harga (Murah-Mahal)</SelectItem>
+                    <SelectItem value="price-desc">Harga (Mahal-Murah)</SelectItem>
+                    <SelectItem value="category-asc">Kategori (A-Z)</SelectItem>
+                    <SelectItem value="category-desc">Kategori (Z-A)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-
+          </CardHeader>
+          <CardContent>
             <div className="space-y-4">
               {filteredInventory.length === 0 ? (
                 <div className="text-center py-8">
@@ -516,37 +610,20 @@ export default function TransaksiPage() {
                 </div>
               ) : (
                 filteredInventory.map((item) => (
-                  <div key={item.id} className="border rounded-lg p-4 bg-white">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div key={item.id} className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold text-lg">{item.name}</h3>
+                        <div className="flex items-center gap-2 flex-wrap mb-2">
+                          <h3 className="font-semibold text-lg text-blue-700">{item.name}</h3>
                           <Badge variant={item.quantity <= item.minStock ? "destructive" : "secondary"}>
-                            {item.quantity} stok
+                            Stok: {item.quantity} / Min: {item.minStock}
                           </Badge>
-                          {item.category && <Badge variant="outline">{item.category}</Badge>}
-                          {item.quantity <= item.minStock && (
-                            <Badge variant="destructive" className="animate-pulse">
-                              Stok Rendah
-                            </Badge>
-                          )}
+                          <Badge variant="outline">{item.category}</Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground">{item.description}</p>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
+                        <p className="text-sm text-gray-600 mb-1 truncate" title={item.description}>{item.description || "Tidak ada deskripsi"}</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-sm text-gray-500">
                           <span>
-                            <strong>Barcode:</strong>
-                            <span className="font-mono text-xs">{item.barcode}</span>
-                            <div className="bg-white p-1 rounded border inline-block mt-1">
-                              <BarcodeComponent
-                                value={item.barcode ?? ""}
-                                format="CODE128"
-                                width={1.5}
-                                height={40}
-                                displayValue={false}
-                                background="#fff"
-                                lineColor="#000"
-                              />
-                            </div>
+                            <strong>Barcode:</strong> {item.barcode || "-"}
                           </span>
                           <span>
                             <strong>Harga:</strong> Rp {item.price.toLocaleString()}
@@ -557,10 +634,15 @@ export default function TransaksiPage() {
                           <span>
                             <strong>Pemasok:</strong> {item.supplier || "-"}
                           </span>
+                           {item.lastUpdated && (
+                            <span className="col-span-2 sm:col-span-1">
+                                <strong>Update:</strong> {new Date(item.lastUpdated).toLocaleDateString()}
+                            </span>
+                           )}
                         </div>
                       </div>
-                      <div className="flex flex-col gap-2 ml-4">
-                        <div className="flex gap-1">
+                      <div className="flex flex-col gap-2 ml-0 md:ml-4 pt-2 md:pt-0 border-t md:border-t-0 md:border-l md:pl-4">
+                        <div className="flex gap-1 flex-wrap justify-start md:justify-end">
                           <Button
                             variant="outline"
                             size="sm"
@@ -590,7 +672,8 @@ export default function TransaksiPage() {
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
-                            variant="outline"
+                            variant="destructive"
+                            // outline // This is not a valid prop for Button, should be variant="outline" + custom destructive styling or just variant="destructive"
                             size="sm"
                             onClick={() => deleteInventoryItem(item.id, item.name)}
                             title="Hapus Item"
@@ -598,11 +681,19 @@ export default function TransaksiPage() {
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 mt-1 flex-wrap justify-start md:justify-end">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setStockAdjustment({ item: { ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" }, type: "add", amount: 1 })}
+                            onClick={() =>
+                              setStockAdjustment({
+                                itemId: item.id,
+                                itemName: item.name,
+                                currentQuantity: item.quantity,
+                                type: "add",
+                                amount: 1,
+                              })
+                            }
                             title="Tambah Stok"
                           >
                             <Plus className="h-4 w-4" />
@@ -610,7 +701,15 @@ export default function TransaksiPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setStockAdjustment({ item: { ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" }, type: "remove", amount: 1 })}
+                            onClick={() =>
+                              setStockAdjustment({
+                                itemId: item.id,
+                                itemName: item.name,
+                                currentQuantity: item.quantity,
+                                type: "subtract",
+                                amount: 1,
+                              })
+                            }
                             title="Kurangi Stok"
                           >
                             <Minus className="h-4 w-4" />
@@ -625,9 +724,62 @@ export default function TransaksiPage() {
           </CardContent>
         </Card>
 
+        {/* Add Item Dialog */}
+        <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Tambah Item Baru</DialogTitle>
+              <DialogDescription>Masukkan detail item inventaris baru.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              {/* Fields: Barcode, Name, Description, Category, Quantity, MinStock, Price, Supplier, Location */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="barcode" className="text-right">Barcode</Label>
+                <Input id="barcode" value={newItem.barcode ?? ""} onChange={(e) => setNewItem({ ...newItem, barcode: e.target.value })} className="col-span-3" placeholder="Contoh: 1234567890123"/>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">Nama Item</Label>
+                <Input id="name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} className="col-span-3" placeholder="Contoh: Kopi Sachet ABC"/>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="description" className="text-right">Deskripsi</Label>
+                <Input id="description" value={newItem.description} onChange={(e) => setNewItem({ ...newItem, description: e.target.value })} className="col-span-3" placeholder="Detail singkat mengenai item"/>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="category" className="text-right">Kategori</Label>
+                <Input id="category" value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} className="col-span-3" placeholder="Contoh: Minuman"/>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="quantity" className="text-right">Kuantitas</Label>
+                <Input id="quantity" type="number" value={newItem.quantity} onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })} className="col-span-3" />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="minStock" className="text-right">Stok Min.</Label>
+                <Input id="minStock" type="number" value={newItem.minStock} onChange={(e) => setNewItem({ ...newItem, minStock: parseInt(e.target.value) || 0 })} className="col-span-3" />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="price" className="text-right">Harga (Rp)</Label>
+                <Input id="price" type="number" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) || 0 })} className="col-span-3" />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="supplier" className="text-right">Pemasok</Label>
+                <Input id="supplier" value={newItem.supplier ?? ""} onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })} className="col-span-3" placeholder="Nama supplier (opsional)"/>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="location" className="text-right">Lokasi</Label>
+                <Input id="location" value={newItem.location} onChange={(e) => setNewItem({ ...newItem, location: e.target.value })} className="col-span-3" placeholder="Contoh: Rak A1"/>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAddItemOpen(false)}>Batal</Button>
+              <Button onClick={addInventoryItem}>Simpan Item</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Edit Item Dialog */}
         <Dialog open={!!editingItem} onOpenChange={() => setEditingItem(null)}>
-          <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Item</DialogTitle>
               <DialogDescription>Perbarui informasi item inventaris.</DialogDescription>
@@ -640,14 +792,14 @@ export default function TransaksiPage() {
                   </Label>
                   <Input
                     id="edit-barcode"
-                    value={editingItem.barcode}
+                    value={editingItem.barcode ?? ""}
                     onChange={(e) => setEditingItem({ ...editingItem, barcode: e.target.value })}
                     className="col-span-3"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-name" className="text-right">
-                    Nama
+                    Nama Item
                   </Label>
                   <Input
                     id="edit-name"
@@ -656,100 +808,38 @@ export default function TransaksiPage() {
                     className="col-span-3"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-description" className="text-right">
-                    Deskripsi
-                  </Label>
-                  <Textarea
-                    id="edit-description"
-                    value={editingItem.description}
-                    onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
-                    className="col-span-3"
-                  />
+                 <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-description" className="text-right">Deskripsi</Label>
+                  <Input id="edit-description" value={editingItem.description} onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })} className="col-span-3"/>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-category" className="text-right">
-                    Kategori
-                  </Label>
-                  <Select
-                    value={editingItem.category}
-                    onValueChange={(value) => setEditingItem({ ...editingItem, category: value })}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Elektronik">Elektronik</SelectItem>
-                      <SelectItem value="Makanan">Makanan</SelectItem>
-                      <SelectItem value="Minuman">Minuman</SelectItem>
-                      <SelectItem value="Pakaian">Pakaian</SelectItem>
-                      <SelectItem value="Kesehatan">Kesehatan</SelectItem>
-                      <SelectItem value="Rumah Tangga">Rumah Tangga</SelectItem>
-                      <SelectItem value="Lainnya">Lainnya</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="edit-category" className="text-right">Kategori</Label>
+                  <Input id="edit-category" value={editingItem.category} onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })} className="col-span-3"/>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-quantity" className="text-right">
-                    Stok
-                  </Label>
-                  <Input
-                    id="edit-quantity"
-                    type="number"
-                    value={editingItem.quantity}
-                    onChange={(e) => setEditingItem({ ...editingItem, quantity: Number(e.target.value) })}
-                    className="col-span-3"
-                  />
+                  <Label htmlFor="edit-quantity" className="text-right">Kuantitas</Label>
+                  <Input id="edit-quantity" type="number" value={editingItem.quantity} onChange={(e) => setEditingItem({ ...editingItem, quantity: parseInt(e.target.value) || 0 })} className="col-span-3"/>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-minStock" className="text-right">
-                    Stok Minimum
-                  </Label>
-                  <Input
-                    id="edit-minStock"
-                    type="number"
-                    value={editingItem.minStock}
-                    onChange={(e) => setEditingItem({ ...editingItem, minStock: Number(e.target.value) })}
-                    className="col-span-3"
-                  />
+                  <Label htmlFor="edit-minStock" className="text-right">Stok Min.</Label>
+                  <Input id="edit-minStock" type="number" value={editingItem.minStock} onChange={(e) => setEditingItem({ ...editingItem, minStock: parseInt(e.target.value) || 0 })} className="col-span-3"/>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-price" className="text-right">
-                    Harga (Rp)
-                  </Label>
-                  <Input
-                    id="edit-price"
-                    type="number"
-                    value={editingItem.price}
-                    onChange={(e) => setEditingItem({ ...editingItem, price: Number(e.target.value) })}
-                    className="col-span-3"
-                  />
+                  <Label htmlFor="edit-price" className="text-right">Harga (Rp)</Label>
+                  <Input id="edit-price" type="number" value={editingItem.price} onChange={(e) => setEditingItem({ ...editingItem, price: parseFloat(e.target.value) || 0 })} className="col-span-3"/>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-supplier" className="text-right">
-                    Pemasok
-                  </Label>
-                  <Input
-                    id="edit-supplier"
-                    value={editingItem.supplier}
-                    onChange={(e) => setEditingItem({ ...editingItem, supplier: e.target.value })}
-                    className="col-span-3"
-                  />
+                  <Label htmlFor="edit-supplier" className="text-right">Pemasok</Label>
+                  <Input id="edit-supplier" value={editingItem.supplier ?? ""} onChange={(e) => setEditingItem({ ...editingItem, supplier: e.target.value })} className="col-span-3"/>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-location" className="text-right">
-                    Lokasi
-                  </Label>
-                  <Input
-                    id="edit-location"
-                    value={editingItem.location}
-                    onChange={(e) => setEditingItem({ ...editingItem, location: e.target.value })}
-                    className="col-span-3"
-                  />
+                  <Label htmlFor="edit-location" className="text-right">Lokasi</Label>
+                  <Input id="edit-location" value={editingItem.location} onChange={(e) => setEditingItem({ ...editingItem, location: e.target.value })} className="col-span-3"/>
                 </div>
               </div>
             )}
             <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingItem(null)}>Batal</Button>
               <Button onClick={updateInventoryItem}>Simpan Perubahan</Button>
             </DialogFooter>
           </DialogContent>
@@ -757,16 +847,22 @@ export default function TransaksiPage() {
 
         {/* View Item Dialog */}
         <Dialog open={!!viewingItem} onOpenChange={() => setViewingItem(null)}>
-          <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Detail Item</DialogTitle>
-              <DialogDescription>Informasi lengkap item inventaris.</DialogDescription>
             </DialogHeader>
             {viewingItem && (
-              <div className="py-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4 py-4">
+                <div className="flex justify-center mb-4">
+                  {viewingItem.barcode ? (
+                    <BarcodeComponent value={viewingItem.barcode} height={60} displayValue={false} />
+                  ) : (
+                    <p className="text-gray-500">Tidak ada barcode</p>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
                   <div>
-                    <Label className="text-sm font-medium text-gray-500">Nama</Label>
+                    <Label className="text-sm font-medium text-gray-500">Nama Item</Label>
                     <p className="text-lg font-semibold">{viewingItem.name}</p>
                   </div>
                   <div>
@@ -787,7 +883,7 @@ export default function TransaksiPage() {
                   </div>
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Barcode</Label>
-                    <p className="font-mono">{viewingItem.barcode}</p>
+                    <p className="font-mono">{viewingItem.barcode || "-"}</p>
                   </div>
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Pemasok</Label>
@@ -798,70 +894,63 @@ export default function TransaksiPage() {
                     <p>{viewingItem.location || "-"}</p>
                   </div>
                 </div>
+                <div className="pt-2 border-t">
+                  <Label className="text-sm font-medium text-gray-500">Deskripsi</Label>
+                  <p className="whitespace-pre-wrap">{viewingItem.description || "Tidak ada deskripsi."}</p>
+                </div>
                 <div>
-                  <Label className="text-sm font-medium text-gray-500">Total Nilai</Label>
+                  <Label className="text-sm font-medium text-gray-500">Total Nilai Stok Item Ini</Label>
                   <p className="text-xl font-bold text-blue-600">
                     Rp {(viewingItem.quantity * viewingItem.price).toLocaleString()}
                   </p>
                 </div>
-                {/* Contoh menampilkan lastUpdated (jika ada) */}
                 {viewingItem.lastUpdated && (
-                  <span>
-                    <strong>Update Terakhir:</strong>{" "}
-                    {new Date(viewingItem.lastUpdated).toLocaleString()}
-                  </span>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-500">Update Terakhir</Label>
+                    <p>{new Date(viewingItem.lastUpdated).toLocaleString()}</p>
+                  </div>
                 )}
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setViewingItem(null)}>
-                Tutup
-              </Button>
+              <Button onClick={() => setViewingItem(null)}>Tutup</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
         {/* Stock Adjustment Dialog */}
         <Dialog open={!!stockAdjustment} onOpenChange={() => setStockAdjustment(null)}>
-          <DialogContent className="sm:max-w-[400px]">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Penyesuaian Stok</DialogTitle>
+              <DialogTitle>
+                {stockAdjustment?.type === "add" ? "Tambah" : "Kurangi"} Stok: {stockAdjustment?.itemName}
+              </DialogTitle>
               <DialogDescription>
-                {stockAdjustment?.type === "add" ? "Tambah" : "Kurangi"} stok untuk{" "}
-                {stockAdjustment?.item.name}
+                Stok saat ini: {stockAdjustment?.currentQuantity}. Masukkan jumlah untuk penyesuaian.
               </DialogDescription>
             </DialogHeader>
             {stockAdjustment && (
-              <div className="py-4 space-y-4">
-                <div>
-                  <Label>Jumlah</Label>
-                  <Input
-                    type="number"
-                    value={stockAdjustment.amount}
-                    onChange={(e) =>
-                      setStockAdjustment({ ...stockAdjustment, amount: Number(e.target.value) })
-                    }
-                    min="1"
-                  />
-                </div>
-                <div className="bg-gray-50 p-3 rounded">
-                  <p className="text-sm">
-                    <strong>Stok saat ini:</strong> {stockAdjustment.item.quantity}
-                  </p>
-                  <p className="text-sm">
-                    <strong>Stok setelah penyesuaian:</strong>{" "}
-                    {stockAdjustment.type === "add"
-                      ? stockAdjustment.item.quantity + stockAdjustment.amount
-                      : stockAdjustment.item.quantity - stockAdjustment.amount}
-                  </p>
-                </div>
+              <div className="py-4">
+                <Label htmlFor="adjustment-amount">Jumlah</Label>
+                <Input
+                  id="adjustment-amount"
+                  type="number"
+                  min="1"
+                  value={stockAdjustment.amount}
+                  onChange={(e) =>
+                    setStockAdjustment({
+                      ...stockAdjustment,
+                      amount: parseInt(e.target.value) || 1,
+                    })
+                  }
+                />
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setStockAdjustment(null)}>
-                Batal
+              <Button variant="outline" onClick={() => setStockAdjustment(null)}>Batal</Button>
+              <Button onClick={handleStockAdjustment}>
+                {stockAdjustment?.type === "add" ? "Tambah Stok" : "Kurangi Stok"}
               </Button>
-              <Button onClick={adjustStock}>{stockAdjustment?.type === "add" ? "Tambah Stok" : "Kurangi Stok"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
