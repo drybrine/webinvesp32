@@ -23,7 +23,7 @@ import {
   ArrowDown,
   Clock,
 } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { useFirebaseScans, useFirebaseInventory } from "@/hooks/use-firebase"
 import { ScanHistory } from "@/components/scan-history"
 
@@ -38,7 +38,7 @@ interface ProcessedScanRecord {
   [key: string]: any // Allow other properties
 }
 
-export default function ScanPage() {
+export default function RiwayatPage() {
   const router = useRouter()
   const { scans, addScan, loading: scansLoading, error: scansError } = useFirebaseScans()
   const { items, loading: inventoryLoading, error: inventoryError } = useFirebaseInventory()

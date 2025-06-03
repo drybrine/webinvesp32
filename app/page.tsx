@@ -496,18 +496,8 @@ export default function TransaksiPage() {
               <p className="text-xs text-muted-foreground">Item perlu diisi ulang</p>
             </CardContent>
           </Card>
+          {/* Status Pemindai ESP32 Card - Yang lebih lengkap */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pemindai Aktif</CardTitle>
-              <Scan className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{onlineDevices}</div>
-              <p className="text-xs text-muted-foreground">Perangkat ESP32 online</p>
-            </CardContent>
-          </Card>
-           {/* Simplified ESP32 Scanner Status Card */}
-           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Status Pemindai ESP32</CardTitle>
               {onlineDevices > 0 ? <Wifi className="h-4 w-4 text-green-600" /> : <WifiOff className="h-4 w-4 text-red-600" />}
@@ -516,13 +506,34 @@ export default function TransaksiPage() {
               <div className={`text-2xl font-bold ${onlineDevices > 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {onlineDevices > 0 ? "Terhubung" : "Terputus"}
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground mb-2">
                 {onlineDevices > 0 ? `${onlineDevices} perangkat aktif terdeteksi` : "Tidak ada perangkat aktif"}
               </p>
+              
+              {/* Informasi IP Address ESP32 */}
+              {onlineDevices > 0 && devices && devices.length > 0 && (
+                <div className="text-xs text-muted-foreground space-y-1 mb-3 bg-gray-50 p-2 rounded border">
+                  <div className="font-medium text-gray-700 mb-1">📡 Perangkat Aktif:</div>
+                  {devices
+                    .filter(device => device.lastSeen && Date.now() - new Date(device.lastSeen).getTime() < 60 * 1000)
+                    .map((device, index) => (
+                      <div key={device.deviceId || index} className="flex justify-between items-center">
+                        <span className="font-mono text-xs">
+                          {device.deviceId || `Device-${index + 1}`}
+                        </span>
+                        <span className="font-mono text-xs text-blue-600">
+                          {device.ipAddress || "IP tidak tersedia"}
+                        </span>
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+              
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="mt-3 w-full" 
+                className="mt-1 w-full" 
                 onClick={() => router.push('/pengaturan?tab=devices')}
               >
                 <Settings className="mr-2 h-4 w-4" />

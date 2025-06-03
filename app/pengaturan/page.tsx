@@ -10,8 +10,9 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Settings, Wifi, Database, Shield, Download, Upload, Trash2, RefreshCw } from "lucide-react"
+import { Settings, Wifi, Database, Shield, Download, Upload, Trash2, RefreshCw, WifiOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useFirebaseDevices } from "@/hooks/use-firebase" // Tambahkan import untuk real data
 
 export default function PengaturanPage() {
   const [settings, setSettings] = useState({
@@ -39,24 +40,8 @@ export default function PengaturanPage() {
     twoFactorAuth: false,
   })
 
-  const [devices, setDevices] = useState([
-    {
-      id: "ESP32_001",
-      name: "Scanner Gudang A",
-      status: "online",
-      lastSeen: "2024-01-20T15:30:00Z",
-      batteryLevel: 85,
-      firmwareVersion: "v1.2.3",
-    },
-    {
-      id: "ESP32_002",
-      name: "Scanner Gudang B",
-      status: "offline",
-      lastSeen: "2024-01-20T12:15:00Z",
-      batteryLevel: 45,
-      firmwareVersion: "v1.2.1",
-    },
-  ])
+  // Hapus mock data dan gunakan real data dari Firebase
+  const { devices, loading: devicesLoading, error: devicesError } = useFirebaseDevices()
 
   const { toast } = useToast()
 
@@ -104,22 +89,23 @@ export default function PengaturanPage() {
     })
   }
 
-  const formatDateTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString("id-ID")
+  const formatDateTime = (timestamp: string | number) => {
+    if (!timestamp) return "Tidak tersedia"
+    const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(timestamp)
+    return date.toLocaleString("id-ID")
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "online":
-        return (
-          <Badge variant="default" className="bg-green-500">
-            Online
-          </Badge>
-        )
-      case "offline":
-        return <Badge variant="secondary">Offline</Badge>
-      default:
-        return <Badge variant="outline">Unknown</Badge>
+  const getStatusBadge = (device: any) => {
+    const isOnline = device.lastSeen && Date.now() - new Date(device.lastSeen).getTime() < 60 * 1000
+    
+    if (isOnline || device.status === "online") {
+      return (
+        <Badge variant="default" className="bg-green-500">
+          Online
+        </Badge>
+      )
+    } else {
+      return <Badge variant="secondary">Offline</Badge>
     }
   }
 
@@ -288,32 +274,67 @@ export default function PengaturanPage() {
                   <CardDescription>Kelola perangkat ESP32 scanner yang terhubung</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {devices.map((device) => (
-                      <div key={device.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <Wifi className="w-6 h-6 text-blue-600" />
+                  {devicesLoading ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                      <p className="text-gray-500 mt-4">Memuat data perangkat...</p>
+                    </div>
+                  ) : devicesError ? (
+                    <div className="text-center py-8">
+                      <WifiOff className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                      <p className="text-red-500">Error memuat data perangkat</p>
+                      <p className="text-sm text-gray-500 mt-2">{devicesError}</p>
+                    </div>
+                  ) : !devices || devices.length === 0 ? (
+                    <div className="text-center py-8">
+                      <WifiOff className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                      <p className="text-gray-500">Tidak ada perangkat ESP32 yang terdaftar</p>
+                      <p className="text-sm text-gray-400 mt-2">
+                        Perangkat akan muncul secara otomatis saat mengirim heartbeat pertama
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {devices.map((device, index) => (
+                        <div key={device.deviceId || index} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                              <Wifi className="w-6 h-6 text-blue-600" />
+                            </div>
+                            <div>
+                              <h3 className="font-medium">{device.deviceId || `ESP32-${index + 1}`}</h3>
+                              <p className="text-sm text-gray-500">IP: {device.ipAddress || "Tidak tersedia"}</p>
+                              <p className="text-sm text-gray-500">
+                                Terakhir aktif: {formatDateTime(device.lastSeen)}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-medium">{device.name}</h3>
-                            <p className="text-sm text-gray-500">ID: {device.id}</p>
-                            <p className="text-sm text-gray-500">Terakhir aktif: {formatDateTime(device.lastSeen)}</p>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              {getStatusBadge(device)}
+                              <p className="text-sm text-gray-500 mt-1">
+                                Uptime: {device.uptime ? `${Math.floor(device.uptime / 3600)}h` : "N/A"}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                Ver: {(device as any).version || "Unknown"}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                Heap: {device.freeHeap ? `${Math.floor(device.freeHeap / 1024)}KB` : "N/A"}
+                              </p>
+                            </div>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleRestartDevice(device.deviceId || `Device-${index + 1}`)}
+                              disabled={!(device.status === "online" || (device.lastSeen && Date.now() - new Date(device.lastSeen).getTime() < 60 * 1000))}
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            {getStatusBadge(device.status)}
-                            <p className="text-sm text-gray-500 mt-1">Battery: {device.batteryLevel}%</p>
-                            <p className="text-sm text-gray-500">FW: {device.firmwareVersion}</p>
-                          </div>
-                          <Button variant="outline" size="sm" onClick={() => handleRestartDevice(device.id)}>
-                            <RefreshCw className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

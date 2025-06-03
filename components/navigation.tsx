@@ -4,12 +4,12 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { BarChart3, Scan, Receipt, Settings, Menu, X } from "lucide-react"
+import { BarChart3, Receipt, Settings, Menu, X, History } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: BarChart3 },
-  { name: "Scan In/Out", href: "/scan", icon: Scan },
+  { name: "Riwayat", href: "/riwayat", icon: History },
   { name: "Transaksi", href: "/transaksi", icon: Receipt },
   { name: "Pengaturan", href: "/pengaturan", icon: Settings },
 ]
