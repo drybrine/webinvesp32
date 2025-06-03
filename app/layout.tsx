@@ -34,3 +34,10 @@ export default function RootLayout({
     </html>
   )
 }
+
+// Cari bagian navigation/menu yang berisi "Scan In/Out" dan ubah menjadi:
+// {
+//   name: "Riwayat", // Diubah dari "Scan In/Out"
+//   href: "/scan",
+//   icon: History // atau icon yang sesuai
+// }
