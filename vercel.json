@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/check-device-status",
+      "schedule": "*/30 * * * * *"
+    }
+  ],
+  "CRON_SECRET": "your_secret_key_here"
+}

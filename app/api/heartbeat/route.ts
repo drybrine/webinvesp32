@@ -1,18 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { database } from "@/lib/firebase"
-import { ref, set, get } from "firebase/database"
+import { ref, get, set, serverTimestamp } from "firebase/database"
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { deviceId, uptime, freeHeap, scanCount, version } = body
-
-    console.log("Heartbeat received from device:", deviceId, {
-      uptime,
-      freeHeap,
-      scanCount,
-      version,
-    })
 
     // Check if Firebase is available
     if (!database) {
@@ -20,37 +13,38 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: "Firebase not available",
-          message: "Device heartbeat received but Firebase is not available",
         },
-        { status: 200 }, // Still return 200 so ESP32 doesn't retry unnecessarily
+        { status: 503 },
       )
     }
 
-    // Update device status in Firebase
+    // Update device status dengan heartbeat
     const deviceRef = ref(database, `devices/${deviceId}`)
     const deviceSnapshot = await get(deviceRef)
     const existingData = deviceSnapshot.val() || {}
 
-    await set(deviceRef, {
+    const deviceData = {
       ...existingData,
       deviceId,
       status: "online",
-      lastSeen: Date.now(),
-      uptime: uptime || 0,
-      freeHeap: freeHeap || 0,
-      scanCount: scanCount || existingData.scanCount || 0,
-      version: version || "unknown",
+      lastSeen: Date.now(), // Gunakan timestamp client
       ipAddress:
         request.headers.get("x-forwarded-for") ||
         request.headers.get("x-real-ip") ||
-        existingData.ipAddress ||
         "unknown",
-    })
+      uptime: uptime || existingData.uptime || 0,
+      freeHeap: freeHeap || existingData.freeHeap || 0,
+      scanCount: scanCount || existingData.scanCount || 0,
+      version: version || existingData.version || "1.0.0",
+    }
+
+    await set(deviceRef, deviceData)
 
     return NextResponse.json({
       success: true,
-      message: "Heartbeat received and device status updated",
-      serverTime: Date.now(),
+      message: "Heartbeat received",
+      deviceId,
+      timestamp: Date.now(),
     })
   } catch (error) {
     console.error("Error processing heartbeat:", error)
@@ -71,7 +65,7 @@ export async function OPTIONS() {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Headers": "Content-Type",
     },
   })
 }

@@ -4,7 +4,9 @@ import { useState, useEffect, useMemo } from "react"; // Add useMemo
 import { ref, onValue, DataSnapshot, query, orderByChild, off, Unsubscribe } from "firebase/database"; // Added Unsubscribe, off
 import { firebaseHelpers, isFirebaseConfigured, database, dbRefs } from "@/lib/firebase"; // Ensure all are imported
 
-interface InventoryItem {
+export interface InventoryItem {
+  lastUpdated: string | number | Date;
+  lastUpdated: any;
   id: string
   name: string
   category: string
@@ -20,7 +22,7 @@ interface InventoryItem {
   deleted?: boolean
 }
 
-interface ScanRecord {
+export interface ScanRecord {
   id: string
   barcode: string
   deviceId: string
@@ -31,7 +33,7 @@ interface ScanRecord {
   location?: string
 }
 
-interface DeviceStatus {
+export interface DeviceStatus {
   deviceId: string
   status: "online" | "offline"
   ipAddress: string
