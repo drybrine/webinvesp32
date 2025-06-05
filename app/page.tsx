@@ -434,6 +434,19 @@ export default function TransaksiPage() {
     toast({ title: "Export Berhasil", description: `${filteredInventory.length} item diexport ke ${fileName}` });
   };
 
+  // Add this function near your other utility functions (at the top of your component)
+  interface DeviceStatus {
+    deviceId?: string;
+    lastHeartbeat?: number | string | Date;
+    lastSeen?: number | string | Date;
+    ipAddress?: string;
+  }
+  
+  const checkDeviceStatus = (device: DeviceStatus) => {
+    const lastSeen = device.lastHeartbeat || device.lastSeen;
+    const now = Date.now();
+    return lastSeen && (now - new Date(lastSeen).getTime() < 60000) ? "online" : "offline";
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
@@ -516,16 +529,28 @@ export default function TransaksiPage() {
                   <div className="font-medium text-gray-700 mb-1">📡 Perangkat Aktif:</div>
                   {devices
                     .filter(device => device.lastSeen && Date.now() - new Date(device.lastSeen).getTime() < 60 * 1000)
-                    .map((device, index) => (
-                      <div key={device.deviceId || index} className="flex justify-between items-center">
-                        <span className="font-mono text-xs">
-                          {device.deviceId || `Device-${index + 1}`}
-                        </span>
-                        <span className="font-mono text-xs text-blue-600">
-                          {device.ipAddress || "IP tidak tersedia"}
-                        </span>
-                      </div>
-                    ))
+                    .map((device, index) => {
+                      // Use the checkDeviceStatus function here
+                      const deviceStatus = checkDeviceStatus(device);
+                      
+                      return (
+                        <div key={device.deviceId || index} className="flex justify-between items-center">
+                          <span className="font-mono text-xs">
+                            {device.deviceId || `Device-${index + 1}`}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {deviceStatus === "online" && (
+                              <span className="font-mono text-xs text-green-500">
+                                • online
+                              </span>
+                            )}
+                            <span className="font-mono text-xs text-blue-600">
+                              {device.ipAddress || "IP tidak tersedia"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
                   }
                 </div>
               )}
