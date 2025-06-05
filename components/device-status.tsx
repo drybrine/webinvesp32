@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react" // Add useEffect import
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,7 @@ interface DeviceStatus {
   version?: string
   name?: string
   batteryLevel?: number
+  lastHeartbeat?: any
 }
 
 interface DeviceStatusProps {
@@ -29,11 +30,35 @@ interface DeviceStatusProps {
 
 export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: DeviceStatusProps) {
   const [refreshing, setRefreshing] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState(new Date())
+
+  // Add auto-refresh every 60 seconds (1 minute)
+  useEffect(() => {
+    // Initial refresh when component mounts
+    if (onRefresh) {
+      onRefresh();
+    }
+    
+    // Set up interval for regular refresh
+    const intervalId = setInterval(() => {
+      if (onRefresh) {
+        console.log('Auto-refreshing device status...');
+        setRefreshing(true);
+        onRefresh();
+        setLastRefresh(new Date());
+        setTimeout(() => setRefreshing(false), 500);
+      }
+    }, 60000); // 60000 ms = 1 minute
+    
+    // Clear interval on component unmount
+    return () => clearInterval(intervalId);
+  }, [onRefresh]);
 
   const handleRefresh = () => {
     if (onRefresh) {
       setRefreshing(true)
       onRefresh()
+      setLastRefresh(new Date())
       setTimeout(() => setRefreshing(false), 2000)
     }
   }
@@ -93,6 +118,32 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
     return Date.now() - lastSeen < 2 * 60 * 1000 // 2 minutes
   }
 
+  // or wherever your client-side check is located
+  const checkDeviceStatus = (device: DeviceStatus) => {
+    // First check if status is explicitly set in database
+    if (device.status === "online") {
+      return "online"
+    }
+
+    // Then do timestamp check as backup
+    const lastSeen = device.lastHeartbeat || device.lastSeen
+
+    // Handle different timestamp formats
+    const lastSeenMs =
+      typeof lastSeen === "string"
+        ? parseInt(lastSeen, 10)
+        : typeof lastSeen === "number"
+        ? lastSeen
+        : 0
+
+    const now = Date.now()
+
+    // Debug: console.log('Time diff:', now - lastSeenMs, 'ms');
+
+    // Check if the timestamp is within the last minute (60,000 ms)
+    return lastSeenMs && now - lastSeenMs < 60000 ? "online" : "offline"
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -100,10 +151,15 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
           <Smartphone className="w-5 h-5" />
           Status Perangkat Scanner
         </CardTitle>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex flex-col items-end">
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+          <span className="text-xs text-gray-400 mt-1">
+            Update otomatis setiap 1 menit
+          </span>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -124,7 +180,8 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
         ) : (
           <div className="space-y-4">
             {devices.map((device) => {
-              const online = isDeviceOnline(device)
+              // Use the more reliable checkDeviceStatus function instead
+              const online = checkDeviceStatus(device) === "online"
               return (
                 <div key={device.deviceId} className="border rounded-lg p-4">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -143,7 +200,8 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
                       <div>
                         <div className="flex items-center gap-2">
                           <h3 className="font-medium">{device.name || device.deviceId}</h3>
-                          <Badge variant={online ? "default" : "secondary"}>{online ? "Online" : "Offline"}</Badge>
+                          {/* Only show badge for online devices */}
+                          {online && <Badge variant="default">Online</Badge>}
                         </div>
                         <p className="text-sm text-gray-500">ID: {device.deviceId}</p>
                         <div className="flex items-center gap-1 text-sm text-gray-500">

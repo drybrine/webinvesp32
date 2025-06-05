@@ -2,11 +2,14 @@ import { type NextRequest, NextResponse } from "next/server"
 import { database } from "@/lib/firebase"
 import { ref, get, update } from "firebase/database"
 
+// Timeout in milliseconds (60 seconds)
+const OFFLINE_TIMEOUT = 60000
+
 export async function POST(request: NextRequest) {
   try {
-    // Verifikasi authorization untuk keamanan
+    // Authorization check for security
     const authHeader = request.headers.get("authorization")
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -28,37 +31,42 @@ export async function POST(request: NextRequest) {
     const now = Date.now()
     const updates: Record<string, any> = {}
     let updatedCount = 0
+    let offlineCount = 0
+    let onlineCount = 0
 
     Object.keys(devices).forEach((deviceId) => {
       const device = devices[deviceId]
-      const lastSeen = device.lastSeen
+      const lastSeen = device.lastHeartbeat || device.lastSeen
       
-      // Jika device belum pernah kirim heartbeat atau terakhir kirim > 60 detik
-      if (!lastSeen || (now - lastSeen) > 60000) {
+      // If device hasn't sent heartbeat in last 60 seconds
+      if (!lastSeen || (now - Number(lastSeen)) > OFFLINE_TIMEOUT) {
         if (device.status !== "offline") {
           updates[`${deviceId}/status`] = "offline"
+          console.log(`Setting device ${deviceId} to offline, last seen: ${lastSeen}, diff: ${now - Number(lastSeen)}ms`)
           updatedCount++
-          console.log(`Setting device ${deviceId} to offline`)
+          offlineCount++
         }
       } else {
-        // Jika device masih aktif dalam 30 detik terakhir
+        // If device has been active in last 60 seconds
         if (device.status !== "online") {
           updates[`${deviceId}/status`] = "online"
+          console.log(`Setting device ${deviceId} to online, last seen: ${new Date(Number(lastSeen)).toISOString()}`)
           updatedCount++
-          console.log(`Setting device ${deviceId} to online`)
+          onlineCount++
         }
       }
     })
 
-    // Update semua perubahan status sekaligus
+    // Apply all status updates at once
     if (Object.keys(updates).length > 0) {
       await update(devicesRef, updates)
     }
 
     return NextResponse.json({
       success: true,
-      message: `Checked ${Object.keys(devices).length} devices, updated ${updatedCount} statuses`,
-      updatedDevices: updatedCount
+      message: `Checked ${Object.keys(devices).length} devices, updated ${updatedCount} statuses (${onlineCount} online, ${offlineCount} offline)`,
+      updatedDevices: updatedCount,
+      timestamp: new Date().toISOString()
     })
 
   } catch (error) {
@@ -68,4 +76,16 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+// Allow CORS for cron job
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS", 
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  })
 }
