@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory } from "@/hooks/use-firebase"
-import { firebaseHelpers } from "@/lib/firebase" // Ditambahkan
+import { firebaseHelpers } from "@/lib/firebase"
 import { Package, AlertTriangle, Plus, Minus, Edit, Trash2, Zap, MapPin, Truck, DollarSign, Barcode as BarcodeIcon, PackagePlus } from "lucide-react"
 import BarcodeComponent from "react-barcode"
 
@@ -81,16 +81,23 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
 
   const handleAddProduct = async () => {
     try {
-      if (!newProduct.name || !newProduct.barcode) {
-        toast({ title: "Error", description: "Nama produk dan barcode harus diisi", variant: "destructive" });
+      if (!newProduct) {
+        toast({ title: "Error", description: "Data produk tidak lengkap.", variant: "destructive" });
         return;
       }
       // Cek jika barcode sudah ada (meskipun seharusnya tidak terjadi jika alur dari scan)
       if (items.some(item => item.barcode === newProduct.barcode)) {
-          toast({ title: "Error", description: "Barcode sudah terdaftar untuk produk lain.", variant: "destructive" });
-          return;
+        toast({ title: "Error", description: "Barcode sudah terdaftar untuk produk lain.", variant: "destructive" });
+        return;
       }
-      await addItem(newProduct); // addItem dari hook sudah menangani createdAt, updatedAt, dan id
+      
+      // Add the lastUpdated property
+      const productToAdd = {
+        ...newProduct,
+        lastUpdated: new Date().toISOString() // or whatever format your app uses
+      };
+      
+      await addItem(productToAdd);
       toast({ title: "✅ Produk Ditambahkan", description: `${newProduct.name} berhasil ditambahkan.` });
       onClose();
     } catch (error) {
@@ -851,8 +858,22 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl max-h-[90vh]">
+        <DialogHeader>
+          <DialogTitle>
+            {viewMode === 'addNew' ? 'Tambah Produk Baru' : 
+             viewMode === 'quickAction' ? 'Aksi Cepat' :
+             viewMode === 'manualAdjust' ? 'Penyesuaian Manual' : 
+             product ? product.name : 'Informasi Produk'}
+          </DialogTitle>
+          <DialogDescription>
+            {viewMode === 'addNew' ? 'Tambahkan produk baru ke inventaris' : 
+             viewMode === 'quickAction' ? 'Ubah stok dengan cepat' :
+             viewMode === 'manualAdjust' ? 'Sesuaikan stok secara manual' :
+             'Detail informasi produk'}
+          </DialogDescription>
+        </DialogHeader>
         {renderContent()}
       </DialogContent>
     </Dialog>

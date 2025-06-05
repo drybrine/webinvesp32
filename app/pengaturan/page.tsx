@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Settings, Wifi, Database, Shield, Download, Upload, Trash2, RefreshCw, WifiOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useFirebaseDevices } from "@/hooks/use-firebase" // Tambahkan import untuk real data
+import { useFirebaseDevices } from "@/hooks/use-firebase" 
+import { ref, get, set } from "firebase/database"
+import { database } from "@/lib/firebase"
 
 export default function PengaturanPage() {
   const [settings, setSettings] = useState({
@@ -39,54 +41,214 @@ export default function PengaturanPage() {
     requirePasswordChange: false,
     twoFactorAuth: false,
   })
+  
+  const [loading, setLoading] = useState(true)
+  const [saveLoading, setSaveLoading] = useState(false)
 
-  // Hapus mock data dan gunakan real data dari Firebase
+  // Real device data from Firebase
   const { devices, loading: devicesLoading, error: devicesError } = useFirebaseDevices()
 
   const { toast } = useToast()
+  
+  // Load settings from Firebase on component mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (!database) {
+        toast({
+          title: "Error",
+          description: "Koneksi Firebase tidak tersedia",
+          variant: "destructive",
+        })
+        setLoading(false)
+        return
+      }
+      
+      try {
+        const settingsRef = ref(database, "settings/system")
+        const snapshot = await get(settingsRef)
+        const settingsData = snapshot.val()
+        
+        if (settingsData) {
+          // Merge with default settings to ensure all fields exist
+          setSettings(prev => ({
+            ...prev,
+            ...settingsData
+          }))
+          
+          toast({
+            title: "Pengaturan Dimuat",
+            description: "Pengaturan berhasil dimuat dari database"
+          })
+        }
+      } catch (error) {
+        console.error("Error loading settings:", error)
+        toast({
+          title: "Error",
+          description: "Gagal memuat pengaturan dari Firebase",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    loadSettings()
+  }, [toast])
 
-  const handleSaveSettings = () => {
-    // In real app, save to backend
-    toast({
-      title: "Berhasil",
-      description: "Pengaturan berhasil disimpan",
-    })
+  const handleSaveSettings = async () => {
+    if (!database) {
+      toast({
+        title: "Error",
+        description: "Koneksi Firebase tidak tersedia",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    setSaveLoading(true)
+    try {
+      const settingsRef = ref(database, "settings/system")
+      await set(settingsRef, {
+        ...settings,
+        lastUpdated: Date.now(),
+      })
+      
+      toast({
+        title: "Berhasil",
+        description: "Pengaturan berhasil disimpan ke Firebase",
+      })
+    } catch (error) {
+      console.error("Error saving settings:", error)
+      toast({
+        title: "Error",
+        description: "Gagal menyimpan pengaturan ke Firebase",
+        variant: "destructive",
+      })
+    } finally {
+      setSaveLoading(false)
+    }
   }
 
-  const handleTestConnection = () => {
+  const handleTestConnection = async () => {
     toast({
       title: "Menguji Koneksi",
       description: "Sedang menguji koneksi database...",
     })
 
-    // Simulate test
-    setTimeout(() => {
+    try {
+      if (!database) {
+        throw new Error("Firebase not initialized")
+      }
+      
+      const testRef = ref(database, ".info/connected")
+      const snapshot = await get(testRef)
+      
+      if (snapshot.val() === true) {
+        toast({
+          title: "Koneksi Berhasil",
+          description: "Database terhubung dengan baik",
+        })
+      } else {
+        toast({
+          title: "Koneksi Terputus",
+          description: "Database tidak terhubung",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
       toast({
-        title: "Koneksi Berhasil",
-        description: "Database terhubung dengan baik",
+        title: "Error Koneksi",
+        description: "Gagal menguji koneksi database",
+        variant: "destructive",
       })
-    }, 2000)
+    }
   }
 
-  const handleBackupNow = () => {
+  const handleBackupNow = async () => {
+    if (!database) {
+      toast({
+        title: "Error",
+        description: "Koneksi Firebase tidak tersedia",
+        variant: "destructive",
+      })
+      return
+    }
+    
     toast({
       title: "Backup Dimulai",
       description: "Proses backup sedang berjalan...",
     })
 
-    setTimeout(() => {
+    try {
+      // Create backup entry in Firebase
+      const backupRef = ref(database, `backups/${Date.now()}`)
+      
+      // Get data from multiple locations
+      const inventoryRef = ref(database, "inventory")
+      const inventorySnapshot = await get(inventoryRef)
+      
+      const scansRef = ref(database, "scans")
+      const scansSnapshot = await get(scansRef)
+      
+      // Create backup object
+      const backupData = {
+        timestamp: Date.now(),
+        inventory: inventorySnapshot.val() || {},
+        scans: scansSnapshot.val() || {},
+        settings: settings,
+      }
+      
+      // Save backup
+      await set(backupRef, backupData)
+      
       toast({
         title: "Backup Selesai",
-        description: "Data berhasil di-backup",
+        description: "Data berhasil di-backup ke Firebase",
       })
-    }, 3000)
+    } catch (error) {
+      console.error("Backup error:", error)
+      toast({
+        title: "Backup Gagal",
+        description: "Terjadi kesalahan saat backup data",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleRestartDevice = (deviceId: string) => {
+  const handleRestartDevice = async (deviceId: string) => {
+    if (!database) {
+      toast({
+        title: "Error",
+        description: "Koneksi Firebase tidak tersedia",
+        variant: "destructive",
+      })
+      return
+    }
+    
     toast({
       title: "Restart Device",
       description: `Mengirim perintah restart ke ${deviceId}...`,
     })
+    
+    try {
+      // Send restart command to device via Firebase
+      const commandRef = ref(database, `devices/${deviceId}/commands`)
+      await set(commandRef, {
+        action: "restart",
+        timestamp: Date.now()
+      })
+      
+      toast({
+        title: "Perintah Terkirim",
+        description: `Perintah restart berhasil dikirim ke ${deviceId}`,
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal mengirim perintah restart",
+        variant: "destructive",
+      })
+    }
   }
 
   const formatDateTime = (timestamp: string | number) => {
@@ -107,6 +269,17 @@ export default function PengaturanPage() {
     } else {
       return <Badge variant="secondary">Offline</Badge>
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-gray-600">Memuat pengaturan...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -186,7 +359,9 @@ export default function PengaturanPage() {
                     rows={3}
                   />
                 </div>
-                <Button onClick={handleSaveSettings}>Simpan Pengaturan</Button>
+                <Button onClick={handleSaveSettings} disabled={saveLoading}>
+                  {saveLoading ? "Menyimpan..." : "Simpan Pengaturan"}
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -252,7 +427,9 @@ export default function PengaturanPage() {
                     </div>
                   </div>
                   <div className="flex gap-4">
-                    <Button onClick={handleSaveSettings}>Simpan Pengaturan</Button>
+                    <Button onClick={handleSaveSettings} disabled={saveLoading}>
+                      {saveLoading ? "Menyimpan..." : "Simpan Pengaturan"}
+                    </Button>
                     <Button variant="outline" onClick={handleTestConnection}>
                       <Database className="w-4 h-4 mr-2" />
                       Test Koneksi
@@ -376,7 +553,9 @@ export default function PengaturanPage() {
                       />
                     </div>
                   </div>
-                  <Button onClick={handleSaveSettings}>Simpan Pengaturan Scanner</Button>
+                  <Button onClick={handleSaveSettings} disabled={saveLoading}>
+                    {saveLoading ? "Menyimpan..." : "Simpan Pengaturan Scanner"}
+                  </Button>
                 </CardContent>
               </Card>
             </div>
@@ -424,7 +603,9 @@ export default function PengaturanPage() {
                     />
                   </div>
                 </div>
-                <Button onClick={handleSaveSettings}>Simpan Pengaturan Keamanan</Button>
+                <Button onClick={handleSaveSettings} disabled={saveLoading}>
+                  {saveLoading ? "Menyimpan..." : "Simpan Pengaturan Keamanan"}
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -460,36 +641,8 @@ export default function PengaturanPage() {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
                         <div>
-                          <p className="font-medium">backup_2024-01-20_15-30.sql</p>
-                          <p className="text-sm text-gray-500">20 Jan 2024, 15:30 - 2.5 MB</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                        <div>
-                          <p className="font-medium">backup_2024-01-19_15-30.sql</p>
-                          <p className="text-sm text-gray-500">19 Jan 2024, 15:30 - 2.3 MB</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                        <div>
-                          <p className="font-medium">backup_2024-01-18_15-30.sql</p>
-                          <p className="text-sm text-gray-500">18 Jan 2024, 15:30 - 2.1 MB</p>
+                          <p className="font-medium">backup_{new Date().toISOString().split('T')[0]}_auto.json</p>
+                          <p className="text-sm text-gray-500">{new Date().toLocaleString()} - Auto Backup</p>
                         </div>
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm">
