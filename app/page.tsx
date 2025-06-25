@@ -30,6 +30,14 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
   Package,
   DollarSign,
   AlertCircle,
@@ -449,104 +457,107 @@ export default function TransaksiPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8 text-center md:text-left">
-          <h1 className="text-4xl font-bold text-gray-900">📦 Dashboard Inventaris</h1>
-          <p className="text-gray-600">Kelola stok barang dengan mudah dan efisien</p>
+        {/* Header - Better mobile spacing */}
+        <div className="mb-4 sm:mb-8 text-center md:text-left px-2 sm:px-0">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">📦 Dashboard Inventaris</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">Kelola stok barang dengan mudah dan efisien</p>
         </div>
 
-        <Alert className={`mb-6 ${firebaseStatus.available ? "border-green-500 bg-green-50" : "border-yellow-500 bg-yellow-50"}`}>
+        {/* Firebase Status Alert - Mobile optimized */}
+        <Alert className={`mb-4 sm:mb-6 ${firebaseStatus.available ? "border-green-500 bg-green-50" : "border-yellow-500 bg-yellow-50"}`}>
           {firebaseStatus.available ? (
             <Wifi className="h-4 w-4 text-green-600" />
           ) : (
             <WifiOff className="h-4 w-4 text-yellow-600" />
           )}
-          <AlertDescription>
+          <AlertDescription className="text-sm">
             <strong>Status Koneksi Backend:</strong>{" "}
             {firebaseStatus.available ? "Terhubung (Real-time sync aktif)" : "Tidak terhubung ke Firebase"}
           </AlertDescription>
         </Alert>
 
+        {/* Error Alerts */}
         {(inventoryError || scansError || devicesError) && (
-          <Alert variant="destructive" className="mb-6 border-red-500 bg-red-50">
+          <Alert variant="destructive" className="mb-4 sm:mb-6 border-red-500 bg-red-50">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
+            <AlertDescription className="text-sm">
               <strong>Error:</strong> {inventoryError || scansError || devicesError || "Gagal memuat data."}
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        {/* Stats Cards - Responsive grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-4 sm:mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Item</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-xs sm:text-sm font-medium">Total Item</CardTitle>
+              <Package className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{totalItems}</div>
+              <div className="text-lg sm:text-2xl font-bold">{totalItems}</div>
               <p className="text-xs text-muted-foreground">Jenis barang unik</p>
             </CardContent>
           </Card>
+          
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Nilai</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-xs sm:text-sm font-medium">Total Nilai</CardTitle>
+              <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">Rp {totalValue.toLocaleString()}</div>
+              <div className="text-lg sm:text-2xl font-bold">Rp {totalValue.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">Nilai inventaris saat ini</p>
             </CardContent>
           </Card>
+          
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Stok Rendah</CardTitle>
-              <AlertCircle className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-xs sm:text-sm font-medium">Stok Rendah</CardTitle>
+              <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{lowStockItems.length}</div>
+              <div className="text-lg sm:text-2xl font-bold text-red-600">{lowStockItems.length}</div>
               <p className="text-xs text-muted-foreground">Item perlu diisi ulang</p>
             </CardContent>
           </Card>
-          {/* Status Pemindai ESP32 Card - Yang lebih lengkap */}
+          
+          {/* ESP32 Status Card */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Status Pemindai ESP32</CardTitle>
-              {onlineDevices > 0 ? <Wifi className="h-4 w-4 text-green-600" /> : <WifiOff className="h-4 w-4 text-red-600" />}
+              <CardTitle className="text-xs sm:text-sm font-medium">Status Pemindai ESP32</CardTitle>
+              {onlineDevices > 0 ? <Wifi className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" /> : <WifiOff className="h-3 w-3 sm:h-4 sm:w-4 text-red-600" />}
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${onlineDevices > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <div className={`text-lg sm:text-2xl font-bold ${onlineDevices > 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {onlineDevices > 0 ? "Terhubung" : "Terputus"}
               </div>
               <p className="text-xs text-muted-foreground mb-2">
                 {onlineDevices > 0 ? `${onlineDevices} perangkat aktif terdeteksi` : "Tidak ada perangkat aktif"}
               </p>
               
-              {/* Informasi IP Address ESP32 */}
+              {/* Device Info - Hide on very small screens */}
               {onlineDevices > 0 && devices && devices.length > 0 && (
-                <div className="text-xs text-muted-foreground space-y-1 mb-3 bg-gray-50 p-2 rounded border">
+                <div className="text-xs text-muted-foreground space-y-1 mb-3 bg-gray-50 p-2 rounded border hidden sm:block">
                   <div className="font-medium text-gray-700 mb-1">📡 Perangkat Aktif:</div>
                   {devices
                     .filter(device => device.lastSeen && Date.now() - new Date(device.lastSeen).getTime() < 60 * 1000)
+                    .slice(0, 2) // Limit to 2 devices on mobile
                     .map((device, index) => {
-                      // Use the checkDeviceStatus function here
                       const deviceStatus = checkDeviceStatus(device);
                       
                       return (
                         <div key={device.deviceId || index} className="flex justify-between items-center">
-                          <span className="font-mono text-xs">
+                          <span className="font-mono text-xs truncate">
                             {device.deviceId || `Device-${index + 1}`}
                           </span>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
                             {deviceStatus === "online" && (
                               <span className="font-mono text-xs text-green-500">
                                 • online
                               </span>
                             )}
-                            <span className="font-mono text-xs text-blue-600">
-                              {device.ipAddress || "IP tidak tersedia"}
-                            </span>
                           </div>
                         </div>
                       );
@@ -558,24 +569,32 @@ export default function TransaksiPage() {
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="mt-1 w-full" 
+                className="mt-1 w-full text-xs" 
                 onClick={() => router.push('/pengaturan?tab=devices')}
               >
-                <Settings className="mr-2 h-4 w-4" />
+                <Settings className="mr-1 h-3 w-3 sm:mr-2 sm:h-4 sm:w-4" />
                 Kelola Perangkat
               </Button>
             </CardContent>
           </Card>
         </div>
 
+        {/* Low Stock Alert - Mobile optimized */}
         {lowStockItems.length > 0 && (
-          <Alert variant="destructive" className="mb-6">
+          <Alert variant="destructive" className="mb-4 sm:mb-6">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
+            <AlertDescription className="text-sm">
               <strong>Perhatian Stok Rendah:</strong> {lowStockItems.length} item perlu segera diisi ulang.
-              <ul className="list-disc list-inside ml-4 mt-1">
-                {lowStockItems.slice(0, 5).map(item => <li key={item.id}>{item.name} (Sisa: {item.quantity})</li>)}
-              </ul>
+              <div className="mt-2 max-h-20 overflow-y-auto">
+                <ul className="list-disc list-inside text-xs">
+                  {lowStockItems.slice(0, 3).map(item => 
+                    <li key={item.id}>{item.name} (Sisa: {item.quantity})</li>
+                  )}
+                  {lowStockItems.length > 3 && (
+                    <li>...dan {lowStockItems.length - 3} item lainnya</li>
+                  )}
+                </ul>
+              </div>
             </AlertDescription>
           </Alert>
         )}
@@ -583,232 +602,392 @@ export default function TransaksiPage() {
         {/* Inventory Table and Controls */}
         <Card>
           <CardHeader>
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <CardTitle>Daftar Inventaris ({filteredInventory.length})</CardTitle>
-              <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                <Button onClick={() => setIsAddItemOpen(true)} className="w-full sm:w-auto">
-                  <Plus className="mr-2 h-4 w-4" /> Tambah Item
+            <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+              <CardTitle className="text-lg sm:text-xl">Inventaris ({filteredInventory.length})</CardTitle>
+              
+              <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
+                <Button onClick={() => setIsAddItemOpen(true)} size="sm" className="w-full sm:w-auto">
+                  <Plus className="w-4 h-4 mr-2" />
+                  <span className="sm:hidden">Tambah</span>
+                  <span className="hidden sm:inline">Tambah Item</span>
                 </Button>
-                <Button variant="outline" onClick={exportToCSV} className="w-full sm:w-auto">
-                  <Download className="mr-2 h-4 w-4" /> Export CSV
+                <Button variant="outline" onClick={exportToCSV} size="sm" className="w-full sm:w-auto">
+                  <Download className="w-4 h-4 mr-2" />
+                  <span className="sm:hidden">Export</span>
+                  <span className="hidden sm:inline">Export CSV</span>
                 </Button>
               </div>
             </div>
-            <div className="mt-4 flex flex-col md:flex-row gap-4">
-              <div className="relative flex-grow">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+
+            {/* Filters - Mobile responsive */}
+            <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
-                  placeholder="Cari item (nama, barcode, kategori...)"
+                  placeholder="Cari item..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 w-full"
+                  className="pl-9"
                 />
               </div>
-              <div className="flex gap-4">
+              
+              <div className="flex space-x-2">
                 <Select value={filterCategory} onValueChange={setFilterCategory}>
-                  <SelectTrigger className="w-full md:w-[180px]">
-                    <SelectValue placeholder="Filter Kategori" />
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Kategori" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat === "all" ? "Semua Kategori" : cat}
+                    {categories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category === "all" ? "Semua Kategori" : category}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+
                 <Select value={sortOrder} onValueChange={setSortOrder}>
-                  <SelectTrigger className="w-full md:w-[180px]">
+                  <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="Urutkan" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="name-asc">Nama (A-Z)</SelectItem>
-                    <SelectItem value="name-desc">Nama (Z-A)</SelectItem>
-                    <SelectItem value="quantity-asc">Stok (Sedikit-Banyak)</SelectItem>
-                    <SelectItem value="quantity-desc">Stok (Banyak-Sedikit)</SelectItem>
-                    <SelectItem value="price-asc">Harga (Murah-Mahal)</SelectItem>
-                    <SelectItem value="price-desc">Harga (Mahal-Murah)</SelectItem>
-                    <SelectItem value="category-asc">Kategori (A-Z)</SelectItem>
-                    <SelectItem value="category-desc">Kategori (Z-A)</SelectItem>
+                    <SelectItem value="name-asc">Nama A-Z</SelectItem>
+                    <SelectItem value="name-desc">Nama Z-A</SelectItem>
+                    <SelectItem value="quantity-asc">Stok Terendah</SelectItem>
+                    <SelectItem value="quantity-desc">Stok Tertinggi</SelectItem>
+                    <SelectItem value="price-asc">Harga Terendah</SelectItem>
+                    <SelectItem value="price-desc">Harga Tertinggi</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
           </CardHeader>
+          
           <CardContent>
-            <div className="space-y-4">
+            {/* Mobile Card Layout */}
+            <div className="block sm:hidden space-y-4">
               {filteredInventory.length === 0 ? (
                 <div className="text-center py-8">
                   <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-500">
-                    {inventory.length === 0 ? "Belum ada item dalam inventaris" : "Tidak ada item yang sesuai dengan pencarian"}
-                  </p>
+                  <p className="text-gray-500">Tidak ada item yang ditemukan</p>
                 </div>
               ) : (
                 filteredInventory.map((item) => (
-                  <div key={item.id} className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 flex-wrap mb-2">
-                          <h3 className="font-semibold text-lg text-blue-700">{item.name}</h3>
-                          <Badge variant={item.quantity <= item.minStock ? "destructive" : "secondary"}>
-                            Stok: {item.quantity} / Min: {item.minStock}
-                          </Badge>
-                          <Badge variant="outline">{item.category}</Badge>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-1 truncate" title={item.description}>{item.description || "Tidak ada deskripsi"}</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-sm text-gray-500">
-                          <span>
-                            <strong>Barcode:</strong> {item.barcode || "-"}
-                          </span>
-                          <span>
-                            <strong>Harga:</strong> Rp {item.price.toLocaleString()}
-                          </span>
-                          <span>
-                            <strong>Lokasi:</strong> {item.location}
-                          </span>
-                          <span>
-                            <strong>Pemasok:</strong> {item.supplier || "-"}
-                          </span>
-                           {item.lastUpdated && (
-                            <span className="col-span-2 sm:col-span-1">
-                                <strong>Update:</strong> {new Date(item.lastUpdated).toLocaleDateString()}
-                            </span>
-                           )}
-                        </div>
+                  <div key={item.id} className="border rounded-lg p-4 bg-white">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-gray-900 truncate">{item.name}</h3>
+                        <p className="text-sm text-gray-500 truncate">{item.category}</p>
                       </div>
-                      <div className="flex flex-col gap-2 ml-0 md:ml-4 pt-2 md:pt-0 border-t md:border-t-0 md:border-l md:pl-4">
-                        <div className="flex gap-1 flex-wrap justify-start md:justify-end">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setViewingItem({
-                                ...item,
-                                barcode: item.barcode ?? "",
-                                supplier: item.supplier ?? "",
-                              })
-                            }
-                            title="Lihat Detail"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setEditingItem({
-                                ...item,
-                                barcode: item.barcode ?? "",
-                                supplier: item.supplier ?? "",
-                              })
-                            }
-                            title="Edit Item"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            // outline // This is not a valid prop for Button, should be variant="outline" + custom destructive styling or just variant="destructive"
-                            size="sm"
-                            onClick={() => deleteInventoryItem(item.id, item.name)}
-                            title="Hapus Item"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="flex gap-1 mt-1 flex-wrap justify-start md:justify-end">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setStockAdjustment({
-                                itemId: item.id,
-                                itemName: item.name,
-                                currentQuantity: item.quantity,
-                                type: "add",
-                                amount: 1,
-                              })
-                            }
-                            title="Tambah Stok"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setStockAdjustment({
-                                itemId: item.id,
-                                itemName: item.name,
-                                currentQuantity: item.quantity,
-                                type: "subtract",
-                                amount: 1,
-                              })
-                            }
-                            title="Kurangi Stok"
-                          >
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                        </div>
+                      <div className="flex items-center gap-1 ml-2">
+                        <Badge variant={item.quantity <= item.minStock ? "destructive" : "default"} className="text-xs">
+                          {item.quantity}
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                      <div>
+                        <span className="text-gray-500">Harga:</span>
+                        <p className="font-medium">Rp {item.price.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Lokasi:</span>
+                        <p className="font-medium truncate">{item.location}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <div className="flex space-x-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setViewingItem({
+                            ...item,
+                            barcode: item.barcode ?? "",
+                            supplier: item.supplier ?? "",
+                          })}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingItem({
+                            ...item,
+                            barcode: item.barcode ?? "",
+                            supplier: item.supplier ?? "",
+                          })}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      <div className="flex space-x-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setStockAdjustment({
+                            itemId: item.id,
+                            itemName: item.name,
+                            currentQuantity: item.quantity,
+                            type: "add",
+                            amount: 1,
+                          })}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setStockAdjustment({
+                            itemId: item.id,
+                            itemName: item.name,
+                            currentQuantity: item.quantity,
+                            type: "subtract",
+                            amount: 1,
+                          })}
+                          disabled={item.quantity <= 0}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>
                 ))
               )}
             </div>
+
+            {/* Desktop Table Layout */}
+            <div className="hidden sm:block">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[200px]">Item</TableHead>
+                      <TableHead className="min-w-[100px]">Kategori</TableHead>
+                      <TableHead className="text-center min-w-[80px]">Stok</TableHead>
+                      <TableHead className="text-right min-w-[120px]">Harga</TableHead>
+                      <TableHead className="min-w-[120px]">Lokasi</TableHead>
+                      <TableHead className="text-right min-w-[150px]">Aksi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredInventory.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8">
+                          <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                          <p className="text-gray-500">Tidak ada item yang ditemukan</p>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredInventory.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{item.name}</div>
+                              <div className="text-sm text-gray-500 truncate max-w-[200px]" title={item.description}>
+                                {item.description || "Tidak ada deskripsi"}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{item.category}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={item.quantity <= item.minStock ? "destructive" : "default"}>
+                              {item.quantity}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            Rp {item.price.toLocaleString()}
+                          </TableCell>
+                          <TableCell>{item.location}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end space-x-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setViewingItem({
+                                  ...item,
+                                  barcode: item.barcode ?? "",
+                                  supplier: item.supplier ?? "",
+                                })}
+                                title="Lihat Detail"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setEditingItem({
+                                  ...item,
+                                  barcode: item.barcode ?? "",
+                                  supplier: item.supplier ?? "",
+                                })}
+                                title="Edit Item"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setStockAdjustment({
+                                  itemId: item.id,
+                                  itemName: item.name,
+                                  currentQuantity: item.quantity,
+                                  type: "add",
+                                  amount: 1,
+                                })}
+                                title="Tambah Stok"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setStockAdjustment({
+                                  itemId: item.id,
+                                  itemName: item.name,
+                                  currentQuantity: item.quantity,
+                                  type: "subtract",
+                                  amount: 1,
+                                })}
+                                title="Kurangi Stok"
+                                disabled={item.quantity <= 0}
+                              >
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
         {/* Add Item Dialog */}
         <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle>Tambah Item Baru</DialogTitle>
               <DialogDescription>Masukkan detail item inventaris baru.</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              {/* Fields: Barcode, Name, Description, Category, Quantity, MinStock, Price, Supplier, Location */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="barcode" className="text-right">Barcode</Label>
-                <Input id="barcode" value={newItem.barcode ?? ""} onChange={(e) => setNewItem({ ...newItem, barcode: e.target.value })} className="col-span-3" placeholder="Contoh: 1234567890123"/>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">Nama Item</Label>
-                <Input id="name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} className="col-span-3" placeholder="Contoh: Kopi Sachet ABC"/>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="description" className="text-right">Deskripsi</Label>
-                <Input id="description" value={newItem.description} onChange={(e) => setNewItem({ ...newItem, description: e.target.value })} className="col-span-3" placeholder="Detail singkat mengenai item"/>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="category" className="text-right">Kategori</Label>
-                <Input id="category" value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} className="col-span-3" placeholder="Contoh: Minuman"/>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="quantity" className="text-right">Kuantitas</Label>
-                <Input id="quantity" type="number" value={newItem.quantity} onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })} className="col-span-3" />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="minStock" className="text-right">Stok Min.</Label>
-                <Input id="minStock" type="number" value={newItem.minStock} onChange={(e) => setNewItem({ ...newItem, minStock: parseInt(e.target.value) || 0 })} className="col-span-3" />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="price" className="text-right">Harga (Rp)</Label>
-                <Input id="price" type="number" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) || 0 })} className="col-span-3" />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="supplier" className="text-right">Pemasok</Label>
-                <Input id="supplier" value={newItem.supplier ?? ""} onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })} className="col-span-3" placeholder="Nama supplier (opsional)"/>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="location" className="text-right">Lokasi</Label>
-                <Input id="location" value={newItem.location} onChange={(e) => setNewItem({ ...newItem, location: e.target.value })} className="col-span-3" placeholder="Contoh: Rak A1"/>
+            
+            {/* Scrollable form content */}
+            <div className="flex-1 overflow-y-auto px-1">
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="barcode" className="sm:text-right">Barcode</Label>
+                  <Input 
+                    id="barcode" 
+                    value={newItem.barcode} 
+                    onChange={(e) => setNewItem({ ...newItem, barcode: e.target.value })} 
+                    className="sm:col-span-3" 
+                    placeholder="Scan atau ketik barcode"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="name" className="sm:text-right">Nama *</Label>
+                  <Input 
+                    id="name" 
+                    value={newItem.name} 
+                    onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} 
+                    className="sm:col-span-3" 
+                    placeholder="Contoh: Coca Cola 330ml"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="description" className="sm:text-right">Deskripsi</Label>
+                  <Input 
+                    id="description" 
+                    value={newItem.description} 
+                    onChange={(e) => setNewItem({ ...newItem, description: e.target.value })} 
+                    className="sm:col-span-3" 
+                    placeholder="Detail singkat mengenai item"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="category" className="sm:text-right">Kategori</Label>
+                  <Input 
+                    id="category" 
+                    value={newItem.category} 
+                    onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} 
+                    className="sm:col-span-3" 
+                    placeholder="Contoh: Minuman"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="quantity" className="sm:text-right">Kuantitas</Label>
+                  <Input 
+                    id="quantity" 
+                    type="number" 
+                    value={newItem.quantity} 
+                    onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })} 
+                    className="sm:col-span-3" 
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="minStock" className="sm:text-right">Stok Min.</Label>
+                  <Input 
+                    id="minStock" 
+                    type="number" 
+                    value={newItem.minStock} 
+                    onChange={(e) => setNewItem({ ...newItem, minStock: parseInt(e.target.value) || 0 })} 
+                    className="sm:col-span-3" 
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="price" className="sm:text-right">Harga (Rp)</Label>
+                  <Input 
+                    id="price" 
+                    type="number" 
+                    value={newItem.price} 
+                    onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) || 0 })} 
+                    className="sm:col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="supplier" className="sm:text-right">Pemasok</Label>
+                  <Input 
+                    id="supplier" 
+                    value={newItem.supplier} 
+                    onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })} 
+                    className="sm:col-span-3" 
+                    placeholder="Nama pemasok"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="location" className="sm:text-right">Lokasi</Label>
+                  <Input 
+                    id="location" 
+                    value={newItem.location} 
+                    onChange={(e) => setNewItem({ ...newItem, location: e.target.value })} 
+                    className="sm:col-span-3" 
+                    placeholder="Contoh: Rak A1"
+                  />
+                </div>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddItemOpen(false)}>Batal</Button>
-              <Button onClick={addInventoryItem}>Simpan Item</Button>
+            
+            {/* Fixed footer with buttons */}
+            <DialogFooter className="flex-shrink-0 bg-white border-t pt-4 mt-4">
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-2 w-full">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsAddItemOpen(false)}
+                  className="w-full sm:w-auto"
+                >
+                  Batal
+                </Button>
+                <Button 
+                  onClick={addInventoryItem}
+                  className="w-full sm:w-auto"
+                >
+                  Simpan Item
+                </Button>
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>
