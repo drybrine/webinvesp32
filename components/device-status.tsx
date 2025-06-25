@@ -146,13 +146,13 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2">
+      <CardHeader className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+        <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
           <Smartphone className="w-5 h-5" />
           Status Perangkat Scanner
         </CardTitle>
-        <div className="flex flex-col items-end">
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+        <div className="flex flex-col items-start sm:items-end">
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className="w-full sm:w-auto">
             <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
             Refresh
           </Button>
