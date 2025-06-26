@@ -8,8 +8,14 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# For function configuration
 [functions]
-  timeout = 30
+  # Define the directory where your functions are located (if needed)
+  directory = "netlify/functions"
+  
+  # This is the correct way to specify function timeout
+  [functions.config]
+  timeout_seconds = 30
 
 [[headers]]
   for = "/api/*"
