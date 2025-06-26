@@ -457,15 +457,15 @@ export default function TransaksiPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-blue-50 p-2 sm:p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-blue-50 p-3 sm:p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header - Enhanced with gradient text */}
-        <div className="mb-6 sm:mb-10 text-center md:text-left px-2 sm:px-0">
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+        {/* Header - Enhanced with gradient text and mobile optimized */}
+        <div className="mb-6 sm:mb-8 md:mb-10 text-center md:text-left px-1 sm:px-2">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             📦 Dashboard Inventaris
           </h1>
-          <p className="text-base sm:text-lg text-gray-600 font-medium">Kelola stok barang dengan mudah dan efisien</p>
-          <div className="w-24 h-1 bg-gradient-to-r from-purple-500 to-blue-500 mx-auto md:mx-0 mt-3 rounded-full"></div>
+          <p className="text-sm sm:text-base lg:text-lg text-gray-600 font-medium">Kelola stok barang dengan mudah dan efisien</p>
+          <div className="w-20 sm:w-24 md:w-32 h-1 bg-gradient-to-r from-purple-500 to-blue-500 mx-auto md:mx-0 mt-2 sm:mt-3 rounded-full"></div>
         </div>
 
         {/* Firebase Status Alert - Enhanced styling */}
@@ -495,41 +495,41 @@ export default function TransaksiPage() {
           </Alert>
         )}
 
-        {/* Stats Cards - Enhanced with gradients and animations */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        {/* Stats Cards - Enhanced with gradients and animations, mobile optimized */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
           <Card className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-blue-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-              <CardTitle className="text-xs sm:text-sm font-semibold text-blue-800">Total Item</CardTitle>
-              <Package className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+            <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-blue-200 rounded-full -mr-8 sm:-mr-10 -mt-8 sm:-mt-10 opacity-20"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 relative z-10 p-3 sm:p-4">
+              <CardTitle className="text-xs font-semibold text-blue-800 leading-tight">Total Item</CardTitle>
+              <Package className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 text-blue-600 flex-shrink-0" />
             </CardHeader>
-            <CardContent className="relative z-10">
-              <div className="text-xl sm:text-3xl font-bold text-blue-900">{totalItems}</div>
-              <p className="text-xs text-blue-600 font-medium">Jenis barang unik</p>
+            <CardContent className="relative z-10 p-3 sm:p-4 pt-0 sm:pt-0">
+              <div className="text-lg sm:text-xl lg:text-3xl font-bold text-blue-900">{totalItems}</div>
+              <p className="text-xs text-blue-600 font-medium leading-tight">Jenis barang unik</p>
             </CardContent>
           </Card>
           
           <Card className="relative overflow-hidden bg-gradient-to-br from-emerald-50 to-emerald-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-              <CardTitle className="text-xs sm:text-sm font-semibold text-emerald-800">Total Nilai</CardTitle>
-              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
+            <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-emerald-200 rounded-full -mr-8 sm:-mr-10 -mt-8 sm:-mt-10 opacity-20"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 relative z-10 p-3 sm:p-4">
+              <CardTitle className="text-xs font-semibold text-emerald-800 leading-tight">Total Nilai</CardTitle>
+              <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 text-emerald-600 flex-shrink-0" />
             </CardHeader>
-            <CardContent className="relative z-10">
-              <div className="text-xl sm:text-3xl font-bold text-emerald-900">Rp {totalValue.toLocaleString()}</div>
-              <p className="text-xs text-emerald-600 font-medium">Nilai inventaris saat ini</p>
+            <CardContent className="relative z-10 p-3 sm:p-4 pt-0 sm:pt-0">
+              <div className="text-sm sm:text-lg lg:text-3xl font-bold text-emerald-900">Rp {totalValue.toLocaleString()}</div>
+              <p className="text-xs text-emerald-600 font-medium leading-tight">Nilai inventaris saat ini</p>
             </CardContent>
           </Card>
           
           <Card className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-amber-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-amber-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-              <CardTitle className="text-xs sm:text-sm font-semibold text-amber-800">Stok Rendah</CardTitle>
-              <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
+            <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-amber-200 rounded-full -mr-8 sm:-mr-10 -mt-8 sm:-mt-10 opacity-20"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 relative z-10 p-3 sm:p-4">
+              <CardTitle className="text-xs font-semibold text-amber-800 leading-tight">Stok Rendah</CardTitle>
+              <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 text-amber-600 flex-shrink-0" />
             </CardHeader>
-            <CardContent className="relative z-10">
-              <div className="text-xl sm:text-3xl font-bold text-amber-900">{lowStockItems.length}</div>
-              <p className="text-xs text-amber-600 font-medium">Item perlu diisi ulang</p>
+            <CardContent className="relative z-10 p-3 sm:p-4 pt-0 sm:pt-0">
+              <div className="text-lg sm:text-xl lg:text-3xl font-bold text-amber-900">{lowStockItems.length}</div>
+              <p className="text-xs text-amber-600 font-medium leading-tight">Item perlu diisi ulang</p>
             </CardContent>
           </Card>
           
