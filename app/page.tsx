@@ -720,6 +720,13 @@ export default function TransaksiPage() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteInventoryItem(item.id, item.name)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                       
                       <div className="flex space-x-1">
@@ -854,6 +861,14 @@ export default function TransaksiPage() {
                                 disabled={item.quantity <= 0}
                               >
                                 <Minus className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => deleteInventoryItem(item.id, item.name)}
+                                title="Hapus Item"
+                              >
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </TableCell>
