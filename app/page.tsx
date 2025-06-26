@@ -457,105 +457,127 @@ export default function TransaksiPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-blue-50 p-2 sm:p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header - Better mobile spacing */}
-        <div className="mb-4 sm:mb-8 text-center md:text-left px-2 sm:px-0">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">📦 Dashboard Inventaris</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Kelola stok barang dengan mudah dan efisien</p>
+        {/* Header - Enhanced with gradient text */}
+        <div className="mb-6 sm:mb-10 text-center md:text-left px-2 sm:px-0">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+            📦 Dashboard Inventaris
+          </h1>
+          <p className="text-base sm:text-lg text-gray-600 font-medium">Kelola stok barang dengan mudah dan efisien</p>
+          <div className="w-24 h-1 bg-gradient-to-r from-purple-500 to-blue-500 mx-auto md:mx-0 mt-3 rounded-full"></div>
         </div>
 
-        {/* Firebase Status Alert - Mobile optimized */}
-        <Alert className={`mb-4 sm:mb-6 ${firebaseStatus.available ? "border-green-500 bg-green-50" : "border-yellow-500 bg-yellow-50"}`}>
+        {/* Firebase Status Alert - Enhanced styling */}
+        <Alert className={`mb-6 sm:mb-8 shadow-lg border-0 ${firebaseStatus.available ? "bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-l-green-500" : "bg-gradient-to-r from-yellow-50 to-orange-50 border-l-4 border-l-yellow-500"}`}>
           {firebaseStatus.available ? (
-            <Wifi className="h-4 w-4 text-green-600" />
+            <Wifi className="h-5 w-5 text-green-600" />
           ) : (
-            <WifiOff className="h-4 w-4 text-yellow-600" />
+            <WifiOff className="h-5 w-5 text-yellow-600" />
           )}
-          <AlertDescription className="text-sm">
+          <AlertDescription className="text-sm font-medium">
             <strong>Status Koneksi Backend:</strong>{" "}
-            {firebaseStatus.available ? "Terhubung (Real-time sync aktif)" : "Tidak terhubung ke Firebase"}
+            {firebaseStatus.available ? (
+              <span className="text-green-700">Terhubung (Real-time sync aktif)</span>
+            ) : (
+              <span className="text-yellow-700">Tidak terhubung ke Firebase</span>
+            )}
           </AlertDescription>
         </Alert>
 
-        {/* Error Alerts */}
+        {/* Error Alerts - Enhanced */}
         {(inventoryError || scansError || devicesError) && (
-          <Alert variant="destructive" className="mb-4 sm:mb-6 border-red-500 bg-red-50">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="text-sm">
+          <Alert variant="destructive" className="mb-6 sm:mb-8 shadow-lg border-0 bg-gradient-to-r from-red-50 to-pink-50 border-l-4 border-l-red-500">
+            <AlertCircle className="h-5 w-5" />
+            <AlertDescription className="text-sm font-medium">
               <strong>Error:</strong> {inventoryError || scansError || devicesError || "Gagal memuat data."}
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Stats Cards - Responsive grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-4 sm:mb-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Total Item</CardTitle>
-              <Package className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+        {/* Stats Cards - Enhanced with gradients and animations */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <Card className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-blue-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-xs sm:text-sm font-semibold text-blue-800">Total Item</CardTitle>
+              <Package className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
             </CardHeader>
-            <CardContent>
-              <div className="text-lg sm:text-2xl font-bold">{totalItems}</div>
-              <p className="text-xs text-muted-foreground">Jenis barang unik</p>
+            <CardContent className="relative z-10">
+              <div className="text-xl sm:text-3xl font-bold text-blue-900">{totalItems}</div>
+              <p className="text-xs text-blue-600 font-medium">Jenis barang unik</p>
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Total Nilai</CardTitle>
-              <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+          <Card className="relative overflow-hidden bg-gradient-to-br from-emerald-50 to-emerald-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-xs sm:text-sm font-semibold text-emerald-800">Total Nilai</CardTitle>
+              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
             </CardHeader>
-            <CardContent>
-              <div className="text-lg sm:text-2xl font-bold">Rp {totalValue.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Nilai inventaris saat ini</p>
+            <CardContent className="relative z-10">
+              <div className="text-xl sm:text-3xl font-bold text-emerald-900">Rp {totalValue.toLocaleString()}</div>
+              <p className="text-xs text-emerald-600 font-medium">Nilai inventaris saat ini</p>
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Stok Rendah</CardTitle>
-              <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+          <Card className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-amber-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-amber-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-xs sm:text-sm font-semibold text-amber-800">Stok Rendah</CardTitle>
+              <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
             </CardHeader>
-            <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-red-600">{lowStockItems.length}</div>
-              <p className="text-xs text-muted-foreground">Item perlu diisi ulang</p>
+            <CardContent className="relative z-10">
+              <div className="text-xl sm:text-3xl font-bold text-amber-900">{lowStockItems.length}</div>
+              <p className="text-xs text-amber-600 font-medium">Item perlu diisi ulang</p>
             </CardContent>
           </Card>
           
-          {/* ESP32 Status Card */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Status Pemindai ESP32</CardTitle>
-              {onlineDevices > 0 ? <Wifi className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" /> : <WifiOff className="h-3 w-3 sm:h-4 sm:w-4 text-red-600" />}
+          {/* ESP32 Status Card - Enhanced */}
+          <Card className="relative overflow-hidden bg-gradient-to-br from-indigo-50 to-indigo-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-xs sm:text-sm font-semibold text-indigo-800">Status Pemindai ESP32</CardTitle>
+              {onlineDevices > 0 ? (
+                <div className="relative">
+                  <Wifi className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                </div>
+              ) : (
+                <WifiOff className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
+              )}
             </CardHeader>
-            <CardContent>
-              <div className={`text-lg sm:text-2xl font-bold ${onlineDevices > 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <CardContent className="relative z-10">
+              <div className={`text-xl sm:text-3xl font-bold ${onlineDevices > 0 ? 'text-green-700' : 'text-red-600'}`}>
                 {onlineDevices > 0 ? "Terhubung" : "Terputus"}
               </div>
-              <p className="text-xs text-muted-foreground mb-2">
-                {onlineDevices > 0 ? `${onlineDevices} perangkat aktif terdeteksi` : "Tidak ada perangkat aktif"}
+              <p className="text-xs text-indigo-600 font-medium mb-2">
+                {onlineDevices > 0 ? `${onlineDevices} perangkat aktif` : "Tidak ada perangkat aktif"}
               </p>
               
-              {/* Device Info - Hide on very small screens */}
+              {/* Device Info - Enhanced styling */}
               {onlineDevices > 0 && devices && devices.length > 0 && (
-                <div className="text-xs text-muted-foreground space-y-1 mb-3 bg-gray-50 p-2 rounded border hidden sm:block">
-                  <div className="font-medium text-gray-700 mb-1">📡 Perangkat Aktif:</div>
+                <div className="text-xs space-y-1 mb-3 bg-white/60 backdrop-blur-sm p-2 rounded-lg border border-white/40 hidden sm:block">
+                  <div className="font-semibold text-indigo-700 mb-1 flex items-center gap-1">
+                    <Smartphone className="h-3 w-3" />
+                    Perangkat Aktif:
+                  </div>
                   {devices
                     .filter(device => device.lastSeen && Date.now() - new Date(device.lastSeen).getTime() < 60 * 1000)
-                    .slice(0, 2) // Limit to 2 devices on mobile
+                    .slice(0, 2)
                     .map((device, index) => {
                       const deviceStatus = checkDeviceStatus(device);
                       
                       return (
-                        <div key={device.deviceId || index} className="flex justify-between items-center">
-                          <span className="font-mono text-xs truncate">
+                        <div key={device.deviceId || index} className="flex justify-between items-center bg-white/40 rounded px-2 py-1">
+                          <span className="font-mono text-xs truncate text-indigo-800">
                             {device.deviceId || `Device-${index + 1}`}
                           </span>
                           <div className="flex items-center gap-1">
                             {deviceStatus === "online" && (
-                              <span className="font-mono text-xs text-green-500">
-                                • online
+                              <span className="flex items-center gap-1">
+                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                <span className="font-mono text-xs text-green-600 font-medium">online</span>
                               </span>
                             )}
                           </div>
@@ -569,7 +591,7 @@ export default function TransaksiPage() {
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="mt-1 w-full text-xs" 
+                className="mt-1 w-full text-xs bg-white/60 backdrop-blur-sm border-white/40 hover:bg-white/80 transition-all duration-200" 
                 onClick={() => router.push('/pengaturan?tab=devices')}
               >
                 <Settings className="mr-1 h-3 w-3 sm:mr-2 sm:h-4 sm:w-4" />
@@ -579,19 +601,22 @@ export default function TransaksiPage() {
           </Card>
         </div>
 
-        {/* Low Stock Alert - Mobile optimized */}
+        {/* Low Stock Alert - Enhanced styling */}
         {lowStockItems.length > 0 && (
-          <Alert variant="destructive" className="mb-4 sm:mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="text-sm">
-              <strong>Perhatian Stok Rendah:</strong> {lowStockItems.length} item perlu segera diisi ulang.
-              <div className="mt-2 max-h-20 overflow-y-auto">
-                <ul className="list-disc list-inside text-xs">
+          <Alert variant="destructive" className="mb-6 sm:mb-8 shadow-lg border-0 bg-gradient-to-r from-red-50 to-pink-50 border-l-4 border-l-red-500">
+            <AlertCircle className="h-5 w-5" />
+            <AlertDescription className="text-sm font-medium">
+              <strong>⚠️ Perhatian Stok Rendah:</strong> {lowStockItems.length} item perlu segera diisi ulang.
+              <div className="mt-3 max-h-24 overflow-y-auto bg-white/50 rounded-lg p-3">
+                <ul className="list-disc list-inside text-xs space-y-1">
                   {lowStockItems.slice(0, 3).map(item => 
-                    <li key={item.id}>{item.name} (Sisa: {item.quantity})</li>
+                    <li key={item.id} className="text-red-700">
+                      <span className="font-medium">{item.name}</span> 
+                      <span className="text-red-600"> (Sisa: {item.quantity})</span>
+                    </li>
                   )}
                   {lowStockItems.length > 3 && (
-                    <li>...dan {lowStockItems.length - 3} item lainnya</li>
+                    <li className="text-red-600 font-medium">...dan {lowStockItems.length - 3} item lainnya</li>
                   )}
                 </ul>
               </div>
@@ -599,19 +624,35 @@ export default function TransaksiPage() {
           </Alert>
         )}
 
-        {/* Inventory Table and Controls */}
-        <Card>
-          <CardHeader>
+        {/* Inventory Table and Controls - Enhanced */}
+        <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+          <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 border-b border-gray-100">
             <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-              <CardTitle className="text-lg sm:text-xl">Inventaris ({filteredInventory.length})</CardTitle>
+              <div>
+                <CardTitle className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-700 to-gray-900 bg-clip-text text-transparent">
+                  📦 Inventaris ({filteredInventory.length})
+                </CardTitle>
+                <CardDescription className="text-sm text-gray-600 font-medium mt-1">
+                  Kelola dan pantau stok barang Anda
+                </CardDescription>
+              </div>
               
-              <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
-                <Button onClick={() => setIsAddItemOpen(true)} size="sm" className="w-full sm:w-auto">
+              <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-3">
+                <Button 
+                  onClick={() => setIsAddItemOpen(true)} 
+                  size="sm" 
+                  className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   <span className="sm:hidden">Tambah</span>
                   <span className="hidden sm:inline">Tambah Item</span>
                 </Button>
-                <Button variant="outline" onClick={exportToCSV} size="sm" className="w-full sm:w-auto">
+                <Button 
+                  variant="outline" 
+                  onClick={exportToCSV} 
+                  size="sm" 
+                  className="w-full sm:w-auto bg-white/80 backdrop-blur-sm border-gray-200 hover:bg-gray-50 shadow-md hover:shadow-lg transition-all duration-300"
+                >
                   <Download className="w-4 h-4 mr-2" />
                   <span className="sm:hidden">Export</span>
                   <span className="hidden sm:inline">Export CSV</span>
@@ -619,24 +660,25 @@ export default function TransaksiPage() {
               </div>
             </div>
 
-            {/* Filters - Mobile responsive */}
-            <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-4">
+            {/* Filters - Enhanced styling */}
+            <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 p-4 rounded-lg border border-blue-100/50">
               <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
                 <Input
-                  placeholder="Cari item..."
+                  placeholder="🔍 Cari item berdasarkan nama, kategori, atau barcode..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
+                  className="pl-10 bg-white/80 backdrop-blur-sm border-gray-200 focus:border-blue-400 focus:ring-blue-400 transition-all duration-200"
                 />
               </div>
               
               <div className="flex space-x-2">
                 <Select value={filterCategory} onValueChange={setFilterCategory}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Kategori" />
+                  <SelectTrigger className="w-full sm:w-[180px] bg-white/80 backdrop-blur-sm border-gray-200 hover:border-blue-300 transition-all duration-200">
+                    <Filter className="h-4 w-4 mr-2 text-gray-500" />
+                    <SelectValue placeholder="Semua Kategori" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white/95 backdrop-blur-sm">
                     {categories.map((category) => (
                       <SelectItem key={category} value={category}>
                         {category === "all" ? "Semua Kategori" : category}

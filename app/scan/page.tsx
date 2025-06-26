@@ -78,45 +78,52 @@ export default function ScanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-blue-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
+        {/* Enhanced Header */}
         <div className="mb-8 text-center md:text-left">
-          <h1 className="text-4xl font-bold text-gray-900">📋 Riwayat Transaksi</h1>
-          <p className="text-gray-600">Lihat riwayat scan masuk dan keluar barang inventaris</p>
+          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 bg-clip-text text-transparent mb-3">
+            📋 Riwayat Transaksi
+          </h1>
+          <p className="text-lg text-gray-600 font-medium mb-4">Lihat riwayat scan masuk dan keluar barang inventaris</p>
+          <div className="w-32 h-1 bg-gradient-to-r from-purple-500 to-blue-500 mx-auto md:mx-0 rounded-full"></div>
         </div>
 
-        {/* Stats Cards untuk Riwayat */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Scan Hari Ini</CardTitle>
-              <History className="h-4 w-4 text-muted-foreground" />
+        {/* Enhanced Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+          <Card className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-blue-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-xs sm:text-sm font-semibold text-blue-800">Total Scan</CardTitle>
+              <History className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">0</div>
-              <p className="text-xs text-muted-foreground">Aktivitas scan hari ini</p>
+            <CardContent className="relative z-10">
+              <div className="text-xl sm:text-3xl font-bold text-blue-900">0</div>
+              <p className="text-xs text-blue-600 font-medium">Aktivitas hari ini</p>
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Barang Masuk</CardTitle>
-              <ArrowUp className="h-4 w-4 text-green-600" />
+          <Card className="relative overflow-hidden bg-gradient-to-br from-green-50 to-emerald-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-green-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-xs sm:text-sm font-semibold text-green-800">Barang Masuk</CardTitle>
+              <ArrowUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">0</div>
-              <p className="text-xs text-muted-foreground">Total scan masuk</p>
+            <CardContent className="relative z-10">
+              <div className="text-xl sm:text-3xl font-bold text-green-900">0</div>
+              <p className="text-xs text-green-600 font-medium">Total scan masuk</p>
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Barang Keluar</CardTitle>
-              <ArrowDown className="h-4 w-4 text-red-600" />
+          <Card className="relative overflow-hidden bg-gradient-to-br from-red-50 to-red-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-red-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-xs sm:text-sm font-semibold text-red-800">Barang Keluar</CardTitle>
+              <ArrowDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">0</div>
-              <p className="text-xs text-muted-foreground">Total scan keluar</p>
+            <CardContent className="relative z-10">
+              <div className="text-xl sm:text-3xl font-bold text-red-900">0</div>
+              <p className="text-xs text-red-600 font-medium">Total scan keluar</p>
             </CardContent>
           </Card>
           
