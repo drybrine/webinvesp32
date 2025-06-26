@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useEffect, useState } from "react"
+import { usePathname } from "next/navigation"
 import { onValue, off, ref } from "firebase/database"
 import { database, isFirebaseConfigured } from "@/lib/firebase"
 import { ProductInfoPopup } from "./product-info-popup"
@@ -24,11 +25,16 @@ interface RealtimeScanProviderProps {
 }
 
 export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
+  const pathname = usePathname()
   const [isScanning, setIsScanning] = useState(false)
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null)
   const [scanCount, setScanCount] = useState(0)
   const [showPopup, setShowPopup] = useState(false)
   const [currentBarcode, setCurrentBarcode] = useState("")
+
+  // Pages where product popup should be disabled
+  const disabledPages = ['/absensi']
+  const isPopupDisabled = disabledPages.includes(pathname)
 
   useEffect(() => {
     if (!isFirebaseConfigured() || !database) {
@@ -58,12 +64,31 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
           const scanTime = latestScan.timestamp || 0
           const isRecentScan = now - scanTime < 5000
 
+          // Check if the scan is from inventory mode - IMPORTANT
+          const isScanFromInventoryMode = (
+            latestScan.mode === "inventory" || 
+            latestScan.type === "inventory_scan" || 
+            (!latestScan.mode && !latestScan.type) // For backward compatibility with older scans
+          )
+          
+          if (!isScanFromInventoryMode) {
+            // Skip processing scans from attendance mode
+            console.log(`⏭️ Skipping non-inventory scan in scan provider: ${latestScan.barcode} (mode: ${latestScan.mode || "unknown"}, type: ${latestScan.type || "unknown"})`)
+            return
+          }
+          
+          console.log(`📦 Processing inventory scan: ${latestScan.barcode} (mode: ${latestScan.mode || "unknown"}, type: ${latestScan.type || "unknown"})`)
+
           if (isRecentScan && latestScan.barcode !== lastScannedBarcode) {
             setLastScannedBarcode(latestScan.barcode)
             setCurrentBarcode(latestScan.barcode)
             setScanCount(prev => prev + 1)
             setIsScanning(true)
-            setShowPopup(true)
+            
+            // Only show popup if not on disabled pages
+            if (!isPopupDisabled) {
+              setShowPopup(true)
+            }
 
             // Reset scanning state after 2 seconds
             setTimeout(() => {
@@ -79,7 +104,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
         off(scansRef, "value", unsubscribe)
       }
     }
-  }, [lastScannedBarcode])
+  }, [lastScannedBarcode, isPopupDisabled])
 
   const handleClosePopup = () => {
     setShowPopup(false)

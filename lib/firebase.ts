@@ -29,6 +29,7 @@ interface DbRefs {
   settings: DatabaseReference;
   analytics: DatabaseReference;
   transactions: DatabaseReference; // Ditambahkan
+  attendance: DatabaseReference; // Ditambahkan untuk absensi
 }
 export let dbRefs: DbRefs | null = null; // Initialize as null
 
@@ -61,6 +62,7 @@ const initializeFirebase = () => {
         settings: ref(database, "settings"),
         analytics: ref(database, "analytics"),
         transactions: ref(database, "transactions"), // Ditambahkan
+        attendance: ref(database, "attendance"), // Ditambahkan untuk absensi
       };
     }
 
