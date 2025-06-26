@@ -229,48 +229,50 @@ export default function AbsensiPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-blue-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-blue-50 p-3 sm:p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Enhanced Header */}
-        <div className="mb-8 text-center md:text-left">
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 bg-clip-text text-transparent mb-3">
+        {/* Enhanced Header - Mobile optimized */}
+        <div className="mb-6 sm:mb-8 text-center md:text-left px-1">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 sm:mb-3">
             🎟️ Absensi Peserta Seminar
           </h1>
-          <p className="text-lg text-gray-600 font-medium mb-4">Gunakan ESP32 Scanner atau input manual untuk mencatat kehadiran</p>
-          <div className="w-32 h-1 bg-gradient-to-r from-purple-500 to-blue-500 mx-auto md:mx-0 rounded-full"></div>
+          <p className="text-sm sm:text-base lg:text-lg text-gray-600 font-medium mb-3 sm:mb-4">Gunakan ESP32 Scanner atau input manual untuk mencatat kehadiran</p>
+          <div className="w-24 sm:w-32 h-1 bg-gradient-to-r from-purple-500 to-blue-500 mx-auto md:mx-0 rounded-full"></div>
           
-          {/* Enhanced ESP32 Status Indicator */}
-          <div className="mt-6 flex flex-col sm:flex-row items-center gap-4 bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/40 shadow-lg">
-            <div className="flex items-center gap-3">
+          {/* Enhanced ESP32 Status Indicator - Mobile friendly */}
+          <div className="mt-4 sm:mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 bg-white/60 backdrop-blur-sm p-3 sm:p-4 rounded-xl border border-white/40 shadow-lg">
+            <div className="flex items-center justify-center sm:justify-start gap-3">
               <div className={`w-3 h-3 rounded-full ${isProcessing ? 'bg-green-500 animate-pulse shadow-green-300 shadow-lg' : 'bg-gray-400'}`}></div>
               <span className={`text-sm font-semibold ${isProcessing ? 'text-green-700' : 'text-gray-600'}`}>
                 {isProcessing ? '🔄 ESP32 sedang memproses scan...' : '📡 ESP32 Scanner siap'}
               </span>
             </div>
-            {processCount > 0 && (
-              <Badge variant="outline" className="bg-blue-50 border-blue-200 text-blue-700 font-medium">
-                📊 {processCount} scan ESP32 hari ini
-              </Badge>
-            )}
-            {lastProcessedNim && (
-              <Badge variant="outline" className="bg-green-50 border-green-200 text-green-700 font-medium">
-                ✅ Terakhir: {lastProcessedNim}
-              </Badge>
-            )}
+            <div className="flex flex-wrap justify-center sm:justify-start gap-2">
+              {processCount > 0 && (
+                <Badge variant="outline" className="bg-blue-50 border-blue-200 text-blue-700 font-medium text-xs">
+                  📊 {processCount} scan ESP32 hari ini
+                </Badge>
+              )}
+              {lastProcessedNim && (
+                <Badge variant="outline" className="bg-green-50 border-green-200 text-green-700 font-medium text-xs">
+                  ✅ Terakhir: {lastProcessedNim}
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8">
+        {/* Enhanced Stats Cards - Mobile optimized */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
           <Card className="relative overflow-hidden bg-gradient-to-br from-green-50 to-emerald-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-green-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-              <CardTitle className="text-xs sm:text-sm font-semibold text-green-800">Total Kehadiran</CardTitle>
-              <UserCheck className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
+            <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-green-200 rounded-full -mr-8 sm:-mr-10 -mt-8 sm:-mt-10 opacity-20"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 relative z-10 p-3 sm:p-4">
+              <CardTitle className="text-xs font-semibold text-green-800 leading-tight">Total Kehadiran</CardTitle>
+              <UserCheck className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 text-green-600 flex-shrink-0" />
             </CardHeader>
-            <CardContent className="relative z-10">
-              <div className="text-xl sm:text-3xl font-bold text-green-900">{stats.unique}</div>
-              <p className="text-xs text-green-600 font-medium">Peserta unik hadir</p>
+            <CardContent className="relative z-10 p-3 sm:p-4 pt-0 sm:pt-0">
+              <div className="text-lg sm:text-xl lg:text-3xl font-bold text-green-900">{stats.unique}</div>
+              <p className="text-xs text-green-600 font-medium leading-tight">Peserta unik hadir</p>
             </CardContent>
           </Card>
           
