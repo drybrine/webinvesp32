@@ -56,7 +56,7 @@ StokManager is a real-time inventory management system that integrates ESP32 bar
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/webinvesp32.git
+git clone https://github.com/drybrine/webinvesp32.git
 cd webinvesp32
 ```
 
