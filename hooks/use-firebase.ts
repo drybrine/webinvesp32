@@ -1,12 +1,10 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"; // Add useMemo
-import { ref, onValue, DataSnapshot, query, orderByChild, off, Unsubscribe } from "firebase/database"; // Added Unsubscribe, off
+import { ref, onValue, DataSnapshot, query, orderByChild, off, Unsubscribe, push, set } from "firebase/database"; // Added push, set
 import { firebaseHelpers, isFirebaseConfigured, database, dbRefs } from "@/lib/firebase"; // Ensure all are imported
 
 export interface InventoryItem {
-  lastUpdated: string | number | Date;
-  lastUpdated: any;
   id: string
   name: string
   category: string
@@ -19,6 +17,7 @@ export interface InventoryItem {
   supplier?: string
   createdAt: any
   updatedAt: any
+  lastUpdated: any
   deleted?: boolean
 }
 
@@ -461,6 +460,104 @@ export function useFirebaseTransactions() {
     transactions,
     loading,
     error,
+    isConfigured: isFirebaseConfigured(),
+  };
+}
+
+export interface AttendanceRecord {
+  id: string
+  nim: string
+  nama?: string
+  timestamp: any
+  deviceId?: string
+  sessionId?: string
+  eventName?: string
+  location?: string
+  scanned: boolean
+}
+
+export function useFirebaseAttendance() {
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let unsubscribe: Unsubscribe | undefined;
+    if (typeof window === "undefined") {
+      setLoading(false);
+      return;
+    }
+
+    if (!isFirebaseConfigured() || !database) {
+      console.warn("Firebase not configured for attendance");
+      setLoading(false);
+      return;
+    }
+
+    const attendanceRef = ref(database, 'attendance');
+    const attendanceQuery = query(attendanceRef, orderByChild('timestamp'));
+    
+    unsubscribe = onValue(
+      attendanceQuery,
+      (snapshot: DataSnapshot) => {
+        const data = snapshot.val();
+        const loadedAttendance: AttendanceRecord[] = data
+          ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
+          : [];
+        // Sort by timestamp, newest first
+        setAttendance(loadedAttendance.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+        setError(null);
+        setLoading(false);
+      },
+      (errorObject: Error) => {
+        console.error("Firebase attendance error:", errorObject);
+        setError(errorObject.message);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  const addAttendance = async (nim: string, nama?: string, deviceId?: string) => {
+    if (!isFirebaseConfigured() || !database) {
+      throw new Error("Firebase not configured");
+    }
+
+    try {
+      const attendanceRef = ref(database, 'attendance');
+      const newAttendanceRef = push(attendanceRef);
+      const newAttendance: Omit<AttendanceRecord, 'id'> = {
+        nim,
+        nama: nama || '',
+        timestamp: Date.now(),
+        deviceId: deviceId || 'web',
+        sessionId: 'seminar-2025',
+        eventName: 'Seminar Teknologi 2025',
+        location: 'Auditorium Utama',
+        scanned: true
+      };
+
+      await set(newAttendanceRef, {
+        ...newAttendance,
+        id: newAttendanceRef.key
+      });
+      return newAttendance;
+    } catch (error) {
+      console.error("Error adding attendance:", error);
+      throw error;
+    }
+  };
+
+  return {
+    attendance,
+    loading,
+    error,
+    addAttendance,
     isConfigured: isFirebaseConfigured(),
   };
 }

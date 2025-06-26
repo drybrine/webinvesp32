@@ -5,6 +5,7 @@ import "./globals.css"
 import Navigation from "@/components/navigation"
 import { Toaster } from "@/components/ui/toaster"
 import { RealtimeScanProvider } from "@/components/realtime-scan-provider"
+import { RealtimeAttendanceProvider } from "@/components/realtime-attendance-provider"
 import { AdminGuard } from "@/components/AdminGuard"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -24,11 +25,13 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <RealtimeScanProvider>
-          <AdminGuard>
-            <Navigation />
-            <main>{children}</main>
-            <Toaster />
-          </AdminGuard>
+          <RealtimeAttendanceProvider>
+            <AdminGuard>
+              <Navigation />
+              <main>{children}</main>
+              <Toaster />
+            </AdminGuard>
+          </RealtimeAttendanceProvider>
         </RealtimeScanProvider>
       </body>
     </html>

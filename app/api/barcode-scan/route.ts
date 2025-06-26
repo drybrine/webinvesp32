@@ -36,6 +36,8 @@ export async function POST(request: NextRequest) {
       timestamp: timestamp || Date.now(),
       processed: false,
       location: location || "Unknown",
+      mode: body.mode || "inventory", // Default to inventory mode if not specified
+      type: body.type || "inventory_scan", // Default type if not specified
     }
 
     // Save to Firebase
