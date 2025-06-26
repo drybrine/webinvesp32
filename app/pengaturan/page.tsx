@@ -15,7 +15,6 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirebaseDevices } from "@/hooks/use-firebase" 
 import { ref, get, set } from "firebase/database"
 import { database } from "@/lib/firebase"
-import { AttendanceQRGenerator } from "@/components/attendance-qr-generator"
 import { FirebaseRulesSetup } from "@/components/firebase-rules-setup"
 
 export default function PengaturanPage() {
@@ -293,11 +292,10 @@ export default function PengaturanPage() {
         </div>
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="general">Umum</TabsTrigger>
             <TabsTrigger value="system">Sistem</TabsTrigger>
             <TabsTrigger value="devices">Perangkat</TabsTrigger>
-            <TabsTrigger value="qr-generator">QR Tiket</TabsTrigger>
             <TabsTrigger value="security">Keamanan</TabsTrigger>
             <TabsTrigger value="backup">Backup</TabsTrigger>
           </TabsList>
@@ -561,54 +559,6 @@ export default function PengaturanPage() {
                   <Button onClick={handleSaveSettings} disabled={saveLoading}>
                     {saveLoading ? "Menyimpan..." : "Simpan Pengaturan Scanner"}
                   </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="qr-generator">
-            <div className="space-y-6">
-              <AttendanceQRGenerator />
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Petunjuk Penggunaan QR Code</CardTitle>
-                  <CardDescription>Cara menggunakan QR code untuk absensi seminar</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-sm font-medium">1</div>
-                      <div>
-                        <h4 className="font-medium">Generate QR Code</h4>
-                        <p className="text-sm text-gray-600">Masukkan NIM peserta (contoh: 10222005) dan klik "Buat QR Code"</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-sm font-medium">2</div>
-                      <div>
-                        <h4 className="font-medium">Download QR Code</h4>
-                        <p className="text-sm text-gray-600">Download QR code dan cetak pada tiket atau kartu peserta</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-sm font-medium">3</div>
-                      <div>
-                        <h4 className="font-medium">Scan untuk Absensi</h4>
-                        <p className="text-sm text-gray-600">Peserta scan QR code di halaman absensi untuk mencatat kehadiran</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h5 className="font-medium text-blue-900 mb-2">Informasi Penting:</h5>
-                    <ul className="text-sm text-blue-800 space-y-1">
-                      <li>• QR code berisi NIM peserta (contoh: 10222005)</li>
-                      <li>• Sistem akan otomatis mencegah duplikasi absensi</li>
-                      <li>• Data absensi tersimpan terpisah dari data inventaris</li>
-                      <li>• Bisa export data ke format CSV</li>
-                    </ul>
-                  </div>
                 </CardContent>
               </Card>
             </div>
