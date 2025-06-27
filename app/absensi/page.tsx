@@ -21,12 +21,14 @@ import {
   Users,
   Clock,
   UserCheck,
-  FileText
+  FileText,
+  Smartphone
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { useFirebaseAttendance } from "@/hooks/use-firebase"
+import { useFirebaseAttendance, useFirebaseDevices } from "@/hooks/use-firebase"
 import { FirebasePermissionError } from "@/components/firebase-permission-error"
 import { useRealtimeAttendance } from "@/components/realtime-attendance-provider"
+import { DeviceStatusDisplay } from "@/components/device-status"
 
 interface AttendanceRecord {
   id: string
@@ -43,6 +45,7 @@ interface AttendanceRecord {
 export default function AbsensiPage() {
   const router = useRouter()
   const { attendance, addAttendance, loading, error } = useFirebaseAttendance()
+  const { devices, loading: devicesLoading, error: devicesError } = useFirebaseDevices()
   const { isProcessing, lastProcessedNim, processCount } = useRealtimeAttendance()
   const { toast } = useToast()
   
@@ -73,6 +76,29 @@ export default function AbsensiPage() {
       (record.nama && record.nama.toLowerCase().includes(searchTerm.toLowerCase()))
     )
   }, [todayAttendance, searchTerm])
+
+  // Unified device status check - consistent logic
+  const hasOnlineDevices = useMemo(() => {
+    return devices.some(device => {
+      // Use the same logic as device-status.tsx
+      // PRIORITY 1: Trust database status if online
+      if (device.status === "online") {
+        return true
+      }
+      
+      // PRIORITY 2: Check timestamp as backup (2 minutes threshold)
+      const lastSeen = device.lastSeen
+      let lastSeenMs = 0
+      if (typeof lastSeen === "string") {
+        const parsedNumber = parseInt(lastSeen, 10)
+        lastSeenMs = !isNaN(parsedNumber) ? (parsedNumber > 1000000000000 ? parsedNumber : parsedNumber * 1000) : new Date(lastSeen).getTime()
+      } else if (typeof lastSeen === "number") {
+        lastSeenMs = lastSeen > 1000000000000 ? lastSeen : lastSeen * 1000
+      }
+      const timeDiff = Date.now() - lastSeenMs
+      return lastSeenMs > 0 && timeDiff < 120000 // 2 minutes threshold
+    })
+  }, [devices])
 
   // Statistics
   const stats = useMemo(() => {
@@ -202,6 +228,53 @@ export default function AbsensiPage() {
     })
   }
 
+  // Device status refresh function - more aggressive for offline detection
+  const refreshDeviceStatus = async () => {
+    try {
+      // Call the API to check device status with internal flag for detailed response
+      const response = await fetch('/api/check-device-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Call': 'true'
+        }
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log('📡 Device status updated:', result.message)
+        
+        // Log device details if available
+        if (result.deviceDetails) {
+          console.log('📊 Device status details:', result.deviceDetails)
+        }
+        
+        // Show toast only for significant updates, not auto-refresh
+        if (result.updatedDevices > 0) {
+          console.log(`✅ Updated ${result.updatedDevices} device statuses`)
+        }
+      } else {
+        console.error('❌ Device status API error:', response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing device status:', error)
+      // Don't show error toast for auto-refresh failures to avoid spam
+    }
+  }
+
+  // Auto-refresh device status every 20 seconds for faster offline detection
+  useEffect(() => {
+    const deviceStatusInterval = setInterval(() => {
+      console.log('⏰ Auto-refreshing device status for offline detection...')
+      refreshDeviceStatus()
+    }, 20000) // 20 seconds
+
+    // Initial call
+    refreshDeviceStatus()
+
+    return () => clearInterval(deviceStatusInterval)
+  }, [])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
@@ -290,6 +363,10 @@ export default function AbsensiPage() {
           
           <Card className="relative overflow-hidden bg-gradient-to-br from-purple-50 to-purple-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
             <div className="absolute top-0 right-0 w-20 h-20 bg-purple-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
+            {/* Real-time scanning indicator */}              {/* Real-time scanning indicator - unified logic */}
+              {hasOnlineDevices && (
+                <div className="absolute top-2 right-2 w-3 h-3 bg-green-500 rounded-full animate-pulse-glow"></div>
+              )}
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
               <CardTitle className="text-xs sm:text-sm font-semibold text-purple-800">ESP32 Scanner</CardTitle>
               <Users className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
@@ -325,6 +402,48 @@ export default function AbsensiPage() {
               <p className="text-xs text-muted-foreground">Scan terakhir</p>
               {lastProcessedNim && (
                 <p className="text-xs text-blue-600 mt-1">ESP32: {lastProcessedNim}</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ESP32 Device Status - Real-time monitoring */}
+        <div className="mb-6">
+          {/* Offline Warning Banner */}
+          {!hasOnlineDevices && devices.length > 0 && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg animate-pulse">
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 bg-red-500 rounded-full animate-bounce"></div>
+                <div>
+                  <h3 className="font-semibold text-red-800">⚠️ Peringatan: ESP32 Scanner Offline</h3>
+                  <p className="text-red-600 text-sm">
+                    Semua ESP32 scanner sedang offline. Scan QR code otomatis tidak tersedia saat ini.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <Card className="bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-indigo-800">
+                <Smartphone className="h-5 w-5" />
+                Status ESP32 Scanner (Real-time)
+              </CardTitle>
+              <CardDescription className="text-indigo-600">
+                Monitor status device ESP32 untuk scan QR Code absensi secara real-time
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DeviceStatusDisplay 
+                devices={devices} 
+                loading={devicesLoading}
+                onRefresh={refreshDeviceStatus}
+              />
+              {devicesError && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-600 text-sm">Error: {devicesError}</p>
+                </div>
               )}
             </CardContent>
           </Card>

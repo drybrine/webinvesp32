@@ -66,7 +66,6 @@ const initializeFirebase = () => {
       };
     }
 
-
     // Connect to emulator in development if needed
     if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true") {
       try {
@@ -89,10 +88,64 @@ const initializeFirebase = () => {
   }
 }
 
+// Server-side Firebase initialization
+const initializeFirebaseServer = () => {
+  try {
+    // Check if Firebase apps have already been initialized
+    if (getApps().length === 0) {
+      // No apps initialized, so initialize Firebase
+      app = initializeApp(firebaseConfig)
+    } else {
+      // Firebase app already initialized, use the existing app
+      app = getApps()[0]
+    }
+
+    database = getDatabase(app)
+    firebaseInitialized = true
+
+    // Populate dbRefs for server side
+    if (database) {
+      dbRefs = {
+        inventory: ref(database, "inventory"),
+        scans: ref(database, "scans"),
+        devices: ref(database, "devices"),
+        settings: ref(database, "settings"),
+        analytics: ref(database, "analytics"),
+        transactions: ref(database, "transactions"),
+        attendance: ref(database, "attendance"),
+      };
+    }
+
+    console.log("✅ Firebase initialized successfully (server-side)")
+    return database
+  } catch (error) {
+    console.error("❌ Failed to initialize Firebase (server-side):", error)
+    database = null
+    dbRefs = null
+    firebaseInitialized = false
+    return null
+  }
+}
+
 // Initialize Firebase immediately if we're on the client side
 if (typeof window !== "undefined") {
   initializeFirebase()
+} else {
+  // Initialize on server side for API routes
+  initializeFirebaseServer()
 }
+
+// Export a function to ensure database is available
+export const ensureFirebaseInitialized = () => {
+  if (!database && typeof window === "undefined") {
+    // If we're on server side and database is not initialized, try to initialize
+    return initializeFirebaseServer()
+  }
+  return database
+}
+
+// Export initialization functions for explicit control
+export { initializeFirebaseServer }
 
 // Database references are initialized in the initializeFirebase function above
 
