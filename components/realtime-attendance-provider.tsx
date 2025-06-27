@@ -6,6 +6,7 @@ import { onValue, off, ref } from "firebase/database"
 import { database, isFirebaseConfigured } from "@/lib/firebase"
 import { useFirebaseAttendance } from "@/hooks/use-firebase"
 import { useToast } from "@/hooks/use-toast"
+import { startDeviceStatusMonitor, stopDeviceStatusMonitor } from "@/lib/device-status-monitor"
 
 interface RealtimeAttendanceContextType {
   isProcessing: boolean
@@ -130,6 +131,13 @@ export function RealtimeAttendanceProvider({ children }: RealtimeAttendanceProvi
           
           if (isRecentScan) {
             console.log(`✅ Processing new ESP32 scan: ${latestScan.barcode} (${scanKey})`)
+            
+            // Show immediate detection notification
+            toast({
+              title: "📱 QR Code Terdeteksi!",
+              description: `ESP32 Scanner mendeteksi QR Code: ${latestScan.barcode}`,
+            })
+            
             processESP32Scan(latestScan.barcode, latestScan.deviceId || "esp32", scanKey)
           }
         }
@@ -143,6 +151,19 @@ export function RealtimeAttendanceProvider({ children }: RealtimeAttendanceProvi
       }
     }
   }, [isAttendancePage, processedScans, lastProcessedNim, lastProcessedTime])
+
+  // Device Status Monitor Effect
+  useEffect(() => {
+    // Start the device status monitor when component mounts
+    console.log("🔧 Starting device status monitor from attendance provider...")
+    const monitor = startDeviceStatusMonitor()
+    
+    // Cleanup function
+    return () => {
+      console.log("🛑 Stopping device status monitor from attendance provider...")
+      stopDeviceStatusMonitor()
+    }
+  }, [])
 
   const processESP32Scan = async (barcode: string, deviceId: string, scanKey: string) => {
     try {
@@ -188,19 +209,29 @@ export function RealtimeAttendanceProvider({ children }: RealtimeAttendanceProvi
       setLastProcessedTime(Date.now())
       setProcessCount(prev => prev + 1)
       
-      // Show success notification
+      // Show success notification with enhanced details
       toast({
-        title: "🎉 Absensi Berhasil!",
-        description: `NIM ${nim} berhasil dicatat melalui ESP32 Scanner`,
+        title: "🎉 QR Code Berhasil Terdeteksi!",
+        description: `✅ NIM ${nim} berhasil dicatat melalui ESP32 Scanner (${deviceId}) pada ${new Date().toLocaleTimeString("id-ID")}`,
       })
+
+      // Additional celebration notification for mobile
+      if (window.navigator?.vibrate) {
+        // Vibrate pattern: short-long-short
+        window.navigator.vibrate([200, 100, 200])
+      }
 
       // Play success sound if available
       try {
         const successSound = new Audio("/success.mp3")
+        successSound.volume = 0.7
         successSound.play().catch(() => console.log("Success sound not available"))
       } catch (e) {
         console.log("Success sound error:", e)
       }
+
+      // Log successful scan for monitoring
+      console.log(`🎯 ESP32 Attendance Success: NIM ${nim} scanned by ${deviceId} at ${new Date().toISOString()}`)
 
     } catch (error) {
       console.error("Error processing ESP32 attendance scan:", error)

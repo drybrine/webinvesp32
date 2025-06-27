@@ -32,26 +32,49 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefresh, setLastRefresh] = useState(new Date())
 
-  // Add auto-refresh every 60 seconds (1 minute)
+  // Add auto-refresh every 30 seconds for more responsive offline detection
   useEffect(() => {
     // Initial refresh when component mounts
     if (onRefresh) {
       onRefresh();
     }
     
-    // Set up interval for regular refresh
+    // Set up interval for regular refresh - more frequent for offline detection
     const intervalId = setInterval(() => {
       if (onRefresh) {
-        console.log('Auto-refreshing device status...');
+        console.log('🔄 Auto-refreshing device status...');
         setRefreshing(true);
         onRefresh();
         setLastRefresh(new Date());
         setTimeout(() => setRefreshing(false), 500);
       }
-    }, 60000); // 60000 ms = 1 minute
+    }, 30000); // 30000 ms = 30 seconds (more frequent for real-time feel)
+
+    // Listen for device status updates from the background monitor
+    const handleDeviceStatusUpdate = (event: CustomEvent) => {
+      console.log('📡 Received device status update from monitor:', event.detail);
+      if (onRefresh) {
+        onRefresh();
+        setLastRefresh(new Date());
+      }
+    };
+
+    // Listen for device status errors from the background monitor
+    const handleDeviceStatusError = (event: CustomEvent) => {
+      console.warn('⚠️ Device status monitor error:', event.detail);
+      // Don't spam users with error toasts from automatic checks
+      // Just log the error for debugging
+    };
+
+    window.addEventListener('deviceStatusUpdated', handleDeviceStatusUpdate as EventListener);
+    window.addEventListener('deviceStatusError', handleDeviceStatusError as EventListener);
     
-    // Clear interval on component unmount
-    return () => clearInterval(intervalId);
+    // Clear interval and event listener on component unmount
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('deviceStatusUpdated', handleDeviceStatusUpdate as EventListener);
+      window.removeEventListener('deviceStatusError', handleDeviceStatusError as EventListener);
+    };
   }, [onRefresh]);
 
   const handleRefresh = () => {
@@ -59,6 +82,17 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
       setRefreshing(true)
       onRefresh()
       setLastRefresh(new Date())
+      
+      // Debug: log current device data
+      console.log('📊 Current devices data:', devices)
+      devices.forEach(device => {
+        console.log(`📱 Device ${device.deviceId}:`, {
+          status: device.status,
+          lastSeen: device.lastSeen,
+          ipAddress: device.ipAddress
+        })
+      })
+      
       setTimeout(() => setRefreshing(false), 2000)
     }
   }
@@ -118,30 +152,42 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
     return Date.now() - lastSeen < 2 * 60 * 1000 // 2 minutes
   }
 
-  // or wherever your client-side check is located
+  // Check device status with proper logic - prioritize database status
   const checkDeviceStatus = (device: DeviceStatus) => {
-    // First check if status is explicitly set in database
+    // First, trust the database status if it says online
     if (device.status === "online") {
+      console.log(`✅ Device ${device.deviceId}: Database says ONLINE`)
       return "online"
     }
 
-    // Then do timestamp check as backup
-    const lastSeen = device.lastHeartbeat || device.lastSeen
-
-    // Handle different timestamp formats
-    const lastSeenMs =
-      typeof lastSeen === "string"
-        ? parseInt(lastSeen, 10)
-        : typeof lastSeen === "number"
-        ? lastSeen
-        : 0
+    // If database says offline, double-check with timestamp
+    const lastSeen = device.lastSeen
+    let lastSeenMs = 0
+    
+    if (typeof lastSeen === "string") {
+      const parsedNumber = parseInt(lastSeen, 10)
+      if (!isNaN(parsedNumber)) {
+        lastSeenMs = parsedNumber > 1000000000000 ? parsedNumber : parsedNumber * 1000
+      } else {
+        lastSeenMs = new Date(lastSeen).getTime()
+      }
+    } else if (typeof lastSeen === "number") {
+      lastSeenMs = lastSeen > 1000000000000 ? lastSeen : lastSeen * 1000
+    }
 
     const now = Date.now()
+    const timeDiff = now - lastSeenMs
+    const OFFLINE_THRESHOLD = 120000 // 2 minutes
 
-    // Debug: console.log('Time diff:', now - lastSeenMs, 'ms');
+    console.log(`🔍 Device ${device.deviceId}: DB=${device.status}, timeDiff=${Math.floor(timeDiff/1000)}s`)
 
-    // Check if the timestamp is within the last minute (60,000 ms)
-    return lastSeenMs && now - lastSeenMs < 60000 ? "online" : "offline"
+    // If timestamp indicates recent activity, override database offline status
+    if (lastSeenMs > 0 && timeDiff < OFFLINE_THRESHOLD) {
+      console.log(`🔄 Device ${device.deviceId}: Timestamp override to ONLINE`)
+      return "online"
+    }
+
+    return "offline"
   }
 
   return (
@@ -157,7 +203,7 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
             Refresh
           </Button>
           <span className="text-xs text-gray-400 mt-1">
-            Update otomatis setiap 1 menit
+            Update otomatis setiap 30 detik
           </span>
         </div>
       </CardHeader>
