@@ -14,7 +14,6 @@ interface DeviceStatus {
   ipAddress: string
   lastSeen: any
   scanCount: number
-  uptime: number
   freeHeap?: number
   version?: string
   name?: string
@@ -32,14 +31,14 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefresh, setLastRefresh] = useState(new Date())
 
-  // Add auto-refresh every 30 seconds for more responsive offline detection
+  // Add auto-refresh every 15 seconds for more responsive offline detection
   useEffect(() => {
     // Initial refresh when component mounts
     if (onRefresh) {
       onRefresh();
     }
     
-    // Set up interval for regular refresh - more frequent for offline detection
+    // Set up interval for regular refresh - more stable timing
     const intervalId = setInterval(() => {
       if (onRefresh) {
         console.log('🔄 Auto-refreshing device status...');
@@ -48,7 +47,7 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
         setLastRefresh(new Date());
         setTimeout(() => setRefreshing(false), 500);
       }
-    }, 30000); // 30000 ms = 30 seconds (more frequent for real-time feel)
+    }, 15000); // 15000 ms = 15 seconds (less frequent for stability)
 
     // Listen for device status updates from the background monitor
     const handleDeviceStatusUpdate = (event: CustomEvent) => {
@@ -112,26 +111,6 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
     }, 1500)
   }
 
-  // Format uptime to human readable
-  const formatUptime = (milliseconds: number) => {
-    if (!milliseconds) return "Unknown"
-
-    const seconds = Math.floor(milliseconds / 1000)
-    const minutes = Math.floor(seconds / 60)
-    const hours = Math.floor(minutes / 60)
-    const days = Math.floor(hours / 24)
-
-    if (days > 0) {
-      return `${days}d ${hours % 24}h`
-    } else if (hours > 0) {
-      return `${hours}h ${minutes % 60}m`
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`
-    } else {
-      return `${seconds}s`
-    }
-  }
-
   // Format date for display
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "Unknown"
@@ -175,9 +154,8 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
       lastSeenMs = lastSeen > 1000000000000 ? lastSeen : lastSeen * 1000
     }
 
-    const now = Date.now()
-    const timeDiff = now - lastSeenMs
-    const OFFLINE_THRESHOLD = 120000 // 2 minutes
+    const timeDiff = Date.now() - lastSeenMs
+    const OFFLINE_THRESHOLD = 30000 // 30 seconds for more stable detection
 
     console.log(`🔍 Device ${device.deviceId}: DB=${device.status}, timeDiff=${Math.floor(timeDiff/1000)}s`)
 
@@ -203,7 +181,7 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
             Refresh
           </Button>
           <span className="text-xs text-gray-400 mt-1">
-            Update otomatis setiap 30 detik
+            Update otomatis setiap 15 detik
           </span>
         </div>
       </CardHeader>
@@ -263,8 +241,14 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
                         <span className="font-mono text-sm">{device.ipAddress || "Unknown"}</span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-xs text-gray-500">Uptime</span>
-                        <span className="text-sm">{formatUptime(device.uptime)}</span>
+                        <span className="text-xs text-gray-500">Status</span>
+                        <span className="text-sm">
+                          {online ? (
+                            <span className="text-green-600 font-medium">Online</span>
+                          ) : (
+                            <span className="text-gray-500">Offline</span>
+                          )}
+                        </span>
                       </div>
                       <div className="flex flex-col">
                         <span className="text-xs text-gray-500">Total Scan</span>

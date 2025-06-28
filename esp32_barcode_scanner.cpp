@@ -55,14 +55,6 @@ enum ScannerMode {
 ScannerMode currentMode = MODE_INVENTORY; // Default mode
 String currentPageUrl = "";
 
-// Debouncing and duplicate prevention
-String lastProcessedBarcode = "";
-unsigned long lastProcessedTime = 0;
-const unsigned long DEBOUNCE_DELAY = 3000; // 3 seconds debounce (increased from 2)
-const unsigned long DUPLICATE_TIMEOUT = 15000; // 15 seconds duplicate prevention (increased from 10)
-std::vector<String> recentScans; // Track recent scans
-const int MAX_RECENT_SCANS = 50; // Maximum recent scans to track (increased from 20)
-
 struct ScanData {
   String barcode;
   String timestamp;
@@ -118,9 +110,7 @@ void checkWiFiConnection(); // Tambahkan fungsi monitoring WiFi
 void setDeviceOffline(); // Tambahkan fungsi offline
 String getModeString(ScannerMode mode); // New: Get mode as string
 bool isValidNIM(String input); // New: Validate NIM format
-bool isDuplicateScan(String barcode); // New: Check for duplicate scans
-void addToRecentScans(String barcode); // New: Add to recent scans list
-void cleanupRecentScans(); // New: Cleanup old scans from recent list
+
 
 void saveWiFiConfig() {
   // Update to zero out the checksum field first
@@ -428,68 +418,7 @@ bool isValidNIM(String input) {
   return true;
 }
 
-// Check for duplicate scans
-bool isDuplicateScan(String barcode) {
-  // Check if same barcode was processed recently (within DEBOUNCE_DELAY)
-  if (barcode == lastProcessedBarcode && 
-      (millis() - lastProcessedTime) < DEBOUNCE_DELAY) {
-    Serial.println("⚠️ Duplicate scan detected (debounce): " + barcode + " [" + String(millis() - lastProcessedTime) + "ms ago]");
-    return true;
-  }
-  
-  // Check if barcode is in recent scans list
-  for (const String& recentScan : recentScans) {
-    int colonIndex = recentScan.lastIndexOf(':');
-    if (colonIndex != -1) {
-      String recentBarcode = recentScan.substring(0, colonIndex);
-      if (recentBarcode == barcode) {
-        unsigned long scanTime = recentScan.substring(colonIndex + 1).toInt();
-        unsigned long timeDiff = millis() - scanTime;
-        Serial.println("⚠️ Duplicate scan detected (recent): " + barcode + " [" + String(timeDiff) + "ms ago]");
-        return true;
-      }
-    }
-  }
-  
-  return false;
-}
 
-// Add to recent scans list
-void addToRecentScans(String barcode) {
-  // Clean up old scans first
-  cleanupRecentScans();
-  
-  // Add to recent scans
-  recentScans.push_back(barcode + ":" + String(millis()));
-  
-  // Keep only MAX_RECENT_SCANS
-  if (recentScans.size() > MAX_RECENT_SCANS) {
-    recentScans.erase(recentScans.begin());
-  }
-  
-  // Update last processed
-  lastProcessedBarcode = barcode;
-  lastProcessedTime = millis();
-}
-
-// Cleanup old scans from recent list
-void cleanupRecentScans() {
-  unsigned long currentTime = millis();
-  
-  // Remove scans older than DUPLICATE_TIMEOUT
-  recentScans.erase(
-    std::remove_if(recentScans.begin(), recentScans.end(),
-      [currentTime](const String& scan) {
-        int colonIndex = scan.lastIndexOf(':');
-        if (colonIndex != -1) {
-          unsigned long scanTime = scan.substring(colonIndex + 1).toInt();
-          return (currentTime - scanTime) > DUPLICATE_TIMEOUT;
-        }
-        return true; // Remove malformed entries
-      }),
-    recentScans.end()
-  );
-}
 
 // Send attendance to Firebase
 bool sendAttendanceToFirebase(String nim) {
@@ -844,9 +773,7 @@ void handleRoot() {
           <strong>Current Mode: )rawliteral" + getModeString(currentMode) + R"rawliteral(</strong><br>
           Free Heap: )rawliteral" + String(ESP.getFreeHeap()) + R"rawliteral( bytes<br>
           Uptime: )rawliteral" + String((millis() - bootTime) / 1000) + R"rawliteral( seconds<br>
-          Total Scans: )rawliteral" + String(scanCount) + R"rawliteral(<br>
-          Recent Scans Tracked: )rawliteral" + String(recentScans.size()) + R"rawliteral(<br>
-          Last Processed: )rawliteral" + String((millis() - lastProcessedTime) / 1000) + R"rawliteral(s ago
+          Total Scans: )rawliteral" + String(scanCount) + R"rawliteral(
         </div>
         
         <div class="status firebase">
@@ -855,10 +782,7 @@ void handleRoot() {
           Database URL: )rawliteral" + String(deviceConfig.firebaseUrl) + R"rawliteral(<br>
           Real-time Sync: )rawliteral" + (isOnline ? "Active" : "Disconnected") + R"rawliteral(<br>
           Last Heartbeat: )rawliteral" + String((millis() - lastHeartbeat) / 1000) + R"rawliteral(s ago<br>
-          Heartbeat Interval: 15 seconds<br>
-          <strong>Duplicate Prevention: Active</strong><br>
-          Debounce Delay: )rawliteral" + String(DEBOUNCE_DELAY / 1000) + R"rawliteral( seconds<br>
-          Duplicate Timeout: )rawliteral" + String(DUPLICATE_TIMEOUT / 1000) + R"rawliteral( seconds
+          Heartbeat Interval: 15 seconds
         </div>
         
         <div class="status wifi-info">
@@ -1062,11 +986,6 @@ void handleApiStatus() {
   doc["lastHeartbeat"] = (millis() - lastHeartbeat) / 1000;
   doc["version"] = "3.2";
   doc["currentMode"] = getModeString(currentMode);
-  doc["debounceDelay"] = DEBOUNCE_DELAY;
-  doc["duplicateTimeout"] = DUPLICATE_TIMEOUT;
-  doc["recentScansCount"] = recentScans.size();
-  doc["lastProcessedBarcode"] = lastProcessedBarcode;
-  doc["lastProcessedTime"] = (millis() - lastProcessedTime) / 1000;
   
   String response;
   serializeJson(doc, response);
@@ -1413,21 +1332,12 @@ void processBarcodeInput(String input) {
     return;
   }
   
-  // **DUPLICATE PREVENTION CHECK**
-  if (isDuplicateScan(input)) {
-    Serial.println("🚫 Skipping duplicate scan: " + input);
-    return;
-  }
-  
-  // Add to recent scans tracking
-  addToRecentScans(input);
-  
   // Update common variables
   lastBarcode = input;
   lastScanTime = millis();
   scanCount++;
   
-  Serial.println("✅ Processing unique scan: " + input);
+  Serial.println("✅ Processing scan: " + input);
   
   // Process based on current mode
   switch (currentMode) {
@@ -1560,11 +1470,6 @@ void loop() {
   
   // Monitor WiFi connection setiap 10 detik
   checkWiFiConnection();
-  
-  // Clean up old scans periodically
-  if (millis() % 30000 < 100) { // Every 30 seconds (approximately)
-    cleanupRecentScans();
-  }
   
   // Read from Serial2 (barcode scanner)
   if (Serial2.available()) {

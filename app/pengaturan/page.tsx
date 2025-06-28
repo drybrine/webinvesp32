@@ -284,30 +284,44 @@ export default function PengaturanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Modern Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Pengaturan Sistem</h1>
-          <p className="text-gray-600 mt-2">Konfigurasi aplikasi dan perangkat</p>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 text-white shadow-lg">
+              <Settings className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+                Pengaturan Sistem
+              </h1>
+              <p className="text-gray-600 mt-1">Konfigurasi aplikasi dan perangkat</p>
+            </div>
+          </div>
         </div>
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="general">Umum</TabsTrigger>
-            <TabsTrigger value="system">Sistem</TabsTrigger>
-            <TabsTrigger value="devices">Perangkat</TabsTrigger>
-            <TabsTrigger value="security">Keamanan</TabsTrigger>
-            <TabsTrigger value="backup">Backup</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-5 bg-white/80 backdrop-blur-sm border border-gray-200/50 shadow-lg rounded-xl p-1">
+            <TabsTrigger value="general" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Umum</TabsTrigger>
+            <TabsTrigger value="system" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Sistem</TabsTrigger>
+            <TabsTrigger value="devices" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Perangkat</TabsTrigger>
+            <TabsTrigger value="security" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Keamanan</TabsTrigger>
+            <TabsTrigger value="backup" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Backup</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="w-5 h-5" />
+            <Card className="glass-card border-gray-200/50">
+              <CardHeader className="border-b border-gray-100">
+                <CardTitle className="flex items-center gap-3 text-lg font-semibold text-gray-900">
+                  <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600">
+                    <Settings className="w-5 h-5 text-white" />
+                  </div>
                   Pengaturan Umum
                 </CardTitle>
-                <CardDescription>Konfigurasi informasi perusahaan dan pengaturan dasar</CardDescription>
+                <CardDescription className="text-gray-600">
+                  Konfigurasi informasi perusahaan dan pengaturan dasar
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -493,7 +507,7 @@ export default function PengaturanPage() {
                             <div className="text-right">
                               {getStatusBadge(device)}
                               <p className="text-sm text-gray-500 mt-1">
-                                Uptime: {device.uptime ? `${Math.floor(device.uptime / 3600)}h` : "N/A"}
+                                Uptime: {(device as any).uptime ? `${Math.floor((device as any).uptime / 3600)}h` : "N/A"}
                               </p>
                               <p className="text-sm text-gray-500">
                                 Ver: {(device as any).version || "Unknown"}
