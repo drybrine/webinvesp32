@@ -2,8 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { database, ensureFirebaseInitialized } from "@/lib/firebase"
 import { ref, get, update } from "firebase/database"
 
-// Timeout in milliseconds (2 minutes for more reasonable offline detection)
-const OFFLINE_TIMEOUT = 120000
+// Timeout in milliseconds (30 seconds for more stable detection)
+const OFFLINE_TIMEOUT = 30000
 
 export async function POST(request: NextRequest) {
   try {
@@ -72,20 +72,18 @@ export async function POST(request: NextRequest) {
         shouldBeOffline
       })
       
-      // If device hasn't sent heartbeat in last 2 minutes
+      // If device hasn't sent heartbeat in timeout period
       if (shouldBeOffline) {
         if (currentStatus !== "offline") {
           updates[`${deviceId}/status`] = "offline"
-          updates[`${deviceId}/lastStatusUpdate`] = now
           console.log(`⚠️ Setting device ${deviceId} to OFFLINE - last seen: ${mostRecentTimestamp ? new Date(mostRecentTimestamp).toISOString() : 'never'}, time diff: ${Math.floor(timeSinceLastSeen/1000)}s`)
           updatedCount++
           offlineCount++
         }
       } else {
-        // If device has been active in last 2 minutes
+        // If device has been active recently
         if (currentStatus !== "online") {
           updates[`${deviceId}/status`] = "online"
-          updates[`${deviceId}/lastStatusUpdate`] = now
           console.log(`✅ Setting device ${deviceId} to ONLINE - last seen: ${new Date(mostRecentTimestamp).toISOString()}`)
           updatedCount++
           onlineCount++

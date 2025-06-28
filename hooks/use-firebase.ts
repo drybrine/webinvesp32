@@ -38,7 +38,6 @@ export interface DeviceStatus {
   ipAddress: string
   lastSeen: any
   scanCount: number
-  uptime: number
   freeHeap?: number
 }
 
@@ -339,7 +338,6 @@ export function useFirebaseDevices() {
             ipAddress: "192.168.1.100",
             lastSeen: Date.now(),
             scanCount: 45,
-            uptime: 3600, // 1 hour
             freeHeap: 245760,
           },
         ]
@@ -360,6 +358,17 @@ export function useFirebaseDevices() {
         const loadedDevices: DeviceStatus[] = data
           ? Object.keys(data).map((key) => ({ ...data[key], deviceId: key })) // Assuming deviceId is the key
           : [];
+        
+        // Debug: Log loaded device data
+        console.log('🔍 Firebase devices loaded:', loadedDevices);
+        loadedDevices.forEach(device => {
+          console.log(`📱 Device ${device.deviceId}:`, {
+            firstSeen: (device as any).firstSeen,
+            status: device.status,
+            lastSeen: device.lastSeen
+          });
+        });
+        
         setDevices(loadedDevices);
         setError(null);
         setLoading(false);

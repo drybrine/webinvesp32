@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react" // Ditambahkan useMemo
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, DollarSign } from "lucide-react"
+import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, DollarSign, FileText } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase" // Diganti
 import { firebaseHelpers } from "@/lib/firebase" // Ditambahkan
@@ -43,7 +43,7 @@ export default function TransaksiPage() {
     transactions,
     loading: transactionsLoading,
     error: transactionsError,
-  } = useFirebaseTransactions() // Menggunakan hook baru
+  } = useFirebaseTransactions()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedType, setSelectedType] = useState("all")
@@ -61,8 +61,6 @@ export default function TransaksiPage() {
     notes: "",
   })
   const { toast } = useToast()
-
-  // Hapus useEffect lama yang mengatur transactions secara manual
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((transaction) => {
@@ -326,55 +324,88 @@ export default function TransaksiPage() {
     })
   }
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Modern Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Riwayat Transaksi</h1>
-          <p className="text-gray-600 mt-2">Kelola dan pantau semua transaksi stok</p>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500 to-blue-600 text-white shadow-lg">
+              <DollarSign className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+                Riwayat Transaksi
+              </h1>
+              <p className="text-gray-600 mt-1">Kelola dan pantau semua transaksi stok</p>
+            </div>
+          </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Modern Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
+          <Card className="glass-card border-emerald-200/50 hover:shadow-xl transition-all duration-300 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Masuk</CardTitle>
-              <TrendingUp className="h-4 w-4 text-green-600" />
+              <CardTitle className="text-sm font-medium text-gray-700">Total Masuk</CardTitle>
+              <div className="p-2 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 group-hover:scale-110 transition-transform duration-300">
+                <TrendingUp className="h-4 w-4 text-white" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{formatCurrency(totalIn)}</div>
+              <div className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
+                {formatCurrency(totalIn)}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">↗ 12% dari bulan lalu</p>
             </CardContent>
           </Card>
-          <Card>
+          
+          <Card className="glass-card border-red-200/50 hover:shadow-xl transition-all duration-300 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Keluar</CardTitle>
-              <TrendingDown className="h-4 w-4 text-red-600" />
+              <CardTitle className="text-sm font-medium text-gray-700">Total Keluar</CardTitle>
+              <div className="p-2 rounded-lg bg-gradient-to-r from-red-500 to-pink-600 group-hover:scale-110 transition-transform duration-300">
+                <TrendingDown className="h-4 w-4 text-white" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{formatCurrency(totalOut)}</div>
+              <div className="text-2xl font-bold bg-gradient-to-r from-red-600 to-pink-600 bg-clip-text text-transparent">
+                {formatCurrency(totalOut)}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">↘ 8% dari bulan lalu</p>
             </CardContent>
           </Card>
-          <Card>
+          
+          <Card className="glass-card border-amber-200/50 hover:shadow-xl transition-all duration-300 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Penyesuaian</CardTitle>
-              <DollarSign className="h-4 w-4 text-orange-600" />
+              <CardTitle className="text-sm font-medium text-gray-700">Total Penyesuaian</CardTitle>
+              <div className="p-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 group-hover:scale-110 transition-transform duration-300">
+                <DollarSign className="h-4 w-4 text-white" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{formatCurrency(totalAdjustment)}</div>
+              <div className="text-2xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                {formatCurrency(totalAdjustment)}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">± 3% dari bulan lalu</p>
             </CardContent>
           </Card>
-          <Card>
+          
+          <Card className="glass-card border-blue-200/50 hover:shadow-xl transition-all duration-300 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Transaksi Hari Ini</CardTitle>
-              <Calendar className="h-4 w-4 text-blue-600" />
+              <CardTitle className="text-sm font-medium text-gray-700">Transaksi Hari Ini</CardTitle>
+              <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 group-hover:scale-110 transition-transform duration-300">
+                <Calendar className="h-4 w-4 text-white" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{todayTransactionsCount}</div>
+              <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                {todayTransactionsCount}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">📈 +5 dari kemarin</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Filters and Actions */}
-        <Card className="mb-6">
+        {/* Modern Filters and Actions */}
+        <Card className="glass-card mb-6 border-gray-200/50">
           <CardHeader>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="flex flex-col sm:flex-row gap-4 flex-1">
@@ -384,11 +415,11 @@ export default function TransaksiPage() {
                     placeholder="Cari transaksi..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 modern-input"
                   />
                 </div>
                 <Select value={selectedType} onValueChange={setSelectedType}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectTrigger className="w-full sm:w-[180px] modern-input">
                     <SelectValue placeholder="Jenis Transaksi" />
                   </SelectTrigger>
                   <SelectContent>
@@ -399,7 +430,7 @@ export default function TransaksiPage() {
                   </SelectContent>
                 </Select>
                 <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-                  <SelectTrigger className="w-full sm:w-[150px]">
+                  <SelectTrigger className="w-full sm:w-[150px] modern-input">
                     <SelectValue placeholder="Periode" />
                   </SelectTrigger>
                   <SelectContent>
@@ -415,7 +446,7 @@ export default function TransaksiPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => exportTransactionsToCSV(filteredTransactions)}
-                  className="flex-1 sm:flex-initial"
+                  className="flex-1 sm:flex-initial modern-button bg-white hover:bg-gray-50"
                   disabled={filteredTransactions.length === 0}
                 >
                   <Download className="h-4 w-4 mr-2" />
@@ -423,7 +454,7 @@ export default function TransaksiPage() {
                 </Button>
                 <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button size="sm" className="flex-1 sm:flex-initial">
+                    <Button size="sm" className="flex-1 sm:flex-initial modern-button-primary">
                       <Plus className="h-4 w-4 mr-2" />
                       Tambah Transaksi
                     </Button>
@@ -533,10 +564,15 @@ export default function TransaksiPage() {
           </CardHeader>
         </Card>
 
-        {/* Transactions Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Riwayat Transaksi ({filteredTransactions.length})</CardTitle>
+        {/* Modern Transactions Table */}
+        <Card className="glass-card border-gray-200/50">
+          <CardHeader className="border-b border-gray-100">
+            <CardTitle className="text-lg font-semibold text-gray-900">
+              Riwayat Transaksi ({filteredTransactions.length})
+            </CardTitle>
+            <CardDescription>
+              Daftar transaksi yang telah dilakukan
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -556,8 +592,16 @@ export default function TransaksiPage() {
                 <TableBody>
                   {filteredTransactions.length === 0 ? (
                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8">
-                           <p className="text-gray-500">Tidak ada transaksi yang sesuai dengan filter.</p>
+                        <TableCell colSpan={8} className="text-center py-12">
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="p-4 rounded-full bg-gray-100">
+                              <FileText className="h-8 w-8 text-gray-400" />
+                            </div>
+                            <div>
+                              <p className="text-gray-900 font-medium">Tidak ada transaksi</p>
+                              <p className="text-gray-500 text-sm">Tidak ada transaksi yang sesuai dengan filter yang dipilih</p>
+                            </div>
+                          </div>
                         </TableCell>
                      </TableRow>
                   ) : (

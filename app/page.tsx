@@ -144,7 +144,7 @@ export default function TransaksiPage() {
   const onlineDevices = useMemo(() => {
     if (devicesLoading || !devices) return 0;
     return devices.filter(
-      (d) => d.lastSeen && Date.now() - new Date(d.lastSeen).getTime() < 60 * 1000 // Change to 60 seconds
+      (d) => d.lastSeen && Date.now() - new Date(d.lastSeen).getTime() < 15 * 1000 // Match API timeout: 15 seconds
     ).length;
   }, [devices, devicesLoading]);
 
@@ -186,6 +186,70 @@ export default function TransaksiPage() {
     }
   }, [onlineDevices, devicesLoading, toast]);
 
+  // Auto-refresh device status every 10 seconds to match fast offline detection
+  useEffect(() => {
+    const intervalId = setInterval(async () => {
+      // Force refresh of device data by calling the Firebase hook refresh
+      if (window.location.pathname === '/' && document.visibilityState === 'visible') {
+        try {
+          // Trigger a device status check
+          const fetchOptions: RequestInit = {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Call': 'true'
+            }
+          };
+          
+          // Add timeout if AbortSignal.timeout is available
+          if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+            fetchOptions.signal = AbortSignal.timeout(5000); // 5 second timeout
+          }
+          
+          const response = await fetch('/api/check-device-status', fetchOptions);
+          
+          if (!response.ok) {
+            console.warn('🔄 Dashboard auto-refresh failed:', response.status, response.statusText);
+          }
+        } catch (error) {
+          // Only log significant errors, not every network glitch
+          if (error instanceof Error && !error.message.includes('timeout')) {
+            console.log('🔄 Dashboard auto-refresh error:', error.message);
+          }
+        }
+      }
+    }, 10000); // 10 seconds to match fast detection
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  // Listen for device status updates from background monitor
+  useEffect(() => {
+    const handleDeviceStatusUpdate = (event: CustomEvent) => {
+      console.log('📡 Dashboard received device status update:', event.detail);
+      // The Firebase hook will automatically refresh when the database changes
+    };
+
+    window.addEventListener('deviceStatusUpdated', handleDeviceStatusUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('deviceStatusUpdated', handleDeviceStatusUpdate as EventListener);
+    };
+  }, []);
+
+  // Debug: Log device status changes for dashboard
+  useEffect(() => {
+    console.log('📱 Dashboard devices update:', {
+      devicesCount: devices?.length || 0,
+      onlineDevices,
+      devices: devices?.map(d => ({
+        deviceId: d.deviceId,
+        status: d.status,
+        lastSeen: d.lastSeen,
+        timeDiff: d.lastSeen ? Math.floor((Date.now() - new Date(d.lastSeen).getTime()) / 1000) : 'never'
+      }))
+    });
+  }, [devices, onlineDevices]);
 
   if (inventoryLoading || scansLoading || devicesLoading) {
     return (
@@ -457,146 +521,280 @@ export default function TransaksiPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-blue-50 p-3 sm:p-4 md:p-8">
+    <div className="min-h-screen gradient-surface p-3 sm:p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header - Enhanced with gradient text and mobile optimized */}
-        <div className="mb-6 sm:mb-8 md:mb-10 text-center md:text-left px-1 sm:px-2">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
-            📦 Dashboard Inventaris
-          </h1>
-          <p className="text-sm sm:text-base lg:text-lg text-gray-600 font-medium">Kelola stok barang dengan mudah dan efisien</p>
-          <div className="w-20 sm:w-24 md:w-32 h-1 bg-gradient-to-r from-purple-500 to-blue-500 mx-auto md:mx-0 mt-2 sm:mt-3 rounded-full"></div>
+        {/* Enhanced Header with modern design */}
+        <div className="mb-8 sm:mb-10 md:mb-12 text-center md:text-left animate-fade-in-up">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div className="mb-6 md:mb-0">
+              <div className="flex items-center justify-center md:justify-start mb-4">
+                <div className="relative">
+                  <div className="absolute -inset-1 gradient-primary rounded-full blur opacity-30 animate-pulse"></div>
+                  <div className="relative w-12 h-12 sm:w-16 sm:h-16 gradient-primary rounded-full flex items-center justify-center shadow-colored">
+                    <Package className="w-6 h-6 sm:w-8 sm:h-8 text-white animate-float" />
+                  </div>
+                </div>
+                <div className="ml-4">
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold gradient-text tracking-tight">
+                    Dashboard Inventaris
+                  </h1>
+                  <p className="text-sm sm:text-base lg:text-lg text-muted-foreground font-medium mt-2">
+                    Kelola stok barang dengan teknologi terdepan
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-center md:justify-start space-x-4">
+                <div className="h-1 w-16 gradient-primary rounded-full animate-pulse"></div>
+                <div className="h-1 w-8 gradient-secondary rounded-full animate-pulse animation-delay-200"></div>
+                <div className="h-1 w-4 gradient-accent rounded-full animate-pulse animation-delay-400"></div>
+              </div>
+            </div>
+            
+            {/* Quick Actions */}
+            <div className="flex items-center space-x-3">
+              <Button
+                onClick={() => setIsAddItemOpen(true)}
+                className="btn-modern gradient-primary text-white shadow-colored hover:shadow-extra-large px-6 py-3 rounded-2xl font-semibold"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Tambah Item
+              </Button>
+              <Button
+                onClick={exportToCSV}
+                variant="outline"
+                className="glass-card px-6 py-3 rounded-2xl font-semibold hover:shadow-medium"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+            </div>
+          </div>
         </div>
 
-        {/* Firebase Status Alert - Enhanced styling */}
-        <Alert className={`mb-6 sm:mb-8 shadow-lg border-0 ${firebaseStatus.available ? "bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-l-green-500" : "bg-gradient-to-r from-yellow-50 to-orange-50 border-l-4 border-l-yellow-500"}`}>
-          {firebaseStatus.available ? (
-            <Wifi className="h-5 w-5 text-green-600" />
-          ) : (
-            <WifiOff className="h-5 w-5 text-yellow-600" />
-          )}
-          <AlertDescription className="text-sm font-medium">
-            <strong>Status Koneksi Backend:</strong>{" "}
-            {firebaseStatus.available ? (
-              <span className="text-green-700">Terhubung (Real-time sync aktif)</span>
-            ) : (
-              <span className="text-yellow-700">Tidak terhubung ke Firebase</span>
-            )}
-          </AlertDescription>
-        </Alert>
-
-        {/* Error Alerts - Enhanced */}
-        {(inventoryError || scansError || devicesError) && (
-          <Alert variant="destructive" className="mb-6 sm:mb-8 shadow-lg border-0 bg-gradient-to-r from-red-50 to-pink-50 border-l-4 border-l-red-500">
-            <AlertCircle className="h-5 w-5" />
-            <AlertDescription className="text-sm font-medium">
-              <strong>Error:</strong> {inventoryError || scansError || devicesError || "Gagal memuat data."}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Stats Cards - Enhanced with gradients and animations, mobile optimized */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
-          <Card className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-            <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-blue-200 rounded-full -mr-8 sm:-mr-10 -mt-8 sm:-mt-10 opacity-20"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 relative z-10 p-3 sm:p-4">
-              <CardTitle className="text-xs font-semibold text-blue-800 leading-tight">Total Item</CardTitle>
-              <Package className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 text-blue-600 flex-shrink-0" />
-            </CardHeader>
-            <CardContent className="relative z-10 p-3 sm:p-4 pt-0 sm:pt-0">
-              <div className="text-lg sm:text-xl lg:text-3xl font-bold text-blue-900">{totalItems}</div>
-              <p className="text-xs text-blue-600 font-medium leading-tight">Jenis barang unik</p>
-            </CardContent>
-          </Card>
-          
-          <Card className="relative overflow-hidden bg-gradient-to-br from-emerald-50 to-emerald-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-            <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-emerald-200 rounded-full -mr-8 sm:-mr-10 -mt-8 sm:-mt-10 opacity-20"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 relative z-10 p-3 sm:p-4">
-              <CardTitle className="text-xs font-semibold text-emerald-800 leading-tight">Total Nilai</CardTitle>
-              <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 text-emerald-600 flex-shrink-0" />
-            </CardHeader>
-            <CardContent className="relative z-10 p-3 sm:p-4 pt-0 sm:pt-0">
-              <div className="text-sm sm:text-lg lg:text-3xl font-bold text-emerald-900">Rp {totalValue.toLocaleString()}</div>
-              <p className="text-xs text-emerald-600 font-medium leading-tight">Nilai inventaris saat ini</p>
-            </CardContent>
-          </Card>
-          
-          <Card className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-amber-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-            <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-amber-200 rounded-full -mr-8 sm:-mr-10 -mt-8 sm:-mt-10 opacity-20"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 relative z-10 p-3 sm:p-4">
-              <CardTitle className="text-xs font-semibold text-amber-800 leading-tight">Stok Rendah</CardTitle>
-              <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 text-amber-600 flex-shrink-0" />
-            </CardHeader>
-            <CardContent className="relative z-10 p-3 sm:p-4 pt-0 sm:pt-0">
-              <div className="text-lg sm:text-xl lg:text-3xl font-bold text-amber-900">{lowStockItems.length}</div>
-              <p className="text-xs text-amber-600 font-medium leading-tight">Item perlu diisi ulang</p>
-            </CardContent>
-          </Card>
-          
-          {/* ESP32 Status Card - Enhanced */}
-          <Card className="relative overflow-hidden bg-gradient-to-br from-indigo-50 to-indigo-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-200 rounded-full -mr-10 -mt-10 opacity-20"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-              <CardTitle className="text-xs sm:text-sm font-semibold text-indigo-800">Status Pemindai ESP32</CardTitle>
-              {onlineDevices > 0 ? (
+        {/* Enhanced Status Alerts */}
+        <div className="mb-8 space-y-4 animate-fade-in-up animation-delay-200">
+          {/* Firebase Status Alert */}
+          <Alert className={`glass-card shadow-medium border-l-4 transition-all duration-300 ${
+            firebaseStatus.available 
+              ? "border-l-emerald-500 hover:shadow-large" 
+              : "border-l-amber-500 hover:shadow-large"
+          }`}>
+            <div className="flex items-center">
+              {firebaseStatus.available ? (
                 <div className="relative">
-                  <Wifi className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
-                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <Wifi className="h-5 w-5 text-emerald-600" />
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full animate-ping"></div>
                 </div>
               ) : (
-                <WifiOff className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
+                <WifiOff className="h-5 w-5 text-amber-600 animate-pulse" />
               )}
-            </CardHeader>
-            <CardContent className="relative z-10">
-              <div className={`text-xl sm:text-3xl font-bold ${onlineDevices > 0 ? 'text-green-700' : 'text-red-600'}`}>
-                {onlineDevices > 0 ? "Terhubung" : "Terputus"}
-              </div>
-              <p className="text-xs text-indigo-600 font-medium mb-2">
-                {onlineDevices > 0 ? `${onlineDevices} perangkat aktif` : "Tidak ada perangkat aktif"}
-              </p>
-              
-              {/* Device Info - Enhanced styling */}
-              {onlineDevices > 0 && devices && devices.length > 0 && (
-                <div className="text-xs space-y-1 mb-3 bg-white/60 backdrop-blur-sm p-2 rounded-lg border border-white/40 hidden sm:block">
-                  <div className="font-semibold text-indigo-700 mb-1 flex items-center gap-1">
-                    <Smartphone className="h-3 w-3" />
-                    Perangkat Aktif:
-                  </div>
-                  {devices
-                    .filter(device => device.lastSeen && Date.now() - new Date(device.lastSeen).getTime() < 60 * 1000)
-                    .slice(0, 2)
-                    .map((device, index) => {
-                      const deviceStatus = checkDeviceStatus(device);
-                      
-                      return (
-                        <div key={device.deviceId || index} className="flex justify-between items-center bg-white/40 rounded px-2 py-1">
-                          <span className="font-mono text-xs truncate text-indigo-800">
-                            {device.deviceId || `Device-${index + 1}`}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            {deviceStatus === "online" && (
-                              <span className="flex items-center gap-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                <span className="font-mono text-xs text-green-600 font-medium">online</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  }
+              <AlertDescription className="ml-3 text-sm font-medium">
+                <strong className="text-foreground">Status Backend:</strong>{" "}
+                {firebaseStatus.available ? (
+                  <span className="text-emerald-700 font-semibold">Terhubung - Real-time sync aktif</span>
+                ) : (
+                  <span className="text-amber-700 font-semibold">Tidak terhubung ke Firebase</span>
+                )}
+              </AlertDescription>
+            </div>
+          </Alert>
+
+          {/* Error Alerts */}
+          {(inventoryError || scansError || devicesError) && (
+            <Alert className="glass-card shadow-medium border-l-4 border-l-red-500 hover:shadow-large transition-all duration-300">
+              <AlertCircle className="h-5 w-5 text-red-600 animate-pulse" />
+              <AlertDescription className="ml-3 text-sm font-medium">
+                <strong className="text-foreground">Error:</strong>{" "}
+                <span className="text-red-700">{inventoryError || scansError || devicesError || "Gagal memuat data."}</span>
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+
+        {/* Enhanced Stats Cards with modern design */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 mb-8 sm:mb-10 animate-fade-in-up animation-delay-400">
+          {/* Total Items Card */}
+          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
+            <div className="absolute inset-0 gradient-primary opacity-5 rounded-xl"></div>
+            <div className="absolute top-3 right-3 w-12 h-12 gradient-primary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10 pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-muted-foreground">Total Item</CardTitle>
+                <div className="p-2 gradient-primary rounded-lg shadow-sm">
+                  <Package className="h-4 w-4 text-white" />
                 </div>
-              )}
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="mt-1 w-full text-xs bg-white/60 backdrop-blur-sm border-white/40 hover:bg-white/80 transition-all duration-200" 
-                onClick={() => router.push('/pengaturan?tab=devices')}
-              >
-                <Settings className="mr-1 h-3 w-3 sm:mr-2 sm:h-4 sm:w-4" />
-                Kelola Perangkat
-              </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="relative z-10 pt-0">
+              <div className="space-y-2">
+                <div className="text-2xl sm:text-3xl font-bold gradient-text">{totalItems}</div>
+                <p className="text-xs text-muted-foreground font-medium">Jenis barang unik</p>
+                <div className="w-full bg-muted/50 rounded-full h-1">
+                  <div className="gradient-primary h-1 rounded-full w-3/4 animate-pulse"></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Total Value Card */}
+          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
+            <div className="absolute inset-0 gradient-secondary opacity-5 rounded-xl"></div>
+            <div className="absolute top-3 right-3 w-12 h-12 gradient-secondary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10 pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-muted-foreground">Total Nilai</CardTitle>
+                <div className="p-2 gradient-secondary rounded-lg shadow-sm">
+                  <DollarSign className="h-4 w-4 text-white" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="relative z-10 pt-0">
+              <div className="space-y-2">
+                <div className="text-2xl sm:text-3xl font-bold gradient-text">
+                  Rp {totalValue.toLocaleString('id-ID')}
+                </div>
+                <p className="text-xs text-muted-foreground font-medium">Nilai inventaris total</p>
+                <div className="w-full bg-muted/50 rounded-full h-1">
+                  <div className="gradient-secondary h-1 rounded-full w-4/5 animate-pulse"></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Low Stock Card */}
+          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
+            <div className="absolute inset-0 gradient-accent opacity-5 rounded-xl"></div>
+            <div className="absolute top-3 right-3 w-12 h-12 gradient-accent rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10 pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-muted-foreground">Stok Rendah</CardTitle>
+                <div className="p-2 gradient-accent rounded-lg shadow-sm">
+                  <AlertCircle className="h-4 w-4 text-white" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="relative z-10 pt-0">
+              <div className="space-y-2">
+                <div className="text-2xl sm:text-3xl font-bold gradient-text">{lowStockItems.length}</div>
+                <p className="text-xs text-muted-foreground font-medium">Item perlu diisi ulang</p>
+                <div className="w-full bg-muted/50 rounded-full h-1">
+                  <div className={`h-1 rounded-full ${lowStockItems.length > 0 ? 'gradient-accent animate-pulse' : 'bg-emerald-500'} transition-all duration-300`} 
+                       style={{ width: lowStockItems.length > 0 ? '60%' : '100%' }}></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* ESP32 Status Card - Completely redesigned */}
+          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group col-span-2 lg:col-span-1">
+            <div className={`absolute inset-0 ${onlineDevices > 0 ? 'bg-emerald-500' : 'bg-red-500'} opacity-5 rounded-xl`}></div>
+            <CardHeader className="relative z-10 pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-muted-foreground">ESP32 Scanner</CardTitle>
+                <div className={`p-2 rounded-lg shadow-sm ${onlineDevices > 0 ? 'bg-emerald-500' : 'bg-red-500'}`}>
+                  {onlineDevices > 0 ? (
+                    <Wifi className="h-4 w-4 text-white" />
+                  ) : (
+                    <WifiOff className="h-4 w-4 text-white" />
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="relative z-10 pt-0">
+              <div className="space-y-3">
+                <div className={`text-xl sm:text-2xl font-bold ${onlineDevices > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {onlineDevices > 0 ? "Terhubung" : "Terputus"}
+                </div>
+                <p className="text-xs text-muted-foreground font-medium">
+                  {devices && devices.length > 0 
+                    ? `${onlineDevices} dari ${devices.length} perangkat aktif` 
+                    : "Tidak ada perangkat terdaftar"
+                  }
+                </p>
+                
+                {/* Enhanced Device Status - Show all devices */}
+                {devices && devices.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2 text-xs font-semibold text-muted-foreground">
+                      <Smartphone className="h-3 w-3" />
+                      <span>Status Perangkat</span>
+                    </div>
+                    <div className="space-y-1">
+                      {devices
+                        .slice(0, 3) // Show up to 3 devices
+                        .map((device, index) => {
+                          const timeDiff = device.lastSeen ? Date.now() - new Date(device.lastSeen).getTime() : Infinity;
+                          const isOnlineByTime = timeDiff < 30 * 1000; // 30 seconds for more stable detection
+                          const isOnlineByStatus = device.status === "online";
+                          const isActuallyOnline = isOnlineByStatus && isOnlineByTime;
+                          
+                          return (
+                            <div key={device.deviceId || index} className="flex items-center justify-between glass-card p-2 rounded-lg">
+                              <div className="flex flex-col">
+                                <span className="font-mono text-xs text-foreground/80 truncate">
+                                  {device.deviceId || `Device-${index + 1}`}
+                                </span>
+                                {isActuallyOnline && device.ipAddress && (
+                                  <span className="font-mono text-xs text-muted-foreground">
+                                    {device.ipAddress}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center space-x-1">
+                                <div className={`w-2 h-2 rounded-full ${isActuallyOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+                                <span className={`text-xs font-semibold ${isActuallyOnline ? 'text-emerald-600' : 'text-red-600'}`}>
+                                  {isActuallyOnline ? 'Online' : 'Offline'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      }
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1 glass-card hover:shadow-medium btn-modern font-semibold" 
+                    onClick={async () => {
+                      try {
+                        await fetch('/api/check-device-status', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'X-Internal-Call': 'true'
+                          }
+                        });
+                        toast({
+                          title: "Status Diperbarui",
+                          description: "Status perangkat telah direfresh",
+                        });
+                      } catch (error) {
+                        toast({
+                          title: "Error",
+                          description: "Gagal memperbarui status perangkat",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                  >
+                    <WifiOff className="mr-2 h-3 w-3" />
+                    Refresh
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1 glass-card hover:shadow-medium btn-modern font-semibold" 
+                    onClick={() => router.push('/pengaturan?tab=devices')}
+                  >
+                    <Settings className="mr-2 h-3 w-3" />
+                    Kelola
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

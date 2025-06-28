@@ -4,7 +4,7 @@
 class DeviceStatusMonitor {
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
-  private readonly CHECK_INTERVAL = 30000; // 30 seconds
+  private readonly CHECK_INTERVAL = 20000; // 20 seconds for more stable detection
   private readonly API_ENDPOINT = '/api/check-device-status';
 
   constructor() {
@@ -12,6 +12,12 @@ class DeviceStatusMonitor {
   }
 
   start() {
+    // Only run in browser environment
+    if (typeof window === 'undefined') {
+      console.log('⚠️ DeviceStatusMonitor - not in browser environment, skipping');
+      return;
+    }
+
     if (this.isRunning) {
       console.log('⚠️ DeviceStatusMonitor already running');
       return;
@@ -20,12 +26,17 @@ class DeviceStatusMonitor {
     console.log('🚀 Starting DeviceStatusMonitor...');
     this.isRunning = true;
 
-    // Run immediately
-    this.checkDeviceStatus();
+    // Run immediately (with small delay to ensure DOM is ready)
+    setTimeout(() => {
+      this.checkDeviceStatus();
+    }, 1000);
 
     // Set up interval
     this.intervalId = setInterval(() => {
-      this.checkDeviceStatus();
+      // Only run if document is visible
+      if (document.visibilityState === 'visible') {
+        this.checkDeviceStatus();
+      }
     }, this.CHECK_INTERVAL);
 
     console.log(`✅ DeviceStatusMonitor started (checking every ${this.CHECK_INTERVAL / 1000}s)`);
@@ -52,13 +63,26 @@ class DeviceStatusMonitor {
     try {
       console.log('🔍 Running automated device status check...');
       
-      const response = await fetch(this.API_ENDPOINT, {
+      // Ensure we have a valid URL
+      const url = this.API_ENDPOINT.startsWith('http') 
+        ? this.API_ENDPOINT 
+        : `${window.location.origin}${this.API_ENDPOINT}`;
+      
+      // Create fetch options with optional timeout
+      const fetchOptions: RequestInit = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Internal-Call': 'true'
         }
-      });
+      };
+      
+      // Add timeout if AbortSignal.timeout is available
+      if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+        fetchOptions.signal = AbortSignal.timeout(10000); // 10 second timeout
+      }
+      
+      const response = await fetch(url, fetchOptions);
 
       if (response.ok) {
         const result = await response.json();
@@ -96,10 +120,20 @@ class DeviceStatusMonitor {
     } catch (error) {
       console.error('❌ Error in automated device status check:', error);
       
+      // More specific error handling
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        console.error('🌐 Network connection error - check if server is running');
+      } else if (error instanceof DOMException && error.name === 'AbortError') {
+        console.error('⏱️ Request timeout - server taking too long to respond');
+      } else {
+        console.error('🔧 Unexpected error in device status monitor');
+      }
+      
       // Dispatch error event for network/other errors
       window.dispatchEvent(new CustomEvent('deviceStatusError', {
         detail: { 
           error: error instanceof Error ? error.message : 'Network error',
+          errorType: error instanceof TypeError ? 'network' : 'unknown',
           timestamp: new Date().toISOString()
         }
       }));

@@ -6,6 +6,15 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { deviceId, uptime, freeHeap, scanCount, version } = body
+    
+    // Debug: Log received values
+    console.log(`📡 Heartbeat received from ${deviceId}:`, {
+      uptime: uptime,
+      uptimeType: typeof uptime,
+      freeHeap,
+      scanCount,
+      version
+    });
 
     // Check if Firebase is available
     if (!database) {
@@ -32,11 +41,16 @@ export async function POST(request: NextRequest) {
         request.headers.get("x-forwarded-for") ||
         request.headers.get("x-real-ip") ||
         "unknown",
-      uptime: uptime || existingData.uptime || 0,
+      uptime: uptime || 0, // Keep it simple - 0 if not provided
       freeHeap: freeHeap || existingData.freeHeap || 0,
       scanCount: scanCount || existingData.scanCount || 0,
       version: version || existingData.version || "1.0.0",
+      // Add a field to track when device was first seen for better uptime calculation
+      firstSeen: existingData.firstSeen || Date.now(),
     }
+
+    // Debug: Log data being stored
+    console.log(`💾 Storing device data for ${deviceId}:`, deviceData);
 
     await set(deviceRef, deviceData)
 

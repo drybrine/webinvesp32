@@ -93,7 +93,7 @@ export default function AbsensiPage() {
         lastSeenMs = lastSeen > 1000000000000 ? lastSeen : lastSeen * 1000
       }
       const timeDiff = Date.now() - lastSeenMs
-      return lastSeenMs > 0 && timeDiff < 15000 // 15 seconds threshold
+      return lastSeenMs > 0 && timeDiff < 120000 // 2 minutes threshold
     })
   }, [devices])
 

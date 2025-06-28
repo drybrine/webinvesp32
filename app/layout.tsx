@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { RealtimeScanProvider } from "@/components/realtime-scan-provider"
 import { RealtimeAttendanceProvider } from "@/components/realtime-attendance-provider"
 import { AdminGuard } from "@/components/AdminGuard"
+import { DeviceStatusMonitorProvider } from "@/components/device-status-monitor-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -24,15 +25,17 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <RealtimeScanProvider>
-          <RealtimeAttendanceProvider>
-            <AdminGuard>
-              <Navigation />
-              <main>{children}</main>
-              <Toaster />
-            </AdminGuard>
-          </RealtimeAttendanceProvider>
-        </RealtimeScanProvider>
+        <DeviceStatusMonitorProvider>
+          <RealtimeScanProvider>
+            <RealtimeAttendanceProvider>
+              <AdminGuard>
+                <Navigation />
+                <main>{children}</main>
+                <Toaster />
+              </AdminGuard>
+            </RealtimeAttendanceProvider>
+          </RealtimeScanProvider>
+        </DeviceStatusMonitorProvider>
       </body>
     </html>
   )
