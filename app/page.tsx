@@ -612,22 +612,22 @@ export default function TransaksiPage() {
         </div>
 
         {/* Enhanced Stats Cards with modern design */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 mb-8 sm:mb-10 animate-fade-in-up animation-delay-400">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8 animate-fade-in-up animation-delay-400">
           {/* Total Items Card */}
           <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
             <div className="absolute inset-0 gradient-primary opacity-5 rounded-xl"></div>
-            <div className="absolute top-3 right-3 w-12 h-12 gradient-primary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
-            <CardHeader className="relative z-10 pb-3">
+            <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-primary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10 pb-2 sm:pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">Total Item</CardTitle>
-                <div className="p-2 gradient-primary rounded-lg shadow-sm">
-                  <Package className="h-4 w-4 text-white" />
+                <CardTitle className="text-xs sm:text-sm font-semibold text-muted-foreground">Total Item</CardTitle>
+                <div className="p-1.5 sm:p-2 gradient-primary rounded-lg shadow-sm">
+                  <Package className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                 </div>
               </div>
             </CardHeader>
             <CardContent className="relative z-10 pt-0">
-              <div className="space-y-2">
-                <div className="text-2xl sm:text-3xl font-bold gradient-text">{totalItems}</div>
+              <div className="space-y-1 sm:space-y-2">
+                <div className="text-lg sm:text-2xl md:text-3xl font-bold gradient-text">{totalItems}</div>
                 <p className="text-xs text-muted-foreground font-medium">Jenis barang unik</p>
                 <div className="w-full bg-muted/50 rounded-full h-1">
                   <div className="gradient-primary h-1 rounded-full w-3/4 animate-pulse"></div>
@@ -639,18 +639,18 @@ export default function TransaksiPage() {
           {/* Total Value Card */}
           <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
             <div className="absolute inset-0 gradient-secondary opacity-5 rounded-xl"></div>
-            <div className="absolute top-3 right-3 w-12 h-12 gradient-secondary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
-            <CardHeader className="relative z-10 pb-3">
+            <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-secondary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10 pb-2 sm:pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">Total Nilai</CardTitle>
-                <div className="p-2 gradient-secondary rounded-lg shadow-sm">
-                  <DollarSign className="h-4 w-4 text-white" />
+                <CardTitle className="text-xs sm:text-sm font-semibold text-muted-foreground">Total Nilai</CardTitle>
+                <div className="p-1.5 sm:p-2 gradient-secondary rounded-lg shadow-sm">
+                  <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                 </div>
               </div>
             </CardHeader>
             <CardContent className="relative z-10 pt-0">
-              <div className="space-y-2">
-                <div className="text-2xl sm:text-3xl font-bold gradient-text">
+              <div className="space-y-1 sm:space-y-2">
+                <div className="text-lg sm:text-2xl md:text-3xl font-bold gradient-text">
                   Rp {totalValue.toLocaleString('id-ID')}
                 </div>
                 <p className="text-xs text-muted-foreground font-medium">Nilai inventaris total</p>
@@ -664,18 +664,18 @@ export default function TransaksiPage() {
           {/* Low Stock Card */}
           <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
             <div className="absolute inset-0 gradient-accent opacity-5 rounded-xl"></div>
-            <div className="absolute top-3 right-3 w-12 h-12 gradient-accent rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
-            <CardHeader className="relative z-10 pb-3">
+            <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-accent rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10 pb-2 sm:pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">Stok Rendah</CardTitle>
-                <div className="p-2 gradient-accent rounded-lg shadow-sm">
-                  <AlertCircle className="h-4 w-4 text-white" />
+                <CardTitle className="text-xs sm:text-sm font-semibold text-muted-foreground">Stok Rendah</CardTitle>
+                <div className="p-1.5 sm:p-2 gradient-accent rounded-lg shadow-sm">
+                  <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                 </div>
               </div>
             </CardHeader>
             <CardContent className="relative z-10 pt-0">
-              <div className="space-y-2">
-                <div className="text-2xl sm:text-3xl font-bold gradient-text">{lowStockItems.length}</div>
+              <div className="space-y-1 sm:space-y-2">
+                <div className="text-lg sm:text-2xl md:text-3xl font-bold gradient-text">{lowStockItems.length}</div>
                 <p className="text-xs text-muted-foreground font-medium">Item perlu diisi ulang</p>
                 <div className="w-full bg-muted/50 rounded-full h-1">
                   <div className={`h-1 rounded-full ${lowStockItems.length > 0 ? 'gradient-accent animate-pulse' : 'bg-emerald-500'} transition-all duration-300`} 
@@ -685,24 +685,24 @@ export default function TransaksiPage() {
             </CardContent>
           </Card>
           
-          {/* ESP32 Status Card - Completely redesigned */}
+          {/* ESP32 Status Card - Mobile optimized */}
           <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group col-span-2 lg:col-span-1">
             <div className={`absolute inset-0 ${onlineDevices > 0 ? 'bg-emerald-500' : 'bg-red-500'} opacity-5 rounded-xl`}></div>
-            <CardHeader className="relative z-10 pb-3">
+            <CardHeader className="relative z-10 pb-2 sm:pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">ESP32 Scanner</CardTitle>
-                <div className={`p-2 rounded-lg shadow-sm ${onlineDevices > 0 ? 'bg-emerald-500' : 'bg-red-500'}`}>
+                <CardTitle className="text-xs sm:text-sm font-semibold text-muted-foreground">ESP32 Scanner</CardTitle>
+                <div className={`p-1.5 sm:p-2 rounded-lg shadow-sm ${onlineDevices > 0 ? 'bg-emerald-500' : 'bg-red-500'}`}>
                   {onlineDevices > 0 ? (
-                    <Wifi className="h-4 w-4 text-white" />
+                    <Wifi className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                   ) : (
-                    <WifiOff className="h-4 w-4 text-white" />
+                    <WifiOff className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                   )}
                 </div>
               </div>
             </CardHeader>
             <CardContent className="relative z-10 pt-0">
-              <div className="space-y-3">
-                <div className={`text-xl sm:text-2xl font-bold ${onlineDevices > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              <div className="space-y-2 sm:space-y-3">
+                <div className={`text-lg sm:text-xl md:text-2xl font-bold ${onlineDevices > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                   {onlineDevices > 0 ? "Terhubung" : "Terputus"}
                 </div>
                 <p className="text-xs text-muted-foreground font-medium">
@@ -712,35 +712,36 @@ export default function TransaksiPage() {
                   }
                 </p>
                 
-                {/* Enhanced Device Status - Show all devices */}
+                {/* Enhanced Device Status - Mobile responsive */}
                 {devices && devices.length > 0 && (
                   <div className="space-y-2">
                     <div className="flex items-center space-x-2 text-xs font-semibold text-muted-foreground">
                       <Smartphone className="h-3 w-3" />
-                      <span>Status Perangkat</span>
+                      <span className="hidden sm:inline">Status Perangkat</span>
+                      <span className="sm:hidden">Perangkat</span>
                     </div>
                     <div className="space-y-1">
                       {devices
-                        .slice(0, 3) // Show up to 3 devices
+                        .slice(0, 2) // Show only 2 devices on mobile
                         .map((device, index) => {
                           const timeDiff = device.lastSeen ? Date.now() - new Date(device.lastSeen).getTime() : Infinity;
-                          const isOnlineByTime = timeDiff < 30 * 1000; // 30 seconds for more stable detection
+                          const isOnlineByTime = timeDiff < 30 * 1000;
                           const isOnlineByStatus = device.status === "online";
                           const isActuallyOnline = isOnlineByStatus && isOnlineByTime;
                           
                           return (
                             <div key={device.deviceId || index} className="flex items-center justify-between glass-card p-2 rounded-lg">
-                              <div className="flex flex-col">
+                              <div className="flex flex-col min-w-0 flex-1">
                                 <span className="font-mono text-xs text-foreground/80 truncate">
                                   {device.deviceId || `Device-${index + 1}`}
                                 </span>
                                 {isActuallyOnline && device.ipAddress && (
-                                  <span className="font-mono text-xs text-muted-foreground">
+                                  <span className="font-mono text-xs text-muted-foreground truncate">
                                     {device.ipAddress}
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center space-x-1">
+                              <div className="flex items-center space-x-1 flex-shrink-0">
                                 <div className={`w-2 h-2 rounded-full ${isActuallyOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
                                 <span className={`text-xs font-semibold ${isActuallyOnline ? 'text-emerald-600' : 'text-red-600'}`}>
                                   {isActuallyOnline ? 'Online' : 'Offline'}
@@ -758,7 +759,7 @@ export default function TransaksiPage() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="flex-1 glass-card hover:shadow-medium btn-modern font-semibold" 
+                    className="flex-1 glass-card hover:shadow-medium btn-modern font-semibold text-xs sm:text-sm px-2 py-1" 
                     onClick={async () => {
                       try {
                         await fetch('/api/check-device-status', {
@@ -781,17 +782,19 @@ export default function TransaksiPage() {
                       }
                     }}
                   >
-                    <WifiOff className="mr-2 h-3 w-3" />
-                    Refresh
+                    <WifiOff className="mr-1 h-3 w-3" />
+                    <span className="hidden sm:inline">Refresh</span>
+                    <span className="sm:hidden">↻</span>
                   </Button>
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="flex-1 glass-card hover:shadow-medium btn-modern font-semibold" 
+                    className="flex-1 glass-card hover:shadow-medium btn-modern font-semibold text-xs sm:text-sm px-2 py-1" 
                     onClick={() => router.push('/pengaturan?tab=devices')}
                   >
-                    <Settings className="mr-2 h-3 w-3" />
-                    Kelola
+                    <Settings className="mr-1 h-3 w-3" />
+                    <span className="hidden sm:inline">Kelola</span>
+                    <span className="sm:hidden">⚙</span>
                   </Button>
                 </div>
               </div>
@@ -839,7 +842,7 @@ export default function TransaksiPage() {
                 <Button 
                   onClick={() => setIsAddItemOpen(true)} 
                   size="sm" 
-                  className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                  className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 text-sm px-4 py-2"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   <span className="sm:hidden">Tambah</span>
@@ -849,7 +852,7 @@ export default function TransaksiPage() {
                   variant="outline" 
                   onClick={exportToCSV} 
                   size="sm" 
-                  className="w-full sm:w-auto bg-white/80 backdrop-blur-sm border-gray-200 hover:bg-gray-50 shadow-md hover:shadow-lg transition-all duration-300"
+                  className="w-full sm:w-auto glass-card hover:shadow-lg transition-all duration-300 text-sm px-4 py-2"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   <span className="sm:hidden">Export</span>
@@ -858,27 +861,27 @@ export default function TransaksiPage() {
               </div>
             </div>
 
-            {/* Filters - Enhanced styling */}
-            <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 p-4 rounded-lg border border-blue-100/50">
+            {/* Filters - Enhanced styling and mobile responsive */}
+            <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 p-3 sm:p-4 rounded-lg border border-blue-100/50">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
                 <Input
-                  placeholder="🔍 Cari item berdasarkan nama, kategori, atau barcode..."
+                  placeholder="🔍 Cari item..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-white/80 backdrop-blur-sm border-gray-200 focus:border-blue-400 focus:ring-blue-400 transition-all duration-200"
+                  className="pl-10 bg-white/80 backdrop-blur-sm border-gray-200 focus:border-blue-400 focus:ring-blue-400 transition-all duration-200 text-sm"
                 />
               </div>
               
-              <div className="flex space-x-2">
+              <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
                 <Select value={filterCategory} onValueChange={setFilterCategory}>
-                  <SelectTrigger className="w-full sm:w-[180px] bg-white/80 backdrop-blur-sm border-gray-200 hover:border-blue-300 transition-all duration-200">
+                  <SelectTrigger className="w-full sm:w-[150px] bg-white/80 backdrop-blur-sm border-gray-200 hover:border-blue-300 transition-all duration-200 text-sm">
                     <Filter className="h-4 w-4 mr-2 text-gray-500" />
-                    <SelectValue placeholder="Semua Kategori" />
+                    <SelectValue placeholder="Kategori" />
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 backdrop-blur-sm">
                     {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
+                      <SelectItem key={category} value={category} className="text-sm">
                         {category === "all" ? "Semua Kategori" : category}
                       </SelectItem>
                     ))}
@@ -886,16 +889,16 @@ export default function TransaksiPage() {
                 </Select>
 
                 <Select value={sortOrder} onValueChange={setSortOrder}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Urutkan" />
+                  <SelectTrigger className="w-full sm:w-[150px] bg-white/80 backdrop-blur-sm border-gray-200 hover:border-blue-300 transition-all duration-200 text-sm">
+                    <SelectValue placeholder="Urutan" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="name-asc">Nama A-Z</SelectItem>
-                    <SelectItem value="name-desc">Nama Z-A</SelectItem>
-                    <SelectItem value="quantity-asc">Stok Terendah</SelectItem>
-                    <SelectItem value="quantity-desc">Stok Tertinggi</SelectItem>
-                    <SelectItem value="price-asc">Harga Terendah</SelectItem>
-                    <SelectItem value="price-desc">Harga Tertinggi</SelectItem>
+                  <SelectContent className="bg-white/95 backdrop-blur-sm">
+                    <SelectItem value="name-asc" className="text-sm">Nama A-Z</SelectItem>
+                    <SelectItem value="name-desc" className="text-sm">Nama Z-A</SelectItem>
+                    <SelectItem value="quantity-asc" className="text-sm">Stok ↗</SelectItem>
+                    <SelectItem value="quantity-desc" className="text-sm">Stok ↘</SelectItem>
+                    <SelectItem value="price-asc" className="text-sm">Harga ↗</SelectItem>
+                    <SelectItem value="price-desc" className="text-sm">Harga ↘</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -903,36 +906,43 @@ export default function TransaksiPage() {
           </CardHeader>
           
           <CardContent>
-            {/* Mobile Card Layout */}
-            <div className="block sm:hidden space-y-4">
+            {/* Mobile Card Layout - Enhanced */}
+            <div className="block sm:hidden space-y-3">
               {filteredInventory.length === 0 ? (
-                <div className="text-center py-8">
-                  <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-500">Tidak ada item yang ditemukan</p>
+                <div className="text-center py-12">
+                  <Package className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+                  <p className="text-gray-500 font-medium">Tidak ada item yang ditemukan</p>
+                  <p className="text-sm text-gray-400 mt-1">Coba ubah filter atau tambah item baru</p>
                 </div>
               ) : (
                 filteredInventory.map((item) => (
-                  <div key={item.id} className="border rounded-lg p-4 bg-white">
+                  <div key={item.id} className="border rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-gray-900 truncate">{item.name}</h3>
-                        <p className="text-sm text-gray-500 truncate">{item.category}</p>
+                        <h3 className="font-semibold text-gray-900 truncate text-sm">{item.name}</h3>
+                        <p className="text-xs text-gray-500 truncate">{item.category}</p>
+                        {item.barcode && (
+                          <p className="text-xs font-mono text-gray-400 mt-1">{item.barcode}</p>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 ml-2">
-                        <Badge variant={item.quantity <= item.minStock ? "destructive" : "default"} className="text-xs">
+                        <Badge 
+                          variant={item.quantity <= item.minStock ? "destructive" : "default"} 
+                          className="text-xs px-2 py-1"
+                        >
                           {item.quantity}
                         </Badge>
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                    <div className="grid grid-cols-2 gap-3 text-xs mb-3">
                       <div>
-                        <span className="text-gray-500">Harga:</span>
-                        <p className="font-medium">Rp {item.price.toLocaleString()}</p>
+                        <span className="text-gray-500 block">Harga:</span>
+                        <p className="font-semibold text-emerald-600">Rp {item.price.toLocaleString()}</p>
                       </div>
                       <div>
-                        <span className="text-gray-500">Lokasi:</span>
-                        <p className="font-medium truncate">{item.location}</p>
+                        <span className="text-gray-500 block">Lokasi:</span>
+                        <p className="font-medium truncate">{item.location || "-"}</p>
                       </div>
                     </div>
                     
@@ -941,31 +951,34 @@ export default function TransaksiPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          className="px-2 py-1 h-8 text-xs"
                           onClick={() => setViewingItem({
                             ...item,
                             barcode: item.barcode ?? "",
                             supplier: item.supplier ?? "",
                           })}
                         >
-                          <Eye className="h-4 w-4" />
+                          <Eye className="h-3 w-3" />
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
+                          className="px-2 py-1 h-8 text-xs"
                           onClick={() => setEditingItem({
                             ...item,
                             barcode: item.barcode ?? "",
                             supplier: item.supplier ?? "",
                           })}
                         >
-                          <Edit className="h-4 w-4" />
+                          <Edit className="h-3 w-3" />
                         </Button>
                         <Button
                           variant="destructive"
                           size="sm"
+                          className="px-2 py-1 h-8 text-xs"
                           onClick={() => deleteInventoryItem(item.id, item.name)}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
                       
@@ -973,6 +986,7 @@ export default function TransaksiPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          className="px-2 py-1 h-8 text-xs bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
                           onClick={() => setStockAdjustment({
                             itemId: item.id,
                             itemName: item.name,
@@ -981,11 +995,12 @@ export default function TransaksiPage() {
                             amount: 1,
                           })}
                         >
-                          <Plus className="h-4 w-4" />
+                          <Plus className="h-3 w-3 text-emerald-600" />
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
+                          className="px-2 py-1 h-8 text-xs bg-red-50 hover:bg-red-100 border-red-200"
                           onClick={() => setStockAdjustment({
                             itemId: item.id,
                             itemName: item.name,
@@ -995,7 +1010,7 @@ export default function TransaksiPage() {
                           })}
                           disabled={item.quantity <= 0}
                         >
-                          <Minus className="h-4 w-4" />
+                          <Minus className="h-3 w-3 text-red-600" />
                         </Button>
                       </div>
                     </div>
