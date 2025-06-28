@@ -80,20 +80,20 @@ export default function ScanPage() {
   return (
     <div className="min-h-screen gradient-surface p-3 sm:p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Enhanced Header with modern design */}
-        <div className="mb-8 sm:mb-10 text-center md:text-left animate-fade-in-up">
-          <div className="flex items-center justify-center md:justify-start mb-6">
+        {/* Enhanced Header with modern design - Mobile responsive */}
+        <div className="mb-6 sm:mb-8 md:mb-10 text-center md:text-left animate-fade-in-up">
+          <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start mb-4 sm:mb-6 gap-3 sm:gap-4">
             <div className="relative">
               <div className="absolute -inset-1 gradient-primary rounded-full blur opacity-30 animate-pulse"></div>
-              <div className="relative w-12 h-12 sm:w-16 sm:h-16 gradient-secondary rounded-full flex items-center justify-center shadow-colored">
-                <History className="w-6 h-6 sm:w-8 sm:h-8 text-white animate-float" />
+              <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 gradient-secondary rounded-full flex items-center justify-center shadow-colored">
+                <History className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-white animate-float" />
               </div>
             </div>
-            <div className="ml-4">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold gradient-text tracking-tight">
+            <div className="text-center md:text-left">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold gradient-text tracking-tight">
                 Riwayat Transaksi
               </h1>
-              <p className="text-sm sm:text-base lg:text-lg text-muted-foreground font-medium mt-2">
+              <p className="text-xs sm:text-sm md:text-base lg:text-lg text-muted-foreground font-medium mt-1 sm:mt-2">
                 Pantau aktivitas scan dan transaksi inventaris
               </p>
             </div>

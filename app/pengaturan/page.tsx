@@ -285,29 +285,42 @@ export default function PengaturanPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Modern Header */}
-        <div className="mb-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+        {/* Modern Header - Mobile responsive */}
+        <div className="mb-6 sm:mb-8">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 text-white shadow-lg">
-              <Settings className="h-6 w-6" />
+            <div className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 text-white shadow-lg">
+              <Settings className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
                 Pengaturan Sistem
               </h1>
-              <p className="text-gray-600 mt-1">Konfigurasi aplikasi dan perangkat</p>
+              <p className="text-sm sm:text-base text-gray-600 mt-1">Konfigurasi aplikasi dan perangkat</p>
             </div>
           </div>
         </div>
 
-        <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 bg-white/80 backdrop-blur-sm border border-gray-200/50 shadow-lg rounded-xl p-1">
-            <TabsTrigger value="general" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Umum</TabsTrigger>
-            <TabsTrigger value="system" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Sistem</TabsTrigger>
-            <TabsTrigger value="devices" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Perangkat</TabsTrigger>
-            <TabsTrigger value="security" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Keamanan</TabsTrigger>
-            <TabsTrigger value="backup" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Backup</TabsTrigger>
+        <Tabs defaultValue="general" className="space-y-4 sm:space-y-6">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 bg-white/80 backdrop-blur-sm border border-gray-200/50 shadow-lg rounded-xl p-1 gap-1 sm:gap-0">
+            <TabsTrigger value="general" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-2 py-2">
+              <span className="sm:hidden">Umum</span>
+              <span className="hidden sm:inline">Umum</span>
+            </TabsTrigger>
+            <TabsTrigger value="system" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-2 py-2">
+              <span className="sm:hidden">Sistem</span>
+              <span className="hidden sm:inline">Sistem</span>
+            </TabsTrigger>
+            <TabsTrigger value="devices" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-2 py-2 col-span-2 sm:col-span-1">
+              <span className="sm:hidden">Perangkat</span>
+              <span className="hidden sm:inline">Perangkat</span>
+            </TabsTrigger>
+            <TabsTrigger value="security" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-2 py-2 hidden lg:flex">
+              Keamanan
+            </TabsTrigger>
+            <TabsTrigger value="backup" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-2 py-2 hidden lg:flex">
+              Backup
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="general">
@@ -323,28 +336,30 @@ export default function PengaturanPage() {
                   Konfigurasi informasi perusahaan dan pengaturan dasar
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="companyName">Nama Perusahaan</Label>
+                    <Label htmlFor="companyName" className="text-sm font-medium">Nama Perusahaan</Label>
                     <Input
                       id="companyName"
                       value={settings.companyName}
                       onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
                       placeholder="Masukkan nama perusahaan"
+                      className="text-sm"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="companyPhone">Nomor Telepon</Label>
+                    <Label htmlFor="companyPhone" className="text-sm font-medium">Nomor Telepon</Label>
                     <Input
                       id="companyPhone"
                       value={settings.companyPhone}
                       onChange={(e) => setSettings({ ...settings, companyPhone: e.target.value })}
                       placeholder="Masukkan nomor telepon"
+                      className="text-sm"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="companyEmail">Email</Label>
+                    <Label htmlFor="companyEmail" className="text-sm font-medium">Email</Label>
                     <Input
                       id="companyEmail"
                       type="email"

@@ -207,42 +207,42 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
               // Use the more reliable checkDeviceStatus function instead
               const online = checkDeviceStatus(device) === "online"
               return (
-                <div key={device.deviceId} className="border rounded-lg p-4">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
+                <div key={device.deviceId} className="border rounded-lg p-3 sm:p-4">
+                  <div className="flex flex-col gap-3 sm:gap-4">
+                    <div className="flex items-center gap-3 sm:gap-4">
                       <div
-                        className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center ${
                           online ? "bg-green-100" : "bg-gray-100"
                         }`}
                       >
                         {online ? (
-                          <Wifi className={`w-6 h-6 ${online ? "text-green-600" : "text-gray-400"}`} />
+                          <Wifi className={`w-5 h-5 sm:w-6 sm:h-6 ${online ? "text-green-600" : "text-gray-400"}`} />
                         ) : (
-                          <WifiOff className="w-6 h-6 text-gray-400" />
+                          <WifiOff className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
                         )}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-medium">{device.name || device.deviceId}</h3>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-medium text-sm sm:text-base truncate">{device.name || device.deviceId}</h3>
                           {/* Only show badge for online devices */}
-                          {online && <Badge variant="default">Online</Badge>}
+                          {online && <Badge variant="default" className="text-xs">Online</Badge>}
                         </div>
-                        <p className="text-sm text-gray-500">ID: {device.deviceId}</p>
-                        <div className="flex items-center gap-1 text-sm text-gray-500">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>Terakhir aktif: {formatDate(device.lastSeen)}</span>
+                        <p className="text-xs sm:text-sm text-gray-500 truncate">ID: {device.deviceId}</p>
+                        <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-500">
+                          <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                          <span className="truncate">Terakhir aktif: {formatDate(device.lastSeen)}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                       <div className="flex flex-col">
                         <span className="text-xs text-gray-500">IP Address</span>
-                        <span className="font-mono text-sm">{device.ipAddress || "Unknown"}</span>
+                        <span className="font-mono text-xs sm:text-sm truncate">{device.ipAddress || "Unknown"}</span>
                       </div>
                       <div className="flex flex-col">
                         <span className="text-xs text-gray-500">Status</span>
-                        <span className="text-sm">
+                        <span className="text-xs sm:text-sm">
                           {online ? (
                             <span className="text-green-600 font-medium">Online</span>
                           ) : (
@@ -253,8 +253,8 @@ export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: Dev
                       <div className="flex flex-col">
                         <span className="text-xs text-gray-500">Total Scan</span>
                         <div className="flex items-center gap-1">
-                          <Database className="w-3.5 h-3.5 text-blue-500" />
-                          <span className="text-sm">{device.scanCount || 0}</span>
+                          <Database className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" />
+                          <span className="text-xs sm:text-sm">{device.scanCount || 0}</span>
                         </div>
                       </div>
                       <div className="flex flex-col">
