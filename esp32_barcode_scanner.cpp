@@ -782,7 +782,7 @@ void handleRoot() {
           Database URL: )rawliteral" + String(deviceConfig.firebaseUrl) + R"rawliteral(<br>
           Real-time Sync: )rawliteral" + (isOnline ? "Active" : "Disconnected") + R"rawliteral(<br>
           Last Heartbeat: )rawliteral" + String((millis() - lastHeartbeat) / 1000) + R"rawliteral(s ago<br>
-          Heartbeat Interval: 15 seconds
+          Heartbeat Interval: 8 seconds
         </div>
         
         <div class="status wifi-info">
@@ -1484,8 +1484,8 @@ void loop() {
     processBarcodeInput(input);
   }
   
-  // Send heartbeat setiap 15 detik (lebih sering dari 30 detik timeout)
-  if (millis() - lastHeartbeat > 15000) {
+  // Send heartbeat setiap 8 detik (lebih responsif dengan 30 detik timeout)
+  if (millis() - lastHeartbeat > 8000) {
     if (isWiFiConnected) {
       // Send to Firebase first
       if (strlen(deviceConfig.firebaseUrl) > 0) {
