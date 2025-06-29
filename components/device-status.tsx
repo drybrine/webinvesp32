@@ -1,14 +1,32 @@
 "use client"
 
-import { useState, useEffect } from "react" // Add useEffect import
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useState, useEffect, useCallback } from "react"
+import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
+import { 
+  Card, 
+  CardContent, 
+  CardHeader, 
+  CardTitle, 
+  CardDescription 
+} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import { Smartphone, Wifi, WifiOff, RefreshCw, Clock, Zap, Database } from "lucide-react"
-import { toast } from "@/hooks/use-toast"
+import { Badge } from "@/components/ui/badge"
+import { 
+  Smartphone, 
+  RefreshCw, 
+  Wifi, 
+  WifiOff, 
+  Clock, 
+  Database, 
+  Power, 
+  Info, 
+  AlertTriangle,
+  Loader2
+} from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 
-interface DeviceStatus {
+interface Device {
   deviceId: string
   status: "online" | "offline"
   ipAddress: string
@@ -21,278 +39,189 @@ interface DeviceStatus {
   lastHeartbeat?: any
 }
 
-interface DeviceStatusProps {
-  devices: DeviceStatus[]
-  loading?: boolean
-  onRefresh?: () => void
-}
+const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceId: string) => void }) => {
+  const { toast } = useToast()
+  const [isRestarting, setIsRestarting] = useState(false)
 
-export function DeviceStatusDisplay({ devices, loading = false, onRefresh }: DeviceStatusProps) {
-  const [refreshing, setRefreshing] = useState(false)
-  const [lastRefresh, setLastRefresh] = useState(new Date())
-
-  // Add auto-refresh every 15 seconds for more responsive offline detection
-  useEffect(() => {
-    // Initial refresh when component mounts
-    if (onRefresh) {
-      onRefresh();
-    }
-    
-    // Set up interval for regular refresh - more stable timing
-    const intervalId = setInterval(() => {
-      if (onRefresh) {
-        console.log('🔄 Auto-refreshing device status...');
-        setRefreshing(true);
-        onRefresh();
-        setLastRefresh(new Date());
-        setTimeout(() => setRefreshing(false), 500);
-      }
-    }, 15000); // 15000 ms = 15 seconds (less frequent for stability)
-
-    // Listen for device status updates from the background monitor
-    const handleDeviceStatusUpdate = (event: CustomEvent) => {
-      console.log('📡 Received device status update from monitor:', event.detail);
-      if (onRefresh) {
-        onRefresh();
-        setLastRefresh(new Date());
-      }
-    };
-
-    // Listen for device status errors from the background monitor
-    const handleDeviceStatusError = (event: CustomEvent) => {
-      console.warn('⚠️ Device status monitor error:', event.detail);
-      // Don't spam users with error toasts from automatic checks
-      // Just log the error for debugging
-    };
-
-    window.addEventListener('deviceStatusUpdated', handleDeviceStatusUpdate as EventListener);
-    window.addEventListener('deviceStatusError', handleDeviceStatusError as EventListener);
-    
-    // Clear interval and event listener on component unmount
-    return () => {
-      clearInterval(intervalId);
-      window.removeEventListener('deviceStatusUpdated', handleDeviceStatusUpdate as EventListener);
-      window.removeEventListener('deviceStatusError', handleDeviceStatusError as EventListener);
-    };
-  }, [onRefresh]);
-
-  const handleRefresh = () => {
-    if (onRefresh) {
-      setRefreshing(true)
-      onRefresh()
-      setLastRefresh(new Date())
-      
-      // Debug: log current device data
-      console.log('📊 Current devices data:', devices)
-      devices.forEach(device => {
-        console.log(`📱 Device ${device.deviceId}:`, {
-          status: device.status,
-          lastSeen: device.lastSeen,
-          ipAddress: device.ipAddress
-        })
-      })
-      
-      setTimeout(() => setRefreshing(false), 2000)
-    }
-  }
-
-  const handleRestartDevice = (deviceId: string) => {
-    toast({
-      title: "Restart Device",
-      description: `Mengirim perintah restart ke ${deviceId}...`,
-    })
-
-    // Simulate restart command
-    setTimeout(() => {
+  const handleRestartClick = async () => {
+    setIsRestarting(true)
+    try {
+      await onRestart(device.deviceId)
       toast({
-        title: "Perintah Terkirim",
-        description: `Perintah restart berhasil dikirim ke ${deviceId}`,
+        title: "Perangkat Dimulai Ulang",
+        description: `Perangkat ${device.name || device.deviceId} sedang dimulai ulang.`,
       })
-    }, 1500)
-  }
-
-  // Format date for display
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return "Unknown"
-    const date = new Date(timestamp)
-    return date.toLocaleString("id-ID", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  }
-
-  // Check if device is online (seen in last 2 minutes)
-  const isDeviceOnline = (device: DeviceStatus) => {
-    if (!device.lastSeen) return false
-    const lastSeen = new Date(device.lastSeen).getTime()
-    return Date.now() - lastSeen < 2 * 60 * 1000 // 2 minutes
-  }
-
-  // Check device status with proper logic - prioritize database status
-  const checkDeviceStatus = (device: DeviceStatus) => {
-    // First, trust the database status if it says online
-    if (device.status === "online") {
-      console.log(`✅ Device ${device.deviceId}: Database says ONLINE`)
-      return "online"
+    } catch (error) {
+      toast({
+        title: "Gagal Memulai Ulang",
+        description: `Gagal memulai ulang perangkat. Coba lagi nanti.`,
+        variant: "destructive",
+      })
+    } finally {
+      // Add a delay to prevent spamming the restart button
+      setTimeout(() => setIsRestarting(false), 3000)
     }
-
-    // If database says offline, double-check with timestamp
-    const lastSeen = device.lastSeen
-    let lastSeenMs = 0
-    
-    if (typeof lastSeen === "string") {
-      const parsedNumber = parseInt(lastSeen, 10)
-      if (!isNaN(parsedNumber)) {
-        lastSeenMs = parsedNumber > 1000000000000 ? parsedNumber : parsedNumber * 1000
-      } else {
-        lastSeenMs = new Date(lastSeen).getTime()
-      }
-    } else if (typeof lastSeen === "number") {
-      lastSeenMs = lastSeen > 1000000000000 ? lastSeen : lastSeen * 1000
-    }
-
-    const timeDiff = Date.now() - lastSeenMs
-    const OFFLINE_THRESHOLD = 30000 // 30 seconds for more stable detection
-
-    console.log(`🔍 Device ${device.deviceId}: DB=${device.status}, timeDiff=${Math.floor(timeDiff/1000)}s`)
-
-    // If timestamp indicates recent activity, override database offline status
-    if (lastSeenMs > 0 && timeDiff < OFFLINE_THRESHOLD) {
-      console.log(`🔄 Device ${device.deviceId}: Timestamp override to ONLINE`)
-      return "online"
-    }
-
-    return "offline"
   }
+
+  const isOnline = device.status === 'online'
+  const lastSeenDate = device.lastSeen ? new Date(device.lastSeen) : null
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-        <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-          <Smartphone className="w-5 h-5" />
-          Status Perangkat Scanner
-        </CardTitle>
-        <div className="flex flex-col items-start sm:items-end">
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className="w-full sm:w-auto">
-            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          <span className="text-xs text-gray-400 mt-1">
-            Update otomatis setiap 15 detik
-          </span>
+    <Card className="bg-white/60 backdrop-blur-sm shadow-md hover:shadow-lg transition-shadow duration-300">
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+        <div className="flex items-center space-x-4">
+          <div className={cn(
+            "p-3 rounded-full",
+            isOnline ? "bg-emerald-100" : "bg-gray-200"
+          )}>
+            {isOnline ? (
+              <Wifi className="h-6 w-6 text-emerald-600" />
+            ) : (
+              <WifiOff className="h-6 w-6 text-gray-500" />
+            )}
+          </div>
+          <div className="space-y-1">
+            <CardTitle className="text-lg font-bold text-gray-800">{device.name || device.deviceId}</CardTitle>
+            <p className="text-xs text-gray-500">ID: {device.deviceId}</p>
+            {lastSeenDate && (
+              <div className="flex items-center space-x-1.5 text-xs text-gray-500 pt-1">
+                <Clock className="h-3 w-3" />
+                <span>
+                  Terakhir aktif: {lastSeenDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}, {lastSeenDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="flex flex-col items-center">
-              <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin mb-2"></div>
-              <p className="text-gray-500">Memuat data perangkat...</p>
-            </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center pt-4 border-t border-gray-200/80">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-500">IP Address</p>
+            <p className="text-sm font-semibold text-gray-800">{device.ipAddress || "-"}</p>
           </div>
-        ) : devices.length === 0 ? (
-          <div className="text-center py-8">
-            <Smartphone className="w-12 h-12 mx-auto text-gray-400 mb-2" />
-            <p className="text-gray-500">Tidak ada perangkat yang terhubung</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Pastikan ESP32 scanner Anda terhubung ke internet dan dikonfigurasi dengan benar
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-500">Status</p>
+            <Badge variant={isOnline ? "default" : "destructive"} className={cn(isOnline ? "bg-emerald-500" : "bg-red-500")}>
+              {isOnline ? "Online" : "Offline"}
+            </Badge>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-500">Total Scan</p>
+            <p className="text-sm font-semibold text-gray-800 flex items-center justify-center space-x-1">
+              <Database className="h-3 w-3 text-gray-400" />
+              <span>{device.scanCount || 0}</span>
             </p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {devices.map((device) => {
-              // Use the more reliable checkDeviceStatus function instead
-              const online = checkDeviceStatus(device) === "online"
-              return (
-                <div key={device.deviceId} className="border rounded-lg p-3 sm:p-4">
-                  <div className="flex flex-col gap-3 sm:gap-4">
-                    <div className="flex items-center gap-3 sm:gap-4">
-                      <div
-                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center ${
-                          online ? "bg-green-100" : "bg-gray-100"
-                        }`}
-                      >
-                        {online ? (
-                          <Wifi className={`w-5 h-5 sm:w-6 sm:h-6 ${online ? "text-green-600" : "text-gray-400"}`} />
-                        ) : (
-                          <WifiOff className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-medium text-sm sm:text-base truncate">{device.name || device.deviceId}</h3>
-                          {/* Only show badge for online devices */}
-                          {online && <Badge variant="default" className="text-xs">Online</Badge>}
-                        </div>
-                        <p className="text-xs sm:text-sm text-gray-500 truncate">ID: {device.deviceId}</p>
-                        <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-500">
-                          <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                          <span className="truncate">Terakhir aktif: {formatDate(device.lastSeen)}</span>
-                        </div>
-                      </div>
-                    </div>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-500">Version</p>
+            <p className="text-sm font-semibold text-gray-800">{device.version || "-"}</p>
+          </div>
+        </div>
+        <div className="flex justify-end mt-4 pt-4 border-t border-gray-200/80">
+          <Button 
+            variant="outline"
+            size="sm"
+            onClick={handleRestartClick}
+            disabled={!isOnline || isRestarting}
+            className="bg-white hover:bg-gray-50"
+          >
+            {isRestarting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Power className="mr-2 h-4 w-4" />
+            )}
+            {isRestarting ? "Memulai ulang..." : "Restart"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-                      <div className="flex flex-col">
-                        <span className="text-xs text-gray-500">IP Address</span>
-                        <span className="font-mono text-xs sm:text-sm truncate">{device.ipAddress || "Unknown"}</span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs text-gray-500">Status</span>
-                        <span className="text-xs sm:text-sm">
-                          {online ? (
-                            <span className="text-green-600 font-medium">Online</span>
-                          ) : (
-                            <span className="text-gray-500">Offline</span>
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs text-gray-500">Total Scan</span>
-                        <div className="flex items-center gap-1">
-                          <Database className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" />
-                          <span className="text-xs sm:text-sm">{device.scanCount || 0}</span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs text-gray-500">Version</span>
-                        <span className="text-sm">{device.version || "Unknown"}</span>
-                      </div>
-                    </div>
+export function DeviceStatus() {
+  const { devices, loading, error, lastUpdate, refresh: refreshDeviceStatus, onlineDevices, totalDevices } = useRealtimeDeviceStatus()
+  const { toast } = useToast()
+  const [timeAgo, setTimeAgo] = useState("baru saja")
 
-                    {device.batteryLevel !== undefined && (
-                      <div className="w-full md:w-32">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-gray-500">Battery</span>
-                          <span className="text-xs font-medium">{device.batteryLevel}%</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Zap className="w-3.5 h-3.5 text-yellow-500" />
-                          <Progress value={device.batteryLevel} className="h-2" />
-                        </div>
-                      </div>
-                    )}
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const seconds = Math.floor((new Date().getTime() - lastUpdate.getTime()) / 1000)
+      if (seconds < 10) {
+        setTimeAgo("baru saja")
+      } else {
+        setTimeAgo(`${seconds}d yang lalu`)
+      }
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [lastUpdate])
 
-                    <div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleRestartDevice(device.deviceId)}
-                        disabled={!online}
-                      >
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                        Restart
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+  const handleRestartDevice = useCallback(async (deviceId: string) => {
+    const response = await fetch(`/api/restart-device`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || "Failed to restart device")
+    }
+
+    return response.json()
+  }, [])
+
+  return (
+    <Card className="bg-white/30 backdrop-blur-md shadow-lg">
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center space-x-3">
+            <Smartphone className="h-6 w-6 text-gray-700" />
+            <CardTitle className="text-xl font-bold text-gray-800">Status Perangkat Scanner</CardTitle>
+          </div>
+          <div className="flex items-center space-x-4 mt-3 sm:mt-0">
+            <p className="text-xs text-gray-500">
+              Update otomatis setiap 5 detik
+            </p>
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={() => refreshDeviceStatus()}
+              disabled={loading}
+              className="bg-white hover:bg-gray-50"
+            >
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading && totalDevices === 0 && (
+          <div className="flex items-center justify-center p-8 space-x-2 text-gray-500">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span>Memuat perangkat...</span>
           </div>
         )}
+        {error && (
+          <div className="flex items-center justify-center p-8 space-x-2 text-red-600 bg-red-50 rounded-lg">
+            <AlertTriangle className="h-5 w-5" />
+            <span>Gagal memuat status: {error}</span>
+          </div>
+        )}
+        {!loading && !error && devices.length === 0 && (
+          <div className="flex items-center justify-center p-8 space-x-2 text-gray-500 bg-gray-50 rounded-lg">
+            <Info className="h-5 w-5" />
+            <span>Tidak ada perangkat scanner yang terdaftar.</span>
+          </div>
+        )}
+        {devices.map(device => (
+          <DeviceCard key={device.deviceId} device={device} onRestart={handleRestartDevice} />
+        ))}
       </CardContent>
     </Card>
   )

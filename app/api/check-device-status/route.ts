@@ -2,8 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { database, ensureFirebaseInitialized } from "@/lib/firebase"
 import { ref, get, update } from "firebase/database"
 
-// Timeout in milliseconds (30 seconds for more stable detection)
-const OFFLINE_TIMEOUT = 30000
+// Timeout in milliseconds (20 seconds for fast responsive detection)
+// With ESP32 heartbeat every 8 seconds, this provides good reliability
+const OFFLINE_TIMEOUT = 20000
 
 export async function POST(request: NextRequest) {
   try {

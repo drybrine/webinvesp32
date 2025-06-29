@@ -28,7 +28,6 @@ import { useToast } from "@/components/ui/use-toast"
 import { useFirebaseAttendance, useFirebaseDevices } from "@/hooks/use-firebase"
 import { FirebasePermissionError } from "@/components/firebase-permission-error"
 import { useRealtimeAttendance } from "@/components/realtime-attendance-provider"
-import { DeviceStatusDisplay } from "@/components/device-status"
 
 interface AttendanceRecord {
   id: string
@@ -187,77 +186,35 @@ export default function AbsensiPage() {
   }
 
   return (
-    <div className="min-h-screen gradient-surface p-3 sm:p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Enhanced Header */}
-        <div className="mb-8 sm:mb-10 text-center md:text-left animate-fade-in-up">
-          <div className="flex items-center justify-center md:justify-start mb-6">
+    <div className="min-h-screen gradient-surface mobile-container-full">
+      <div className="mobile-space-y">
+        {/* Enhanced Header - More responsive */}
+        <div className="mobile-margin text-center md:text-left animate-fade-in-up">
+          <div className="flex items-center justify-center md:justify-start mobile-gap">
             <div className="relative">
               <div className="absolute -inset-1 gradient-accent rounded-full blur opacity-30 animate-pulse"></div>
-              <div className="relative w-12 h-12 sm:w-16 sm:h-16 gradient-accent rounded-full flex items-center justify-center shadow-colored">
-                <UserCheck className="w-6 h-6 sm:w-8 sm:h-8 text-white animate-float" />
+              <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 gradient-accent rounded-full flex items-center justify-center shadow-colored">
+                <UserCheck className="w-4 h-4 sm:w-6 sm:h-6 md:w-8 md:h-8 text-white animate-float" />
               </div>
             </div>
-            <div className="ml-4">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold gradient-text tracking-tight">
+            <div className="ml-3 sm:ml-4">
+              <h1 className="mobile-title-lg md:text-5xl lg:text-6xl gradient-text tracking-tight">
                 Sistem Absensi
               </h1>
-              <p className="text-sm sm:text-base lg:text-lg text-muted-foreground font-medium mt-2">
+              <p className="mobile-text lg:text-lg text-muted-foreground font-medium mt-1 sm:mt-2">
                 Kelola kehadiran dengan teknologi barcode scanner
               </p>
             </div>
           </div>
-          <div className="flex items-center justify-center md:justify-start space-x-4">
-            <div className="h-1 w-16 gradient-accent rounded-full animate-pulse"></div>
-            <div className="h-1 w-8 gradient-primary rounded-full animate-pulse animation-delay-200"></div>
-            <div className="h-1 w-4 gradient-secondary rounded-full animate-pulse animation-delay-400"></div>
+          <div className="flex items-center justify-center md:justify-start mobile-space-x mt-4 sm:mt-6">
+            <div className="h-1 w-12 sm:w-16 gradient-accent rounded-full animate-pulse"></div>
+            <div className="h-1 w-6 sm:w-8 gradient-primary rounded-full animate-pulse animation-delay-200"></div>
+            <div className="h-1 w-3 sm:w-4 gradient-secondary rounded-full animate-pulse animation-delay-400"></div>
           </div>
         </div>
 
-        {/* Enhanced ESP32 Status Card */}
-        <Card className="glass-card shadow-large hover:shadow-extra-large transition-all duration-500 mb-8 animate-fade-in-up animation-delay-200">
-          <CardContent className="p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center space-x-4">
-                <div className={`relative p-3 rounded-2xl ${isProcessing ? 'gradient-accent' : 'bg-muted'} transition-all duration-300`}>
-                  {isProcessing ? (
-                    <div className="relative">
-                      <Smartphone className="w-6 h-6 text-white" />
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-ping"></div>
-                    </div>
-                  ) : (
-                    <Smartphone className="w-6 h-6 text-muted-foreground" />
-                  )}
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg gradient-text">
-                    {isProcessing ? 'ESP32 Scanner Aktif' : 'ESP32 Scanner Standby'}
-                  </h3>
-                  <p className="text-sm text-muted-foreground font-medium">
-                    {isProcessing ? 'Sedang memproses scan...' : 'Siap menerima scan barcode'}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex flex-wrap gap-3">
-                {processCount > 0 && (
-                  <Badge className="glass-card border-blue-200 text-blue-700 font-semibold px-3 py-1">
-                    📊 {processCount} scan hari ini
-                  </Badge>
-                )}
-                {lastProcessedNim && (
-                  <Badge className="glass-card border-emerald-200 text-emerald-700 font-semibold px-3 py-1">
-                    ✅ Terakhir: {lastProcessedNim}
-                  </Badge>
-                )}
-                <DeviceStatusDisplay devices={devices} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 mb-8 sm:mb-10 animate-fade-in-up animation-delay-400">
+        {/* Enhanced Stats Cards - Better mobile grid */}
+        <div className="mobile-grid-stats mobile-gap mobile-margin animate-fade-in-up animation-delay-400">
           <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
             <div className="absolute inset-0 gradient-accent opacity-5 rounded-xl"></div>
             <CardHeader className="relative z-10 pb-3">

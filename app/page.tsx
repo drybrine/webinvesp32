@@ -55,18 +55,17 @@ import {
   Barcode as BarcodeIcon,
   Wifi,
   WifiOff,
-  Settings,
   Smartphone,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import {
   useFirebaseInventory,
   useFirebaseScans,
-  useFirebaseDevices,
   InventoryItem,
   // ScanRecord, // Not used directly in this component's state/props
   // DeviceStatus as FirebaseDeviceStatus, // Not used directly
 } from "@/hooks/use-firebase"
+import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
 import { getFirebaseStatus, firebaseHelpers } from "@/lib/firebase"
 // import { ScanHistory } from "@/components/scan-history" // Not used in this file
 import BarcodeComponent from "react-barcode"
@@ -105,7 +104,19 @@ export default function TransaksiPage() {
     deleteItem,
   } = useFirebaseInventory()
   const { scans, loading: scansLoading, error: scansError } = useFirebaseScans()
-  const { devices, loading: devicesLoading, error: devicesError } = useFirebaseDevices()
+  
+  // Real-time device status monitoring
+  const {
+    devices,
+    loading: devicesLoading,
+    error: devicesError,
+    lastUpdate,
+    connectionStatus,
+    refresh: refreshDeviceStatus,
+    onlineDevices: realtimeOnlineDevices,
+    offlineDevices,
+    totalDevices
+  } = useRealtimeDeviceStatus()
 
   const [isAddItemOpen, setIsAddItemOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
@@ -141,12 +152,8 @@ export default function TransaksiPage() {
 
   const firebaseStatus = getFirebaseStatus()
 
-  const onlineDevices = useMemo(() => {
-    if (devicesLoading || !devices) return 0;
-    return devices.filter(
-      (d) => d.lastSeen && Date.now() - new Date(d.lastSeen).getTime() < 15 * 1000 // Match API timeout: 15 seconds
-    ).length;
-  }, [devices, devicesLoading]);
+  // Use real-time online devices count
+  const onlineDevices = realtimeOnlineDevices
 
   const prevOnlineDevicesRef = useRef<number | undefined>(undefined);
 
@@ -521,43 +528,44 @@ export default function TransaksiPage() {
   };
 
   return (
-    <div className="min-h-screen gradient-surface p-3 sm:p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Enhanced Header with modern design */}
-        <div className="mb-8 sm:mb-10 md:mb-12 text-center md:text-left animate-fade-in-up">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-            <div className="mb-6 md:mb-0">
+    <div className="min-h-screen gradient-surface mobile-container-full">
+      <div className="mobile-space-y">
+        {/* Enhanced Header with better mobile layout */}
+        <div className="mobile-margin text-center md:text-left animate-fade-in-up">
+          <div className="mobile-flex-col md:items-center md:justify-between mobile-gap">
+            <div className="mobile-margin md:mb-0">
               <div className="flex items-center justify-center md:justify-start mb-4">
                 <div className="relative">
                   <div className="absolute -inset-1 gradient-primary rounded-full blur opacity-30 animate-pulse"></div>
-                  <div className="relative w-12 h-12 sm:w-16 sm:h-16 gradient-primary rounded-full flex items-center justify-center shadow-colored">
-                    <Package className="w-6 h-6 sm:w-8 sm:h-8 text-white animate-float" />
+                  <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 gradient-primary rounded-full flex items-center justify-center shadow-colored">
+                    <Package className="w-4 h-4 sm:w-6 sm:h-6 md:w-8 md:h-8 text-white animate-float" />
                   </div>
                 </div>
-                <div className="ml-4">
-                  <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold gradient-text tracking-tight">
+                <div className="ml-3 sm:ml-4">
+                  <h1 className="mobile-title-lg md:text-5xl lg:text-6xl gradient-text tracking-tight">
                     Dashboard Inventaris
                   </h1>
-                  <p className="text-sm sm:text-base lg:text-lg text-muted-foreground font-medium mt-2">
+                  <p className="mobile-text lg:text-lg text-muted-foreground font-medium mt-1 sm:mt-2">
                     Kelola stok barang dengan teknologi terdepan
                   </p>
                 </div>
               </div>
-              <div className="flex items-center justify-center md:justify-start space-x-4">
-                <div className="h-1 w-16 gradient-primary rounded-full animate-pulse"></div>
-                <div className="h-1 w-8 gradient-secondary rounded-full animate-pulse animation-delay-200"></div>
-                <div className="h-1 w-4 gradient-accent rounded-full animate-pulse animation-delay-400"></div>
+              <div className="flex items-center justify-center md:justify-start mobile-space-x">
+                <div className="h-1 w-12 sm:w-16 gradient-primary rounded-full animate-pulse"></div>
+                <div className="h-1 w-6 sm:w-8 gradient-secondary rounded-full animate-pulse animation-delay-200"></div>
+                <div className="h-1 w-3 sm:w-4 gradient-accent rounded-full animate-pulse animation-delay-400"></div>
               </div>
             </div>
             
-            {/* Quick Actions */}
-            <div className="flex items-center space-x-3">
+            {/* Quick Actions - Responsive */}
+            <div className="mobile-flex-wrap justify-center md:justify-end mobile-gap">
               <Button
                 onClick={() => setIsAddItemOpen(true)}
-                className="btn-modern gradient-primary text-white shadow-colored hover:shadow-extra-large px-6 py-3 rounded-2xl font-semibold"
+                className="mobile-btn gradient-primary text-white shadow-colored hover:shadow-extra-large rounded-xl sm:rounded-2xl font-semibold"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Tambah Item
+                <span className="mobile-hide">Tambah Item</span>
+                <span className="desktop-hide">Tambah</span>
               </Button>
               <Button
                 onClick={exportToCSV}
@@ -611,13 +619,13 @@ export default function TransaksiPage() {
           )}
         </div>
 
-        {/* Enhanced Stats Cards with modern design */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8 animate-fade-in-up animation-delay-400">
-          {/* Total Items Card */}
+        {/* Enhanced Stats Cards - Better mobile layout */}
+        <div className="mobile-grid-stats mobile-gap mobile-margin animate-fade-in-up animation-delay-400">
+          {/* Total Items Card - Cleaned up layout */}
           <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
             <div className="absolute inset-0 gradient-primary opacity-5 rounded-xl"></div>
             <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-primary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
-            <CardHeader className="relative z-10 pb-2 sm:pb-3">
+            <CardHeader className="relative z-10 pb-2 sm:pb-3 p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-xs sm:text-sm font-semibold text-muted-foreground">Total Item</CardTitle>
                 <div className="p-1.5 sm:p-2 gradient-primary rounded-lg shadow-sm">
@@ -625,22 +633,22 @@ export default function TransaksiPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="relative z-10 pt-0">
+            <CardContent className="relative z-10 pt-0 px-4 pb-4 sm:px-6 sm:pb-6">
               <div className="space-y-1 sm:space-y-2">
                 <div className="text-lg sm:text-2xl md:text-3xl font-bold gradient-text">{totalItems}</div>
-                <p className="text-xs text-muted-foreground font-medium">Jenis barang unik</p>
-                <div className="w-full bg-muted/50 rounded-full h-1">
+                <p className="text-xs sm:text-sm text-muted-foreground font-medium">Jenis barang unik</p>
+                <div className="w-full bg-muted/50 rounded-full h-1 mt-2">
                   <div className="gradient-primary h-1 rounded-full w-3/4 animate-pulse"></div>
                 </div>
               </div>
             </CardContent>
           </Card>
           
-          {/* Total Value Card */}
+          {/* Total Value Card - Cleaned up layout */}
           <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
             <div className="absolute inset-0 gradient-secondary opacity-5 rounded-xl"></div>
             <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-secondary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
-            <CardHeader className="relative z-10 pb-2 sm:pb-3">
+            <CardHeader className="relative z-10 pb-2 sm:pb-3 p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-xs sm:text-sm font-semibold text-muted-foreground">Total Nilai</CardTitle>
                 <div className="p-1.5 sm:p-2 gradient-secondary rounded-lg shadow-sm">
@@ -648,24 +656,24 @@ export default function TransaksiPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="relative z-10 pt-0">
+            <CardContent className="relative z-10 pt-0 px-4 pb-4 sm:px-6 sm:pb-6">
               <div className="space-y-1 sm:space-y-2">
                 <div className="text-lg sm:text-2xl md:text-3xl font-bold gradient-text">
                   Rp {totalValue.toLocaleString('id-ID')}
                 </div>
-                <p className="text-xs text-muted-foreground font-medium">Nilai inventaris total</p>
-                <div className="w-full bg-muted/50 rounded-full h-1">
+                <p className="text-xs sm:text-sm text-muted-foreground font-medium">Nilai inventaris total</p>
+                <div className="w-full bg-muted/50 rounded-full h-1 mt-2">
                   <div className="gradient-secondary h-1 rounded-full w-4/5 animate-pulse"></div>
                 </div>
               </div>
             </CardContent>
           </Card>
           
-          {/* Low Stock Card */}
+          {/* Low Stock Card - Cleaned up layout */}
           <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
             <div className="absolute inset-0 gradient-accent opacity-5 rounded-xl"></div>
             <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-accent rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
-            <CardHeader className="relative z-10 pb-2 sm:pb-3">
+            <CardHeader className="relative z-10 pb-2 sm:pb-3 p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-xs sm:text-sm font-semibold text-muted-foreground">Stok Rendah</CardTitle>
                 <div className="p-1.5 sm:p-2 gradient-accent rounded-lg shadow-sm">
@@ -673,11 +681,11 @@ export default function TransaksiPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="relative z-10 pt-0">
+            <CardContent className="relative z-10 pt-0 px-4 pb-4 sm:px-6 sm:pb-6">
               <div className="space-y-1 sm:space-y-2">
                 <div className="text-lg sm:text-2xl md:text-3xl font-bold gradient-text">{lowStockItems.length}</div>
-                <p className="text-xs text-muted-foreground font-medium">Item perlu diisi ulang</p>
-                <div className="w-full bg-muted/50 rounded-full h-1">
+                <p className="text-xs sm:text-sm text-muted-foreground font-medium">Item perlu diisi ulang</p>
+                <div className="w-full bg-muted/50 rounded-full h-1 mt-2">
                   <div className={`h-1 rounded-full ${lowStockItems.length > 0 ? 'gradient-accent animate-pulse' : 'bg-emerald-500'} transition-all duration-300`} 
                        style={{ width: lowStockItems.length > 0 ? '60%' : '100%' }}></div>
                 </div>
@@ -685,121 +693,60 @@ export default function TransaksiPage() {
             </CardContent>
           </Card>
           
-          {/* ESP32 Status Card - Mobile optimized */}
-          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group col-span-2 lg:col-span-1">
-            <div className={`absolute inset-0 ${onlineDevices > 0 ? 'bg-emerald-500' : 'bg-red-500'} opacity-5 rounded-xl`}></div>
-            <CardHeader className="relative z-10 pb-2 sm:pb-3">
+          {/* Device Status Card - Cleaned up layout */}
+          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
+            <div className="absolute inset-0 gradient-primary opacity-5 rounded-xl"></div>
+            <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-primary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10 pb-2 sm:pb-3 p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-xs sm:text-sm font-semibold text-muted-foreground">ESP32 Scanner</CardTitle>
-                <div className={`p-1.5 sm:p-2 rounded-lg shadow-sm ${onlineDevices > 0 ? 'bg-emerald-500' : 'bg-red-500'}`}>
-                  {onlineDevices > 0 ? (
-                    <Wifi className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
-                  ) : (
-                    <WifiOff className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
-                  )}
+                <CardTitle className="text-xs sm:text-sm font-semibold text-muted-foreground">Status Device</CardTitle>
+                <div className="p-1.5 sm:p-2 gradient-primary rounded-lg shadow-sm">
+                  <Smartphone className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="relative z-10 pt-0">
-              <div className="space-y-2 sm:space-y-3">
-                <div className={`text-lg sm:text-xl md:text-2xl font-bold ${onlineDevices > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {onlineDevices > 0 ? "Terhubung" : "Terputus"}
+            <CardContent className="relative z-10 pt-0 px-4 pb-4 sm:px-6 sm:pb-6">
+              <div className="space-y-1 sm:space-y-2">
+                <div className="text-lg sm:text-2xl md:text-3xl font-bold gradient-text">
+                  {realtimeOnlineDevices}/{totalDevices}
                 </div>
                 <p className="text-xs text-muted-foreground font-medium">
-                  {devices && devices.length > 0 
-                    ? `${onlineDevices} dari ${devices.length} perangkat aktif` 
-                    : "Tidak ada perangkat terdaftar"
-                  }
+                  {realtimeOnlineDevices > 0 ? 'Scanner siap digunakan' : 'Semua device offline'}
                 </p>
-                
-                {/* Enhanced Device Status - Mobile responsive */}
-                {devices && devices.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2 text-xs font-semibold text-muted-foreground">
-                      <Smartphone className="h-3 w-3" />
-                      <span className="hidden sm:inline">Status Perangkat</span>
-                      <span className="sm:hidden">Perangkat</span>
-                    </div>
-                    <div className="space-y-1">
-                      {devices
-                        .slice(0, 2) // Show only 2 devices on mobile
-                        .map((device, index) => {
-                          const timeDiff = device.lastSeen ? Date.now() - new Date(device.lastSeen).getTime() : Infinity;
-                          const isOnlineByTime = timeDiff < 30 * 1000;
-                          const isOnlineByStatus = device.status === "online";
-                          const isActuallyOnline = isOnlineByStatus && isOnlineByTime;
-                          
-                          return (
-                            <div key={device.deviceId || index} className="flex items-center justify-between glass-card p-2 rounded-lg">
-                              <div className="flex flex-col min-w-0 flex-1">
-                                <span className="font-mono text-xs text-foreground/80 truncate">
-                                  {device.deviceId || `Device-${index + 1}`}
-                                </span>
-                                {isActuallyOnline && device.ipAddress && (
-                                  <span className="font-mono text-xs text-muted-foreground truncate">
-                                    {device.ipAddress}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center space-x-1 flex-shrink-0">
-                                <div className={`w-2 h-2 rounded-full ${isActuallyOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-                                <span className={`text-xs font-semibold ${isActuallyOnline ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {isActuallyOnline ? 'Online' : 'Offline'}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })
-                      }
-                    </div>
+                {realtimeOnlineDevices > 0 && devices && devices.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {devices
+                      .filter(device => device.status === 'online')
+                      .slice(0, 2) // Limit to 2 devices for space
+                      .map((device, index) => (
+                        <div key={device.deviceId || index} className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground font-medium">
+                            {device.deviceId || 'Unknown'}:
+                          </span>
+                          <span className="text-emerald-600 font-semibold">
+                            {device.ipAddress || 'N/A'}
+                          </span>
+                        </div>
+                      ))
+                    }
+                    {devices.filter(device => device.status === 'online').length > 2 && (
+                      <div className="text-xs text-muted-foreground font-medium">
+                        +{devices.filter(device => device.status === 'online').length - 2} lainnya
+                      </div>
+                    )}
                   </div>
                 )}
-                
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1 glass-card hover:shadow-medium btn-modern font-semibold text-xs sm:text-sm px-2 py-1" 
-                    onClick={async () => {
-                      try {
-                        await fetch('/api/check-device-status', {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            'X-Internal-Call': 'true'
-                          }
-                        });
-                        toast({
-                          title: "Status Diperbarui",
-                          description: "Status perangkat telah direfresh",
-                        });
-                      } catch (error) {
-                        toast({
-                          title: "Error",
-                          description: "Gagal memperbarui status perangkat",
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                  >
-                    <WifiOff className="mr-1 h-3 w-3" />
-                    <span className="hidden sm:inline">Refresh</span>
-                    <span className="sm:hidden">↻</span>
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1 glass-card hover:shadow-medium btn-modern font-semibold text-xs sm:text-sm px-2 py-1" 
-                    onClick={() => router.push('/pengaturan?tab=devices')}
-                  >
-                    <Settings className="mr-1 h-3 w-3" />
-                    <span className="hidden sm:inline">Kelola</span>
-                    <span className="sm:hidden">⚙</span>
-                  </Button>
+                <div className="w-full bg-muted/50 rounded-full h-1">
+                  <div className={`h-1 rounded-full transition-all duration-300 ${
+                    realtimeOnlineDevices > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                  }`} style={{ 
+                    width: totalDevices > 0 ? `${(realtimeOnlineDevices / totalDevices) * 100}%` : '0%' 
+                  }}></div>
                 </div>
               </div>
             </CardContent>
           </Card>
+
         </div>
 
         {/* Low Stock Alert - Enhanced styling */}
