@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { BarChart3, Receipt, Settings, Menu, X, UserCheck, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { SessionIndicator } from "@/components/session-indicator"
 
 const navigation = [
 	{ name: "Dashboard", href: "/", icon: BarChart3, color: "from-blue-500 to-purple-500" },
@@ -17,6 +18,11 @@ const navigation = [
 export default function Navigation() {
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 	const pathname = usePathname()
+
+	// Don't show navigation on login page
+	if (pathname === "/login") {
+		return null
+	}
 
 	return (
 		<nav className="glass-morphism border-b border-white/20 sticky top-0 z-50 shadow-large backdrop-blur-2xl">
@@ -85,22 +91,30 @@ export default function Navigation() {
 						</div>
 					</div>
 
-					{/* Enhanced Mobile menu button */}
-					<div className="md:hidden flex items-center">
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-							className="relative p-2 sm:p-3 rounded-xl hover:bg-accent/50 hover:shadow-medium interactive-scale transition-all duration-300 min-h-[44px] min-w-[44px]"
-						>
-							<div className="relative w-5 h-5 sm:w-6 sm:h-6">
-								{mobileMenuOpen ? (
-									<X className="w-5 h-5 sm:w-6 sm:h-6 text-foreground transition-transform duration-300 rotate-180" />
-								) : (
-									<Menu className="w-5 h-5 sm:w-6 sm:h-6 text-foreground transition-transform duration-300" />
-								)}
-							</div>
-						</Button>
+					{/* Session Indicator & Mobile menu button */}
+					<div className="flex items-center gap-2">
+						{/* Session Indicator - hidden on mobile, shown on desktop */}
+						<div className="hidden sm:block">
+							<SessionIndicator />
+						</div>
+
+						{/* Enhanced Mobile menu button */}
+						<div className="md:hidden flex items-center">
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+								className="relative p-2 sm:p-3 rounded-xl hover:bg-accent/50 hover:shadow-medium interactive-scale transition-all duration-300 min-h-[44px] min-w-[44px]"
+							>
+								<div className="relative w-5 h-5 sm:w-6 sm:h-6">
+									{mobileMenuOpen ? (
+										<X className="w-5 h-5 sm:w-6 sm:h-6 text-foreground transition-transform duration-300 rotate-180" />
+									) : (
+										<Menu className="w-5 h-5 sm:w-6 sm:h-6 text-foreground transition-transform duration-300" />
+									)}
+								</div>
+							</Button>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -110,6 +124,11 @@ export default function Navigation() {
 				<div className="md:hidden">
 					<div className="glass-morphism border-t border-white/10 mobile-scroll">
 						<div className="mobile-padding py-3 space-y-2">
+							{/* Session Indicator for Mobile */}
+							<div className="pb-2 border-b border-white/10">
+								<SessionIndicator />
+							</div>
+
 							{navigation.map((item) => {
 								const Icon = item.icon
 								const isActive = pathname === item.href

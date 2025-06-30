@@ -7,15 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Settings, Wifi, Database, Shield, Download, Upload, Trash2, RefreshCw, WifiOff } from "lucide-react"
+import { Settings, Wifi, Database, Shield, Download, RefreshCw, WifiOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseDevices } from "@/hooks/use-firebase" 
 import { ref, get, set } from "firebase/database"
 import { database } from "@/lib/firebase"
-import { FirebaseRulesSetup } from "@/components/firebase-rules-setup"
 
 export default function PengaturanPage() {
   const [settings, setSettings] = useState({
@@ -28,7 +26,6 @@ export default function PengaturanPage() {
     // System Settings
     lowStockThreshold: "5",
     autoBackup: true,
-    backupFrequency: "daily",
     notifications: true,
     emailNotifications: true,
 
@@ -302,42 +299,19 @@ export default function PengaturanPage() {
         </div>
 
         <Tabs defaultValue="general" className="space-y-3 sm:space-y-4 lg:space-y-6">
-          {/* Mobile Tab Navigation with dropdown for hidden tabs */}
+          {/* Simplified Tab Navigation - 3 tabs only */}
           <div className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 bg-white/80 backdrop-blur-sm border border-gray-200/50 shadow-lg rounded-xl p-1 gap-1 h-auto">
+            <TabsList className="grid w-full grid-cols-3 bg-white/80 backdrop-blur-sm border border-gray-200/50 shadow-lg rounded-xl p-1 gap-1 h-auto">
               <TabsTrigger value="general" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 min-h-[40px] flex items-center justify-center">
                 <span className="truncate">Umum</span>
               </TabsTrigger>
-              <TabsTrigger value="system" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 min-h-[40px] flex items-center justify-center">
-                <span className="truncate">Sistem</span>
-              </TabsTrigger>
-              <TabsTrigger value="devices" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 col-span-2 sm:col-span-1 min-h-[40px] flex items-center justify-center">
+              <TabsTrigger value="devices" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 min-h-[40px] flex items-center justify-center">
                 <span className="truncate">Perangkat</span>
               </TabsTrigger>
-              <TabsTrigger value="security" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 hidden lg:flex min-h-[40px] items-center justify-center">
+              <TabsTrigger value="security" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 min-h-[40px] flex items-center justify-center">
                 <span className="truncate">Keamanan</span>
               </TabsTrigger>
-              <TabsTrigger value="backup" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 hidden lg:flex min-h-[40px] items-center justify-center">
-                <span className="truncate">Backup</span>
-              </TabsTrigger>
             </TabsList>
-            
-            {/* Mobile dropdown for hidden tabs */}
-            <div className="mt-2 lg:hidden">
-              <Select defaultValue="">
-                <SelectTrigger className="w-full sm:w-auto bg-white/80 backdrop-blur-sm border border-gray-200/50">
-                  <SelectValue placeholder="Tab Lainnya..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="security" onClick={() => (document.querySelector('[value="security"]') as HTMLElement)?.click()}>
-                    🔒 Keamanan
-                  </SelectItem>
-                  <SelectItem value="backup" onClick={() => (document.querySelector('[value="backup"]') as HTMLElement)?.click()}>
-                    💾 Backup
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <TabsContent value="general">
@@ -417,82 +391,6 @@ export default function PengaturanPage() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="system">
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Database className="w-5 h-5" />
-                    Pengaturan Sistem
-                  </CardTitle>
-                  <CardDescription>Konfigurasi sistem dan notifikasi</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Backup Otomatis</Label>
-                        <p className="text-sm text-gray-500">Backup data secara otomatis</p>
-                      </div>
-                      <Switch
-                        checked={settings.autoBackup}
-                        onCheckedChange={(checked) => setSettings({ ...settings, autoBackup: checked })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="backupFrequency">Frekuensi Backup</Label>
-                      <Select
-                        value={settings.backupFrequency}
-                        onValueChange={(value) => setSettings({ ...settings, backupFrequency: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="hourly">Setiap Jam</SelectItem>
-                          <SelectItem value="daily">Harian</SelectItem>
-                          <SelectItem value="weekly">Mingguan</SelectItem>
-                          <SelectItem value="monthly">Bulanan</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Notifikasi</Label>
-                        <p className="text-sm text-gray-500">Tampilkan notifikasi sistem</p>
-                      </div>
-                      <Switch
-                        checked={settings.notifications}
-                        onCheckedChange={(checked) => setSettings({ ...settings, notifications: checked })}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Email Notifikasi</Label>
-                        <p className="text-sm text-gray-500">Kirim notifikasi via email</p>
-                      </div>
-                      <Switch
-                        checked={settings.emailNotifications}
-                        onCheckedChange={(checked) => setSettings({ ...settings, emailNotifications: checked })}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <Button onClick={handleSaveSettings} disabled={saveLoading}>
-                      {saveLoading ? "Menyimpan..." : "Simpan Pengaturan"}
-                    </Button>
-                    <Button variant="outline" onClick={handleTestConnection}>
-                      <Database className="w-4 h-4 mr-2" />
-                      Test Koneksi
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <FirebaseRulesSetup />
-            </div>
           </TabsContent>
 
           <TabsContent value="devices">
@@ -620,98 +518,121 @@ export default function PengaturanPage() {
           </TabsContent>
 
           <TabsContent value="security">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="w-5 h-5" />
-                  Pengaturan Keamanan
-                </CardTitle>
-                <CardDescription>Konfigurasi keamanan dan akses sistem</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="sessionTimeout">Session Timeout (menit)</Label>
-                    <Input
-                      id="sessionTimeout"
-                      type="number"
-                      value={settings.sessionTimeout}
-                      onChange={(e) => setSettings({ ...settings, sessionTimeout: e.target.value })}
-                      placeholder="60"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Wajib Ganti Password</Label>
-                      <p className="text-sm text-gray-500">Paksa user ganti password berkala</p>
-                    </div>
-                    <Switch
-                      checked={settings.requirePasswordChange}
-                      onCheckedChange={(checked) => setSettings({ ...settings, requirePasswordChange: checked })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Two-Factor Authentication</Label>
-                      <p className="text-sm text-gray-500">Aktifkan 2FA untuk keamanan extra</p>
-                    </div>
-                    <Switch
-                      checked={settings.twoFactorAuth}
-                      onCheckedChange={(checked) => setSettings({ ...settings, twoFactorAuth: checked })}
-                    />
-                  </div>
-                </div>
-                <Button onClick={handleSaveSettings} disabled={saveLoading}>
-                  {saveLoading ? "Menyimpan..." : "Simpan Pengaturan Keamanan"}
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="backup">
             <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Download className="w-5 h-5" />
-                    Backup & Restore
+              <Card className="glass-card border-gray-200/50">
+                <CardHeader className="border-b border-gray-100 p-4 sm:p-6">
+                  <CardTitle className="flex items-center gap-2 sm:gap-3 text-base sm:text-lg font-semibold text-gray-900">
+                    <div className="p-1.5 sm:p-2 rounded-lg bg-gradient-to-r from-red-500 to-pink-600 flex-shrink-0">
+                      <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                    </div>
+                    <span className="truncate">Pengaturan Keamanan</span>
                   </CardTitle>
-                  <CardDescription>Kelola backup data dan restore sistem</CardDescription>
+                  <CardDescription className="text-gray-600 text-sm">
+                    Konfigurasi keamanan sistem dan kontrol akses
+                  </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Button onClick={handleBackupNow} className="flex items-center gap-2">
-                      <Download className="w-4 h-4" />
-                      Backup Sekarang
-                    </Button>
-                    <Button variant="outline" className="flex items-center gap-2">
-                      <Upload className="w-4 h-4" />
-                      Restore Data
-                    </Button>
-                    <Button variant="outline" className="flex items-center gap-2">
-                      <Download className="w-4 h-4" />
-                      Download Backup
-                    </Button>
-                  </div>
-
-                  <div className="border rounded-lg p-4">
-                    <h3 className="font-medium mb-4">Riwayat Backup</h3>
+                <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="sessionTimeout" className="text-sm font-medium">Session Timeout (menit)</Label>
+                      <Input
+                        id="sessionTimeout"
+                        type="number"
+                        value={settings.sessionTimeout}
+                        onChange={(e) => setSettings({ ...settings, sessionTimeout: e.target.value })}
+                        placeholder="60"
+                        className="text-sm mobile-input"
+                      />
+                    </div>
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                        <div>
-                          <p className="font-medium">backup_{new Date().toISOString().split('T')[0]}_auto.json</p>
-                          <p className="text-sm text-gray-500">{new Date().toLocaleString()} - Auto Backup</p>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label className="text-sm font-medium">Wajib Ganti Password</Label>
+                          <p className="text-xs sm:text-sm text-gray-500">Paksa user ganti password berkala</p>
                         </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                        <Switch
+                          checked={settings.requirePasswordChange}
+                          onCheckedChange={(checked) => setSettings({ ...settings, requirePasswordChange: checked })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label className="text-sm font-medium">Two-Factor Authentication</Label>
+                          <p className="text-xs sm:text-sm text-gray-500">Aktifkan 2FA untuk keamanan extra</p>
                         </div>
+                        <Switch
+                          checked={settings.twoFactorAuth}
+                          onCheckedChange={(checked) => setSettings({ ...settings, twoFactorAuth: checked })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label className="text-sm font-medium">Notifikasi Keamanan</Label>
+                          <p className="text-xs sm:text-sm text-gray-500">Alert untuk aktivitas mencurigakan</p>
+                        </div>
+                        <Switch
+                          checked={settings.notifications}
+                          onCheckedChange={(checked) => setSettings({ ...settings, notifications: checked })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label className="text-sm font-medium">Auto Backup Keamanan</Label>
+                          <p className="text-xs sm:text-sm text-gray-500">Backup otomatis data keamanan</p>
+                        </div>
+                        <Switch
+                          checked={settings.autoBackup}
+                          onCheckedChange={(checked) => setSettings({ ...settings, autoBackup: checked })}
+                        />
                       </div>
                     </div>
+                  </div>
+                  
+                  {/* Security Actions */}
+                  <div className="border-t pt-4 sm:pt-6">
+                    <h4 className="text-sm font-medium mb-3 text-gray-900">Tindakan Keamanan</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <Button 
+                        variant="outline" 
+                        className="flex items-center gap-2 btn-mobile justify-start"
+                        onClick={() => {
+                          toast({
+                            title: "Mengecek Keamanan",
+                            description: "Memulai audit keamanan sistem...",
+                          })
+                        }}
+                      >
+                        <Shield className="w-4 h-4" />
+                        Audit Keamanan
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="flex items-center gap-2 btn-mobile justify-start"
+                        onClick={() => {
+                          toast({
+                            title: "Log Keamanan",
+                            description: "Membuka log aktivitas keamanan...",
+                          })
+                        }}
+                      >
+                        <Database className="w-4 h-4" />
+                        Log Aktivitas
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="flex items-center gap-2 btn-mobile justify-start"
+                        onClick={handleBackupNow}
+                      >
+                        <Download className="w-4 h-4" />
+                        Backup Data
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-2">
+                    <Button onClick={handleSaveSettings} disabled={saveLoading} className="w-full sm:w-auto btn-mobile">
+                      {saveLoading ? "Menyimpan..." : "Simpan Pengaturan Keamanan"}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
