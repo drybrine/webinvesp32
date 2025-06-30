@@ -284,60 +284,77 @@ export default function PengaturanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 mobile-container">
+      <div className="max-w-7xl mx-auto mobile-safe-area py-4 sm:py-8">
         {/* Modern Header - Mobile responsive */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 text-white shadow-lg">
+        <div className="mb-4 sm:mb-6 lg:mb-8">
+          <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+            <div className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 text-white shadow-lg flex-shrink-0">
               <Settings className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+              <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent mobile-text">
                 Pengaturan Sistem
               </h1>
-              <p className="text-sm sm:text-base text-gray-600 mt-1">Konfigurasi aplikasi dan perangkat</p>
+              <p className="text-xs sm:text-sm lg:text-base text-gray-600 mt-1 mobile-text">Konfigurasi aplikasi dan perangkat</p>
             </div>
           </div>
         </div>
 
-        <Tabs defaultValue="general" className="space-y-4 sm:space-y-6">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 bg-white/80 backdrop-blur-sm border border-gray-200/50 shadow-lg rounded-xl p-1 gap-1 sm:gap-0">
-            <TabsTrigger value="general" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-2 py-2">
-              <span className="sm:hidden">Umum</span>
-              <span className="hidden sm:inline">Umum</span>
-            </TabsTrigger>
-            <TabsTrigger value="system" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-2 py-2">
-              <span className="sm:hidden">Sistem</span>
-              <span className="hidden sm:inline">Sistem</span>
-            </TabsTrigger>
-            <TabsTrigger value="devices" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-2 py-2 col-span-2 sm:col-span-1">
-              <span className="sm:hidden">Perangkat</span>
-              <span className="hidden sm:inline">Perangkat</span>
-            </TabsTrigger>
-            <TabsTrigger value="security" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-2 py-2 hidden lg:flex">
-              Keamanan
-            </TabsTrigger>
-            <TabsTrigger value="backup" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-2 py-2 hidden lg:flex">
-              Backup
-            </TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue="general" className="space-y-3 sm:space-y-4 lg:space-y-6">
+          {/* Mobile Tab Navigation with dropdown for hidden tabs */}
+          <div className="w-full">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 bg-white/80 backdrop-blur-sm border border-gray-200/50 shadow-lg rounded-xl p-1 gap-1 h-auto">
+              <TabsTrigger value="general" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 min-h-[40px] flex items-center justify-center">
+                <span className="truncate">Umum</span>
+              </TabsTrigger>
+              <TabsTrigger value="system" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 min-h-[40px] flex items-center justify-center">
+                <span className="truncate">Sistem</span>
+              </TabsTrigger>
+              <TabsTrigger value="devices" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 col-span-2 sm:col-span-1 min-h-[40px] flex items-center justify-center">
+                <span className="truncate">Perangkat</span>
+              </TabsTrigger>
+              <TabsTrigger value="security" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 hidden lg:flex min-h-[40px] items-center justify-center">
+                <span className="truncate">Keamanan</span>
+              </TabsTrigger>
+              <TabsTrigger value="backup" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 hidden lg:flex min-h-[40px] items-center justify-center">
+                <span className="truncate">Backup</span>
+              </TabsTrigger>
+            </TabsList>
+            
+            {/* Mobile dropdown for hidden tabs */}
+            <div className="mt-2 lg:hidden">
+              <Select defaultValue="">
+                <SelectTrigger className="w-full sm:w-auto bg-white/80 backdrop-blur-sm border border-gray-200/50">
+                  <SelectValue placeholder="Tab Lainnya..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="security" onClick={() => (document.querySelector('[value="security"]') as HTMLElement)?.click()}>
+                    🔒 Keamanan
+                  </SelectItem>
+                  <SelectItem value="backup" onClick={() => (document.querySelector('[value="backup"]') as HTMLElement)?.click()}>
+                    💾 Backup
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
           <TabsContent value="general">
             <Card className="glass-card border-gray-200/50">
-              <CardHeader className="border-b border-gray-100">
-                <CardTitle className="flex items-center gap-3 text-lg font-semibold text-gray-900">
-                  <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600">
-                    <Settings className="w-5 h-5 text-white" />
+              <CardHeader className="border-b border-gray-100 p-4 sm:p-6">
+                <CardTitle className="flex items-center gap-2 sm:gap-3 text-base sm:text-lg font-semibold text-gray-900">
+                  <div className="p-1.5 sm:p-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 flex-shrink-0">
+                    <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
-                  Pengaturan Umum
+                  <span className="truncate">Pengaturan Umum</span>
                 </CardTitle>
-                <CardDescription className="text-gray-600">
+                <CardDescription className="text-gray-600 text-sm">
                   Konfigurasi informasi perusahaan dan pengaturan dasar
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              <CardContent className="space-y-4 sm:space-y-6 p-3 sm:p-4 lg:p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="companyName" className="text-sm font-medium">Nama Perusahaan</Label>
                     <Input
@@ -345,7 +362,7 @@ export default function PengaturanPage() {
                       value={settings.companyName}
                       onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
                       placeholder="Masukkan nama perusahaan"
-                      className="text-sm"
+                      className="text-sm mobile-input"
                     />
                   </div>
                   <div className="space-y-2">
@@ -355,7 +372,8 @@ export default function PengaturanPage() {
                       value={settings.companyPhone}
                       onChange={(e) => setSettings({ ...settings, companyPhone: e.target.value })}
                       placeholder="Masukkan nomor telepon"
-                      className="text-sm"
+                      className="text-sm mobile-input"
+                      type="tel"
                     />
                   </div>
                   <div className="space-y-2">
@@ -366,32 +384,37 @@ export default function PengaturanPage() {
                       value={settings.companyEmail}
                       onChange={(e) => setSettings({ ...settings, companyEmail: e.target.value })}
                       placeholder="Masukkan email perusahaan"
+                      className="text-sm mobile-input"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lowStockThreshold">Batas Stok Rendah</Label>
+                    <Label htmlFor="lowStockThreshold" className="text-sm font-medium">Batas Stok Rendah</Label>
                     <Input
                       id="lowStockThreshold"
                       type="number"
                       value={settings.lowStockThreshold}
                       onChange={(e) => setSettings({ ...settings, lowStockThreshold: e.target.value })}
                       placeholder="5"
+                      className="text-sm mobile-input"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="companyAddress">Alamat Perusahaan</Label>
+                  <Label htmlFor="companyAddress" className="text-sm font-medium">Alamat Perusahaan</Label>
                   <Textarea
                     id="companyAddress"
                     value={settings.companyAddress}
                     onChange={(e) => setSettings({ ...settings, companyAddress: e.target.value })}
                     placeholder="Masukkan alamat lengkap perusahaan"
                     rows={3}
+                    className="text-sm mobile-input resize-none"
                   />
                 </div>
-                <Button onClick={handleSaveSettings} disabled={saveLoading}>
-                  {saveLoading ? "Menyimpan..." : "Simpan Pengaturan"}
-                </Button>
+                <div className="pt-2">
+                  <Button onClick={handleSaveSettings} disabled={saveLoading} className="w-full sm:w-auto btn-mobile">
+                    {saveLoading ? "Menyimpan..." : "Simpan Pengaturan"}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -505,37 +528,40 @@ export default function PengaturanPage() {
                   ) : (
                     <div className="space-y-4">
                       {devices.map((device, index) => (
-                        <div key={device.deviceId || index} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                              <Wifi className="w-6 h-6 text-blue-600" />
+                        <div key={device.deviceId || index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 border rounded-lg space-y-3 sm:space-y-0 sm:space-x-4">
+                          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <Wifi className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                             </div>
-                            <div>
-                              <h3 className="font-medium">{device.deviceId || `ESP32-${index + 1}`}</h3>
-                              <p className="text-sm text-gray-500">IP: {device.ipAddress || "Tidak tersedia"}</p>
-                              <p className="text-sm text-gray-500">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-medium text-sm sm:text-base truncate">{device.deviceId || `ESP32-${index + 1}`}</h3>
+                              <p className="text-xs sm:text-sm text-gray-500 truncate">IP: {device.ipAddress || "Tidak tersedia"}</p>
+                              <p className="text-xs sm:text-sm text-gray-500 truncate">
                                 Terakhir aktif: {formatDateTime(device.lastSeen)}
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
+                          <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
+                            <div className="text-left sm:text-right flex-1 sm:flex-none">
                               {getStatusBadge(device)}
-                              <p className="text-sm text-gray-500 mt-1">
-                                Uptime: {(device as any).uptime ? `${Math.floor((device as any).uptime / 3600)}h` : "N/A"}
-                              </p>
-                              <p className="text-sm text-gray-500">
-                                Ver: {(device as any).version || "Unknown"}
-                              </p>
-                              <p className="text-sm text-gray-500">
-                                Heap: {device.freeHeap ? `${Math.floor(device.freeHeap / 1024)}KB` : "N/A"}
-                              </p>
+                              <div className="grid grid-cols-2 sm:block gap-1 sm:gap-0 mt-1">
+                                <p className="text-xs text-gray-500">
+                                  Uptime: {(device as any).uptime ? `${Math.floor((device as any).uptime / 3600)}h` : "N/A"}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Ver: {(device as any).version || "Unknown"}
+                                </p>
+                                <p className="text-xs text-gray-500 col-span-2 sm:col-span-1">
+                                  Heap: {device.freeHeap ? `${Math.floor(device.freeHeap / 1024)}KB` : "N/A"}
+                                </p>
+                              </div>
                             </div>
                             <Button 
                               variant="outline" 
                               size="sm" 
                               onClick={() => handleRestartDevice(device.deviceId || `Device-${index + 1}`)}
                               disabled={!(device.status === "online" || (device.lastSeen && Date.now() - new Date(device.lastSeen).getTime() < 60 * 1000))}
+                              className="flex-shrink-0"
                             >
                               <RefreshCw className="w-4 h-4" />
                             </Button>

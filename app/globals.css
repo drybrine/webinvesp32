@@ -394,7 +394,9 @@
   }
   
   .mobile-safe-area {
-    @apply pb-safe-area-inset-bottom;
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
   
   /* Enhanced mobile-first responsive utilities */
@@ -501,505 +503,62 @@
     @apply block md:hidden;
   }
 
-  /* ...existing utility classes... */
-}
-
-@keyframes bounceGentle {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
-}
-
-@keyframes pulseSlow {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-@keyframes scanLine {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-@keyframes glow {
-  from {
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
-  }
-  to {
-    box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
-  }
-}
-
-/* Mobile-specific improvements */
-@media (max-width: 640px) {
-  /* Reduce padding on mobile */
-  .container {
-    @apply px-3;
-  }
-
-  /* Optimize button sizes for mobile */
-  .btn {
-    @apply text-sm px-3 py-2;
-  }
-
-  /* Improve table responsiveness */
-  .table-container {
-    @apply overflow-x-auto -mx-3;
-  }
-
-  /* Stack elements vertically on mobile */
-  .mobile-stack {
-    @apply flex-col space-y-3 space-x-0;
-  }
-
-  /* Full width on mobile */
-  .mobile-full {
-    @apply w-full;
-  }
-
-  /* Reduce card padding on mobile */
-  .mobile-card-content {
-    @apply p-3 sm:p-6;
-  }
-}
-
-/* Tablet optimizations */
-@media (min-width: 641px) and (max-width: 1024px) {
-  .tablet-grid {
-    @apply grid-cols-2 lg:grid-cols-3;
-  }
-}
-
-/* Landscape mobile optimizations */
-@media (orientation: landscape) and (max-height: 500px) {
-  .landscape-compact {
-    @apply py-2;
-  }
-}
-
-/* High DPI display optimizations */
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-  .high-dpi-text {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-}
-
-.dark {
-  /* Enhanced dark mode palette */
-  --background: 230 25% 8%;
-  --foreground: 0 0% 95%;
-  --card: 230 25% 10%;
-  --card-foreground: 0 0% 95%;
-  --popover: 230 25% 10%;
-  --popover-foreground: 0 0% 95%;
-  --primary: 240 100% 67%;
-  --primary-foreground: 230 25% 8%;
-  --secondary: 230 20% 15%;
-  --secondary-foreground: 0 0% 85%;
-  --muted: 230 20% 15%;
-  --muted-foreground: 0 0% 65%;
-  --accent: 230 20% 20%;
-  --accent-foreground: 0 0% 85%;
-  --destructive: 0 75% 60%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 230 20% 20%;
-  --input: 230 20% 20%;
-  --ring: 240 100% 67%;
-  
-  /* Dark mode gradients */
-  --gradient-primary: linear-gradient(135deg, hsl(240 100% 67%) 0%, hsl(280 100% 70%) 100%);
-  --gradient-secondary: linear-gradient(135deg, hsl(200 100% 60%) 0%, hsl(240 100% 67%) 100%);
-  --gradient-accent: linear-gradient(135deg, hsl(320 100% 65%) 0%, hsl(280 100% 70%) 100%);
-  --gradient-surface: linear-gradient(135deg, hsl(230 25% 12%) 0%, hsl(230 25% 8%) 100%);
-  
-  /* Dark glass morphism */
-  --glass-bg: rgba(15, 23, 42, 0.8);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --shadow-colored: 0 10px 25px -5px rgb(59 130 246 / 0.3);
-}
-
-@layer base {
-  * {
-    border-color: hsl(var(--border));
-  }
-  
-  html {
-    scroll-behavior: smooth;
-  }
-  
-  body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    font-feature-settings: "rlig" 1, "calt" 1;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-  
-  /* Enhanced scrollbar styling */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: hsl(var(--muted));
-    border-radius: 10px;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: var(--gradient-primary);
-    border-radius: 10px;
-    border: 2px solid hsl(var(--muted));
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: var(--gradient-accent);
-  }
-  
-  ::-webkit-scrollbar-corner {
-    background: hsl(var(--muted));
-  }
-}
-
-/* Enhanced animations and utilities */
-@layer utilities {
-  /* Fade animations */
-  .animate-fade-in {
-    animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  
-  .animate-fade-in-up {
-    animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  
-  .animate-fade-in-down {
-    animation: fadeInDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  
-  .animate-slide-up {
-    animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  
-  .animate-slide-down {
-    animation: slideDown 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  
-  .animate-bounce-gentle {
-    animation: bounceGentle 2s ease-in-out infinite;
-  }
-  
-  .animate-pulse-glow {
-    animation: pulseGlow 2s ease-in-out infinite;
-  }
-  
-  .animate-scan-line {
-    animation: scanLine 2s linear infinite;
-  }
-  
-  .animate-float {
-    animation: float 3s ease-in-out infinite;
-  }
-  
-  .animate-scale-in {
-    animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  
-  /* Glass morphism utility */
-  .glass-morphism {
-    backdrop-filter: var(--glass-backdrop);
-    background-color: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-  }
-  
-  /* Modern glass card */
-  .glass-card {
-    backdrop-filter: blur(20px) saturate(180%);
-    background: linear-gradient(135deg, 
-      rgba(255, 255, 255, 0.1) 0%, 
-      rgba(255, 255, 255, 0.05) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  }
-  
-  .dark .glass-card {
-    background: linear-gradient(135deg, 
-      rgba(255, 255, 255, 0.05) 0%, 
-      rgba(255, 255, 255, 0.02) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  /* Gradient utilities */
-  .gradient-text {
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  
-  .gradient-primary {
-    background: var(--gradient-primary);
-  }
-  
-  .gradient-secondary {
-    background: var(--gradient-secondary);
-  }
-  
-  .gradient-accent {
-    background: var(--gradient-accent);
-  }
-  
-  .gradient-surface {
-    background: var(--gradient-surface);
-  }
-  
-  /* Modern shadow utilities */
-  .shadow-soft {
-    box-shadow: var(--shadow-sm);
-  }
-  
-  .shadow-medium {
-    box-shadow: var(--shadow-md);
-  }
-  
-  .shadow-large {
-    box-shadow: var(--shadow-lg);
-  }
-  
-  .shadow-extra-large {
-    box-shadow: var(--shadow-xl);
-  }
-  
-  .shadow-2xl-custom {
-    box-shadow: var(--shadow-2xl);
-  }
-  
-  .shadow-colored {
-    box-shadow: var(--shadow-colored);
-  }
-  
-  /* Interactive elements */
-  .interactive-scale {
-    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  
-  .interactive-scale:hover {
-    transform: scale(1.02);
-  }
-  
-  .interactive-scale:active {
-    transform: scale(0.98);
-  }
-  
-  /* Modern button styles */
-  .btn-modern {
-    position: relative;
-    overflow: hidden;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  
-  .btn-modern::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
+  /* Enhanced mobile responsiveness utilities */
+  .mobile-container {
     width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    max-width: 100vw;
+    overflow-x: hidden;
   }
   
-  .btn-modern:hover::before {
-    left: 100%;
-  }
-  
-  /* Card hover effects */
-  .card-hover {
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  
-  .card-hover:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-2xl);
-  }
-  
-  /* Loading states */
-  .loading-shimmer {
-    background: linear-gradient(90deg, 
-      hsl(var(--muted)) 0%, 
-      hsl(var(--accent)) 50%, 
-      hsl(var(--muted)) 100%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-  }
-  
-  /* Focus states */
-  .focus-visible {
-    outline: 2px solid hsl(var(--ring));
-    outline-offset: 2px;
-  }
-  
-  /* Mobile-specific utilities */
-  .mobile-card {
-    @apply bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow p-4;
-  }
-  
+  /* Better input field responsiveness */
   .mobile-input {
-    @apply text-sm px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
   }
   
-  .mobile-button {
-    @apply text-sm px-3 py-2 rounded-lg font-medium transition-all duration-200;
-  }
-  
-  .mobile-button-primary {
-    @apply mobile-button bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md;
-  }
-  
-  .mobile-button-secondary {
-    @apply mobile-button bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300;
-  }
-  
-  .mobile-text-xs {
-    @apply text-xs leading-relaxed;
-  }
-  
-  .mobile-text-sm {
-    @apply text-sm leading-relaxed;
-  }
-  
-  .mobile-spacing {
-    @apply space-y-3;
-  }
-  
-  .mobile-grid {
-    @apply grid grid-cols-1 gap-3;
-  }
-  
-  .mobile-flex {
-    @apply flex flex-col gap-3;
-  }
-  
-  .mobile-safe-area {
-    @apply pb-safe-area-inset-bottom;
-  }
-  
-  /* Enhanced mobile-first responsive utilities */
-  .mobile-padding {
-    @apply px-3 sm:px-4 md:px-6 lg:px-8;
-  }
-
-  .mobile-margin {
-    @apply mb-4 sm:mb-6 md:mb-8;
-  }
-
-  .mobile-gap {
-    @apply gap-2 sm:gap-3 md:gap-4 lg:gap-6;
-  }
-
+  /* Prevent text overflow in mobile */
   .mobile-text {
-    @apply text-sm sm:text-base lg:text-lg;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
   }
-
-  .mobile-title-lg {
-    @apply text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold;
+  
+  /* Safe area padding for mobile devices */
+  .mobile-safe-area {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
   }
-
-  .mobile-title-md {
-    @apply text-lg sm:text-xl md:text-2xl lg:text-3xl font-semibold;
+  
+  /* Responsive gap utilities */
+  .gap-mobile {
+    gap: 0.5rem;
   }
-
-  .mobile-title-sm {
-    @apply text-base sm:text-lg md:text-xl lg:text-2xl font-medium;
+  
+  @media (min-width: 640px) {
+    .gap-mobile {
+      gap: 1rem;
+    }
   }
-
-  /* Responsive grid layouts */
-  .mobile-grid-auto {
-    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+  
+  /* Touch-friendly button sizes */
+  .btn-mobile {
+    min-height: 44px;
+    min-width: 44px;
   }
+}
 
-  .mobile-grid-stats {
-    @apply grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4;
+/* Fix for input fields on mobile to prevent zooming */
+@media screen and (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px !important;
+    transform: none !important;
   }
-
-  .mobile-grid-cards {
-    @apply grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3;
-  }
-
-  /* Responsive flex layouts */
-  .mobile-flex-col {
-    @apply flex flex-col sm:flex-row;
-  }
-
-  .mobile-flex-wrap {
-    @apply flex flex-wrap;
-  }
-
-  /* Responsive spacing */
-  .mobile-space-y {
-    @apply space-y-3 sm:space-y-4 md:space-y-6;
-  }
-
-  .mobile-space-x {
-    @apply space-x-2 sm:space-x-3 md:space-x-4;
-  }
-
-  /* Enhanced card responsiveness */
-  .mobile-card-padding {
-    @apply p-3 sm:p-4 md:p-6;
-  }
-
-  .mobile-card-header {
-    @apply pb-2 sm:pb-3 md:pb-4;
-  }
-
-  /* Better button sizing for touch */
-  .mobile-btn {
-    @apply min-h-[44px] px-4 py-2 text-sm sm:text-base;
-  }
-
-  .mobile-btn-lg {
-    @apply min-h-[48px] px-6 py-3 text-base sm:text-lg;
-  }
-
-  /* Container responsive */
-  .mobile-container-full {
-    @apply w-full max-w-7xl mx-auto mobile-padding;
-  }
-
-  .mobile-container-narrow {
-    @apply w-full max-w-4xl mx-auto mobile-padding;
-  }
-
-  /* Hide/show based on screen size */
-  .mobile-hide {
-    @apply hidden sm:block;
-  }
-
-  .desktop-hide {
-    @apply block sm:hidden;
-  }
-
-  .tablet-hide {
-    @apply hidden md:block;
-  }
-
-  .tablet-show {
-    @apply block md:hidden;
-  }
-
-  /* ...existing utility classes... */
 }
 
 @keyframes fadeIn {
@@ -1115,5 +674,56 @@
   }
   100% {
     background-position: 200% 0;
+  }
+}
+
+/* Enhanced mobile viewport fixes */
+@media screen and (max-width: 480px) {
+  /* Ensure proper container width on very small screens */
+  .mobile-container {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  
+  /* Reduce font sizes slightly on very small screens */
+  .mobile-text {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  
+  /* Better button spacing on mobile */
+  .btn-mobile {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+  }
+  
+  /* Improve input field appearance */
+  .mobile-input {
+    padding: 0.75rem 0.75rem !important;
+    border-radius: 0.5rem !important;
+  }
+  
+  /* Tab navigation improvements */
+  [role="tablist"] {
+    gap: 0.25rem !important;
+  }
+  
+  /* Card improvements */
+  .glass-card {
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* Landscape orientation fixes */
+@media screen and (max-height: 500px) and (orientation: landscape) {
+  .mobile-container {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+  
+  .mobile-safe-area {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
   }
 }

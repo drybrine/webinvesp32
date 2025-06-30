@@ -607,8 +607,8 @@ export default function TransaksiPage() {
             </div>
           </Alert>
 
-          {/* Error Alerts */}
-          {(inventoryError || scansError || devicesError) && (
+          {/* Error Alerts - Only show persistent errors */}
+          {(inventoryError || scansError || (devicesError && devicesError !== 'Connection timeout')) && (
             <Alert className="glass-card shadow-medium border-l-4 border-l-red-500 hover:shadow-large transition-all duration-300">
               <AlertCircle className="h-5 w-5 text-red-600 animate-pulse" />
               <AlertDescription className="ml-3 text-sm font-medium">

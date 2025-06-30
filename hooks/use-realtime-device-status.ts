@@ -41,19 +41,23 @@ export function useRealtimeDeviceStatus() {
   // Enhanced status checking with immediate feedback and retry logic
   const checkDeviceStatus = useCallback(async (showToast = false) => {
     let abortController: AbortController | null = null
+    let timeoutId: NodeJS.Timeout | null = null
     
     try {
-      setConnectionStatus('connecting')
+      // Only show connecting if we're not already connected or if it's a manual refresh
+      if (connectionStatus !== 'connected' || showToast) {
+        setConnectionStatus('connecting')
+      }
       
       // Create AbortController for manual timeout handling
       abortController = new AbortController()
       
-      // Set up timeout that doesn't throw abort error
-      const timeoutId = setTimeout(() => {
+      // Increase timeout to 5 seconds for better stability
+      timeoutId = setTimeout(() => {
         if (abortController) {
           abortController.abort()
         }
-      }, 3000) // 3 second timeout
+      }, 5000) // 5 second timeout
       
       const response = await fetch('/api/check-device-status', {
         method: 'POST',
@@ -65,13 +69,18 @@ export function useRealtimeDeviceStatus() {
       })
       
       // Clear timeout on successful response
-      clearTimeout(timeoutId)
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const result = await response.json()
+      
+      // Clear all error states on successful response
       setConnectionStatus('connected')
       setError(null)
       setLastUpdate(new Date())
@@ -163,18 +172,39 @@ export function useRealtimeDeviceStatus() {
 
       return result
     } catch (error) {
+      // Clean up timeout if still active
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+      
       // Handle AbortError differently to avoid console spam
       if (error instanceof Error && error.name === 'AbortError') {
-        console.log('Request timeout - device status check aborted after 3 seconds')
-        setConnectionStatus('disconnected')
-        setError('Connection timeout')
+        console.log('Request timeout - device status check aborted after 5 seconds')
         
-        if (showToast) {
-          toast({
-            title: "Koneksi Timeout",
-            description: "Pemeriksaan status perangkat melebihi batas waktu",
-            variant: "destructive",
-          })
+        // Only set error state if we don't have recent successful data
+        const timeSinceLastUpdate = Date.now() - lastUpdate.getTime()
+        if (timeSinceLastUpdate > 15000) { // Only show error if no successful update in 15 seconds
+          setConnectionStatus('disconnected')
+          setError('Connection timeout')
+          
+          // Auto-clear timeout error after 10 seconds
+          setTimeout(() => {
+            if (error instanceof Error && error.name === 'AbortError') {
+              setError(null)
+            }
+          }, 10000)
+          
+          if (showToast) {
+            toast({
+              title: "Koneksi Timeout",
+              description: "Pemeriksaan status perangkat melebihi batas waktu",
+              variant: "destructive",
+            })
+          }
+        } else {
+          // Keep previous connection state if we have recent data
+          console.log('Timeout occurred but keeping previous connection state due to recent successful update')
         }
       } else {
         console.error('Device status check failed:', error)
@@ -184,7 +214,7 @@ export function useRealtimeDeviceStatus() {
         // Increment retry count
         retryCountRef.current++
         
-        if (showToast) {
+        if (showToast && retryCountRef.current <= maxRetries) {
           toast({
             title: "Koneksi Terputus",
             description: `Gagal memeriksa status perangkat (percobaan ${retryCountRef.current}/${maxRetries})`,
@@ -194,120 +224,25 @@ export function useRealtimeDeviceStatus() {
       }
       
       throw error
+    } finally {
+      // Ensure cleanup
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
     }
   }, [])
 
-  // Fetch device data from Firebase or check-device-status API
+  // Simplified fetch device data - just use checkDeviceStatus to avoid duplication
   const fetchDeviceData = useCallback(async () => {
-    let abortController: AbortController | null = null
-    
     try {
-      // First try to get device data from check-device-status API
-      // which already has the device information
-      abortController = new AbortController()
-      
-      // Set up timeout
-      const timeoutId = setTimeout(() => {
-        if (abortController) {
-          abortController.abort()
-        }
-      }, 3000)
-      
-      const response = await fetch('/api/check-device-status', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Internal-Call': 'true',
-        },
-        signal: abortController.signal,
-      })
-      
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch devices: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      
-      if (!data.success || !data.deviceDetails) {
-        throw new Error('Invalid device data received')
-      }
-
-      // Transform device details to match expected format
-      const deviceList = data.deviceDetails.map((detail: any) => ({
-        deviceId: detail.deviceId,
-        status: detail.currentStatus,
-        ipAddress: '', // Not available in check-device-status response
-        lastSeen: detail.mostRecentTimestamp,
-        scanCount: 0, // Not available in check-device-status response
-        lastHeartbeat: detail.lastHeartbeat,
-        name: detail.deviceId, // Use deviceId as name for now
-      }))
-      
-      // Detect status changes and show notifications
-      const statusChanges: DeviceStatusUpdate[] = []
-      deviceList.forEach((device: DeviceStatus) => {
-        const previousStatus = previousStatusRef.current.get(device.deviceId)
-        if (previousStatus && previousStatus !== device.status) {
-          statusChanges.push({
-            deviceId: device.deviceId,
-            previousStatus,
-            newStatus: device.status,
-            timestamp: Date.now(),
-            ipAddress: device.ipAddress,
-          })
-        }
-        previousStatusRef.current.set(device.deviceId, device.status)
-      })
-
-      // Show notifications for status changes
-      statusChanges.forEach((change) => {
-        const isNowOnline = change.newStatus === 'online'
-        toast({
-          title: isNowOnline ? "Perangkat Terhubung" : "Perangkat Terputus",
-          description: `${change.deviceId} ${isNowOnline ? 'online' : 'offline'}${change.ipAddress ? ` (${change.ipAddress})` : ''}`,
-          variant: isNowOnline ? "default" : "destructive",
-        })
-      })
-
-      setDevices(deviceList)
-      setError(null)
-      
-      return deviceList
+      const result = await checkDeviceStatus(false)
+      return result
     } catch (error) {
-      // Handle AbortError differently
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.log('Device data fetch timeout - request aborted after 3 seconds')
-        setError('Connection timeout')
-      } else {
-        console.error('Failed to fetch device data:', error)
-        setError(error instanceof Error ? error.message : 'Failed to fetch device data')
-      }
-      
-      // Fallback: try firebase-test API as secondary option
-      try {
-        const fallbackResponse = await fetch('/api/firebase-test', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
-
-        if (fallbackResponse.ok) {
-          const fallbackData = await fallbackResponse.json()
-          const deviceList = fallbackData.devices || []
-          setDevices(deviceList)
-          setError(null)
-          return deviceList
-        }
-      } catch (fallbackError) {
-        console.warn('Fallback firebase-test also failed:', fallbackError)
-      }
+      console.error('Failed to fetch device data:', error)
       
       throw error
     }
-  }, [])
+  }, [checkDeviceStatus])
 
   // Enhanced polling with adaptive intervals and retry logic
   const startPolling = useCallback(() => {
@@ -325,9 +260,12 @@ export function useRealtimeDeviceStatus() {
         try {
           await checkDeviceStatus()
         } catch (error) {
-          // Implement exponential backoff on error
-          if (retryCountRef.current < maxRetries) {
-            const backoffDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000) // Max 10s
+          // Only implement backoff if we're getting consistent errors
+          const timeSinceLastUpdate = Date.now() - lastUpdate.getTime()
+          
+          if (timeSinceLastUpdate > 30000 && retryCountRef.current < maxRetries) {
+            // Only do exponential backoff if no successful update in 30 seconds
+            const backoffDelay = Math.min(2000 * Math.pow(1.5, retryCountRef.current), 8000) // Max 8s
             console.warn(`Polling failed, retrying in ${backoffDelay}ms...`)
             
             // Clear current interval and set retry timeout
@@ -339,17 +277,20 @@ export function useRealtimeDeviceStatus() {
             retryTimeoutRef.current = setTimeout(() => {
               startPolling() // Restart polling
             }, backoffDelay)
-          } else {
-            console.error('Max retries reached, stopping polling temporarily')
+          } else if (retryCountRef.current >= maxRetries) {
+            console.log('Max retries reached, stopping polling temporarily')
             // Stop polling for 30 seconds before trying again
             setTimeout(() => {
               retryCountRef.current = 0
               startPolling()
             }, 30000)
+          } else {
+            // Continue normal polling if we have recent successful updates
+            console.log('Polling error but continuing due to recent successful updates')
           }
         }
       }
-    }, 5000) // 5 seconds - more responsive than 8s
+    }, 7000) // Increased to 7 seconds to reduce server load
 
   }, [checkDeviceStatus])
 
@@ -461,6 +402,14 @@ export function useRealtimeDeviceStatus() {
       window.removeEventListener('offline', handleOffline)
     }
   }, [checkDeviceStatus, fetchDeviceData, startPolling, stopPolling])
+
+  // Auto-clear timeout errors and cleanup on success
+  useEffect(() => {
+    if (connectionStatus === 'connected' && error === 'Connection timeout') {
+      // Clear timeout error when connection is restored
+      setError(null)
+    }
+  }, [connectionStatus, error])
 
   // Manual refresh function
   const refresh = useCallback(async () => {
