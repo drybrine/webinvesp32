@@ -7,7 +7,6 @@ export async function GET(request: NextRequest) {
   try {
     // Get referer header to determine current page
     const referer = request.headers.get('referer') || ''
-    const userAgent = request.headers.get('user-agent') || ''
     
     // Simple page detection based on URL patterns
     let currentPage = 'inventory' // default
