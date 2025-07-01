@@ -50,11 +50,17 @@ export default function ScannerIntegration() {
     setConnectionStatus("connecting")
 
     try {
-      // First test HTTP connection
+      // First test HTTP connection with timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+      
       const response = await fetch(`http://${scannerIP}/api/status`, {
         method: "GET",
         mode: "cors",
+        signal: controller.signal,
       })
+      
+      clearTimeout(timeoutId)
 
       if (!response.ok) {
         throw new Error("Scanner not responding")
@@ -179,7 +185,14 @@ export default function ScannerIntegration() {
     if (!scannerIP) return
 
     try {
-      const response = await fetch(`http://${scannerIP}/api/status`)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout for test
+      
+      const response = await fetch(`http://${scannerIP}/api/status`, {
+        signal: controller.signal,
+      })
+      
+      clearTimeout(timeoutId)
       const data = await response.json()
 
       toast({
@@ -189,7 +202,9 @@ export default function ScannerIntegration() {
     } catch (error) {
       toast({
         title: "Test Failed",
-        description: "Cannot reach scanner",
+        description: error instanceof Error && error.name === 'AbortError' 
+          ? "Connection timeout - scanner not responding" 
+          : "Cannot reach scanner",
         variant: "destructive",
       })
     }

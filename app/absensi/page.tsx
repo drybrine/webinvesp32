@@ -24,10 +24,10 @@ import {
   FileText,
   Smartphone
 } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { useFirebaseAttendance, useFirebaseDevices } from "@/hooks/use-firebase"
 import { FirebasePermissionError } from "@/components/firebase-permission-error"
-import { useRealtimeAttendance } from "@/components/realtime-attendance-provider"
+import { useRealtimeAttendance } from "@/hooks/use-realtime-attendance"
 
 interface AttendanceRecord {
   id: string

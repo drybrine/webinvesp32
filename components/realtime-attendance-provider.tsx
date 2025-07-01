@@ -1,26 +1,13 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState } from "react"
+import React, { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { onValue, off, ref } from "firebase/database"
 import { database, isFirebaseConfigured } from "@/lib/firebase"
 import { useFirebaseAttendance } from "@/hooks/use-firebase"
 import { useToast } from "@/hooks/use-toast"
 import { startDeviceStatusMonitor, stopDeviceStatusMonitor } from "@/lib/device-status-monitor"
-
-interface RealtimeAttendanceContextType {
-  isProcessing: boolean
-  lastProcessedNim: string | null
-  processCount: number
-}
-
-const RealtimeAttendanceContext = createContext<RealtimeAttendanceContextType>({
-  isProcessing: false,
-  lastProcessedNim: null,
-  processCount: 0,
-})
-
-export const useRealtimeAttendance = () => useContext(RealtimeAttendanceContext)
+import { RealtimeAttendanceContext, type RealtimeAttendanceContextType } from "@/hooks/use-realtime-attendance"
 
 interface RealtimeAttendanceProviderProps {
   children: React.ReactNode

@@ -3,7 +3,7 @@
 import * as React from "react"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_REMOVE_DELAY = 5000 // 5 seconds
 
 type ToasterToast = {
   id: string
@@ -11,6 +11,9 @@ type ToasterToast = {
   description?: React.ReactNode
   action?: React.ReactElement
   variant?: "default" | "destructive"
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  duration?: number
 }
 
 const actionTypes = {
@@ -135,7 +138,7 @@ type Toast = Omit<ToasterToast, "id">
 
 function toast({ ...props }: Toast) {
   const id = genId()
-
+  
   const update = (props: ToasterToast) =>
     dispatch({
       type: "UPDATE_TOAST",
@@ -149,11 +152,20 @@ function toast({ ...props }: Toast) {
       ...props,
       id,
       open: true,
-      onOpenChange: (open) => {
+      duration: props.duration || 5000, // Default 5 seconds
+      onOpenChange: (open: boolean) => {
         if (!open) dismiss()
       },
     },
   })
+
+  // Auto-dismiss after specified duration (default 5 seconds)
+  const duration = props.duration || 5000
+  if (duration > 0) {
+    setTimeout(() => {
+      dismiss()
+    }, duration)
+  }
 
   return {
     id: id,

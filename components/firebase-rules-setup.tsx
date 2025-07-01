@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Copy, ExternalLink, AlertTriangle, CheckCircle } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
 interface FirebaseRulesSetupProps {
   className?: string

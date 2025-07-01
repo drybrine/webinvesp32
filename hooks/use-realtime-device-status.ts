@@ -52,12 +52,12 @@ export function useRealtimeDeviceStatus() {
       // Create AbortController for manual timeout handling
       abortController = new AbortController()
       
-      // Increase timeout to 5 seconds for better stability
+      // Increase timeout to 10 seconds for better stability
       timeoutId = setTimeout(() => {
         if (abortController) {
           abortController.abort()
         }
-      }, 5000) // 5 second timeout
+      }, 10000) // 10 second timeout
       
       const response = await fetch('/api/check-device-status', {
         method: 'POST',

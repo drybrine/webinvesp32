@@ -23,7 +23,7 @@ import {
   ArrowDown,
   Clock,
 } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { useFirebaseScans, useFirebaseInventory } from "@/hooks/use-firebase"
 import { ScanHistory } from "@/components/scan-history"
 

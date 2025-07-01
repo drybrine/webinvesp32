@@ -44,13 +44,14 @@ export function BarcodeScanner({ onDetected, className = "" }: BarcodeScannerPro
         },
         locate: true,
       },
-      (err) => {
+      (err: any) => {
         if (err) {
           console.error("Error starting Quagga:", err)
           toast({
             title: "Error",
             description: "Tidak dapat mengakses kamera. Pastikan izin kamera telah diberikan.",
             variant: "destructive",
+            duration: 6000, // Error toast lebih lama (6 detik)
           })
           setIsScanning(false)
           return
@@ -61,12 +62,13 @@ export function BarcodeScanner({ onDetected, className = "" }: BarcodeScannerPro
         toast({
           title: "Scanner Aktif",
           description: "Kamera berhasil diaktifkan untuk scanning barcode",
+          duration: 3000, // Success toast (3 detik)
         })
       },
     )
 
     // Add detection event listener
-    Quagga.onDetected((result) => {
+    Quagga.onDetected((result: any) => {
       if (result && result.codeResult && result.codeResult.code) {
         const code = result.codeResult.code
         onDetected(code)
@@ -99,6 +101,7 @@ export function BarcodeScanner({ onDetected, className = "" }: BarcodeScannerPro
     toast({
       title: "Scanner Dihentikan",
       description: "Kamera scanner telah dimatikan",
+      duration: 2000, // Quick notification (2 detik)
     })
   }
 
