@@ -1,24 +1,11 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState } from "react"
+import React, { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { onValue, off, ref } from "firebase/database"
 import { database, isFirebaseConfigured } from "@/lib/firebase"
 import { ProductInfoPopup } from "./product-info-popup"
-
-interface RealtimeScanContextType {
-  isScanning: boolean
-  lastScannedBarcode: string | null
-  scanCount: number
-}
-
-const RealtimeScanContext = createContext<RealtimeScanContextType>({
-  isScanning: false,
-  lastScannedBarcode: null,
-  scanCount: 0,
-})
-
-export const useRealtimeScan = () => useContext(RealtimeScanContext)
+import { RealtimeScanContext, type RealtimeScanContextType } from "@/hooks/use-realtime-scan"
 
 interface RealtimeScanProviderProps {
   children: React.ReactNode

@@ -669,25 +669,57 @@ export default function TransaksiPage() {
             </CardContent>
           </Card>
           
-          {/* Low Stock Card - Cleaned up layout */}
+          {/* Low Stock Card - Enhanced with priority levels */}
           <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
-            <div className="absolute inset-0 gradient-accent opacity-5 rounded-xl"></div>
+            <div className={`absolute inset-0 ${lowStockItems.length > 0 ? 'gradient-accent' : 'bg-emerald-500/10'} opacity-5 rounded-xl`}></div>
             <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-accent rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
             <CardHeader className="relative z-10 pb-2 sm:pb-3 p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-xs sm:text-sm font-semibold text-muted-foreground">Stok Rendah</CardTitle>
-                <div className="p-1.5 sm:p-2 gradient-accent rounded-lg shadow-sm">
+                <div className={`p-1.5 sm:p-2 ${lowStockItems.length > 0 ? 'gradient-accent' : 'bg-emerald-500'} rounded-lg shadow-sm`}>
                   <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                 </div>
               </div>
             </CardHeader>
             <CardContent className="relative z-10 pt-0 px-4 pb-4 sm:px-6 sm:pb-6">
               <div className="space-y-1 sm:space-y-2">
-                <div className="text-lg sm:text-2xl md:text-3xl font-bold gradient-text">{lowStockItems.length}</div>
-                <p className="text-xs sm:text-sm text-muted-foreground font-medium">Item perlu diisi ulang</p>
+                <div className={`text-lg sm:text-2xl md:text-3xl font-bold ${lowStockItems.length > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {lowStockItems.length}
+                </div>
+                <p className="text-xs sm:text-sm text-muted-foreground font-medium">
+                  {lowStockItems.length > 0 ? 'Item perlu diisi ulang' : 'Semua stok aman'}
+                </p>
+                
+                {/* Priority breakdown */}
+                {lowStockItems.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {(() => {
+                      const criticalItems = lowStockItems.filter(item => item.quantity === 0)
+                      const warningItems = lowStockItems.filter(item => item.quantity > 0 && item.quantity <= item.minStock)
+                      
+                      return (
+                        <>
+                          {criticalItems.length > 0 && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-red-700 font-medium">🔴 Habis</span>
+                              <span className="text-red-600 font-semibold">{criticalItems.length}</span>
+                            </div>
+                          )}
+                          {warningItems.length > 0 && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-orange-700 font-medium">🟡 Rendah</span>
+                              <span className="text-orange-600 font-semibold">{warningItems.length}</span>
+                            </div>
+                          )}
+                        </>
+                      )
+                    })()}
+                  </div>
+                )}
+                
                 <div className="w-full bg-muted/50 rounded-full h-1 mt-2">
-                  <div className={`h-1 rounded-full ${lowStockItems.length > 0 ? 'gradient-accent animate-pulse' : 'bg-emerald-500'} transition-all duration-300`} 
-                       style={{ width: lowStockItems.length > 0 ? '60%' : '100%' }}></div>
+                  <div className={`h-1 rounded-full ${lowStockItems.length > 0 ? 'bg-gradient-to-r from-red-500 to-orange-500 animate-pulse' : 'bg-emerald-500'} transition-all duration-300`} 
+                       style={{ width: lowStockItems.length > 0 ? `${Math.min((lowStockItems.length / Math.max(inventory.length, 1)) * 100, 100)}%` : '100%' }}></div>
                 </div>
               </div>
             </CardContent>
@@ -749,25 +781,68 @@ export default function TransaksiPage() {
 
         </div>
 
-        {/* Low Stock Alert - Enhanced styling */}
+        {/* Enhanced Low Stock Alert */}
         {lowStockItems.length > 0 && (
-          <Alert variant="destructive" className="mb-6 sm:mb-8 shadow-lg border-0 bg-gradient-to-r from-red-50 to-pink-50 border-l-4 border-l-red-500">
-            <AlertCircle className="h-5 w-5" />
-            <AlertDescription className="text-sm font-medium">
-              <strong>⚠️ Perhatian Stok Rendah:</strong> {lowStockItems.length} item perlu segera diisi ulang.
-              <div className="mt-3 max-h-24 overflow-y-auto bg-white/50 rounded-lg p-3">
-                <ul className="list-disc list-inside text-xs space-y-1">
-                  {lowStockItems.slice(0, 3).map(item => 
-                    <li key={item.id} className="text-red-700">
-                      <span className="font-medium">{item.name}</span> 
-                      <span className="text-red-600"> (Sisa: {item.quantity})</span>
-                    </li>
-                  )}
-                  {lowStockItems.length > 3 && (
-                    <li className="text-red-600 font-medium">...dan {lowStockItems.length - 3} item lainnya</li>
-                  )}
-                </ul>
+          <Alert className="mb-6 sm:mb-8 shadow-xl border-0 bg-gradient-to-r from-red-50 via-orange-50 to-yellow-50 border-l-4 border-l-red-500">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <AlertDescription className="text-sm">
+              <div className="font-bold text-red-800 mb-2">
+                ⚠️ {lowStockItems.length} Item Memerlukan Perhatian
               </div>
+              
+              {/* Critical Items (Out of Stock) */}
+              {(() => {
+                const criticalItems = lowStockItems.filter(item => item.quantity === 0)
+                const warningItems = lowStockItems.filter(item => item.quantity > 0 && item.quantity <= item.minStock)
+                
+                return (
+                  <div className="space-y-3">
+                    {criticalItems.length > 0 && (
+                      <div className="bg-red-100 rounded-lg p-3 border border-red-200">
+                        <div className="font-semibold text-red-800 mb-2 text-xs">
+                          🔴 HABIS TOTAL ({criticalItems.length} item)
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {criticalItems.slice(0, 4).map(item => (
+                            <div key={item.id} className="flex items-center justify-between bg-white rounded px-2 py-1">
+                              <span className="text-xs font-medium text-red-700 truncate">{item.name}</span>
+                              <Badge variant="destructive" className="text-xs">0</Badge>
+                            </div>
+                          ))}
+                          {criticalItems.length > 4 && (
+                            <div className="text-xs text-red-600 font-medium col-span-full">
+                              +{criticalItems.length - 4} item lainnya
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {warningItems.length > 0 && (
+                      <div className="bg-orange-100 rounded-lg p-3 border border-orange-200">
+                        <div className="font-semibold text-orange-800 mb-2 text-xs">
+                          🟡 STOK RENDAH ({warningItems.length} item)
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {warningItems.slice(0, 4).map(item => (
+                            <div key={item.id} className="flex items-center justify-between bg-white rounded px-2 py-1">
+                              <span className="text-xs font-medium text-orange-700 truncate">{item.name}</span>
+                              <Badge variant="outline" className="text-xs border-orange-300 text-orange-700">
+                                {item.quantity}/{item.minStock}
+                              </Badge>
+                            </div>
+                          ))}
+                          {warningItems.length > 4 && (
+                            <div className="text-xs text-orange-600 font-medium col-span-full">
+                              +{warningItems.length - 4} item lainnya
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </AlertDescription>
           </Alert>
         )}
@@ -989,93 +1064,135 @@ export default function TransaksiPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredInventory.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium">{item.name}</div>
-                              <div className="text-sm text-gray-500 truncate max-w-[200px]" title={item.description}>
-                                {item.description || "Tidak ada deskripsi"}
+                      filteredInventory.map((item) => {
+                        const isLowStock = item.quantity <= item.minStock
+                        const isOutOfStock = item.quantity === 0
+                        
+                        return (
+                          <TableRow 
+                            key={item.id}
+                            className={`
+                              ${isOutOfStock ? 'bg-red-50 border-l-4 border-l-red-500' : 
+                                isLowStock ? 'bg-orange-50 border-l-4 border-l-orange-400' : 
+                                ''}
+                              transition-colors duration-200
+                            `}
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                {/* Stock Status Indicator */}
+                                <div className={`w-2 h-2 rounded-full ${
+                                  isOutOfStock ? 'bg-red-500 animate-pulse' :
+                                  isLowStock ? 'bg-orange-500 animate-pulse' :
+                                  'bg-green-500'
+                                }`}></div>
+                                <div>
+                                  <div className="font-medium flex items-center gap-2">
+                                    {item.name}
+                                    {isOutOfStock && <Badge variant="destructive" className="text-xs">HABIS</Badge>}
+                                    {isLowStock && !isOutOfStock && <Badge variant="outline" className="text-xs border-orange-400 text-orange-700">RENDAH</Badge>}
+                                  </div>
+                                  <div className="text-sm text-gray-500 truncate max-w-[200px]" title={item.description}>
+                                    {item.description || "Tidak ada deskripsi"}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>{item.category}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant={item.quantity <= item.minStock ? "destructive" : "default"}>
-                              {item.quantity}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            Rp {item.price.toLocaleString()}
-                          </TableCell>
-                          <TableCell>{item.location}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end space-x-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setViewingItem({
-                                  ...item,
-                                  barcode: item.barcode ?? "",
-                                  supplier: item.supplier ?? "",
-                                })}
-                                title="Lihat Detail"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setEditingItem({
-                                  ...item,
-                                  barcode: item.barcode ?? "",
-                                  supplier: item.supplier ?? "",
-                                })}
-                                title="Edit Item"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setStockAdjustment({
-                                  itemId: item.id,
-                                  itemName: item.name,
-                                  currentQuantity: item.quantity,
-                                  type: "add",
-                                  amount: 1,
-                                })}
-                                title="Tambah Stok"
-                              >
-                                <Plus className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setStockAdjustment({
-                                  itemId: item.id,
-                                  itemName: item.name,
-                                  currentQuantity: item.quantity,
-                                  type: "subtract",
-                                  amount: 1,
-                                })}
-                                title="Kurangi Stok"
-                                disabled={item.quantity <= 0}
-                              >
-                                <Minus className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => deleteInventoryItem(item.id, item.name)}
-                                title="Hapus Item"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                            </TableCell>
+                            <TableCell>{item.category}</TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <Badge variant={
+                                  isOutOfStock ? "destructive" : 
+                                  isLowStock ? "outline" : 
+                                  "default"
+                                } className={
+                                  isOutOfStock ? "bg-red-600" :
+                                  isLowStock ? "border-orange-400 text-orange-700 bg-orange-50" :
+                                  "bg-green-100 text-green-800"
+                                }>
+                                  {item.quantity}
+                                </Badge>
+                                {isLowStock && (
+                                  <div className="text-xs text-gray-500">
+                                    Min: {item.minStock}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              Rp {item.price.toLocaleString()}
+                            </TableCell>
+                            <TableCell>{item.location}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end space-x-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setViewingItem({
+                                    ...item,
+                                    barcode: item.barcode ?? "",
+                                    supplier: item.supplier ?? "",
+                                  })}
+                                  title="Lihat Detail"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEditingItem({
+                                    ...item,
+                                    barcode: item.barcode ?? "",
+                                    supplier: item.supplier ?? "",
+                                  })}
+                                  title="Edit Item"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                {/* Enhanced Quick Restock for Low Stock */}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setStockAdjustment({
+                                    itemId: item.id,
+                                    itemName: item.name,
+                                    currentQuantity: item.quantity,
+                                    type: "add",
+                                    amount: isLowStock ? Math.max(item.minStock * 2 - item.quantity, 5) : 1,
+                                  })}
+                                  title={isLowStock ? "Quick Restock" : "Tambah Stok"}
+                                  className={isLowStock ? "border-green-400 text-green-700 hover:bg-green-50" : ""}
+                                >
+                                  {isLowStock ? "⚡" : <Plus className="h-4 w-4" />}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setStockAdjustment({
+                                    itemId: item.id,
+                                    itemName: item.name,
+                                    currentQuantity: item.quantity,
+                                    type: "subtract",
+                                    amount: 1,
+                                  })}
+                                  title="Kurangi Stok"
+                                  disabled={item.quantity <= 0}
+                                >
+                                  <Minus className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => deleteInventoryItem(item.id, item.name)}
+                                  title="Hapus Item"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
                     )}
                   </TableBody>
                 </Table>

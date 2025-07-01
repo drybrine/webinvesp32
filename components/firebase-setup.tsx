@@ -20,7 +20,14 @@ export default function FirebaseSetup() {
     setTestResult(null)
 
     try {
-      const response = await fetch("/api/firebase-test")
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout for Firebase
+      
+      const response = await fetch("/api/firebase-test", {
+        signal: controller.signal,
+      })
+      
+      clearTimeout(timeoutId)
       const result = await response.json()
       setTestResult(result)
 
@@ -114,7 +121,7 @@ void setup() {
   
   // Set Firebase URL
   strcpy(deviceConfig.firebaseUrl, "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app");
-  strcpy(deviceConfig.serverUrl, "https://your-vercel-app.vercel.app"); // Ganti dengan URL aplikasi Vercel Anda
+  strcpy(deviceConfig.serverUrl, "https://your-netlify-app.netlify.app"); // Ganti dengan URL aplikasi Netlify Anda
   
   saveDeviceConfig();
 }`
