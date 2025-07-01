@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { database } from "@/lib/firebase"
-import { ref, get, set, serverTimestamp } from "firebase/database"
+import { ref, set, get } from "firebase/database"
 
 export async function POST(request: NextRequest) {
   try {

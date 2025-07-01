@@ -15,9 +15,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [showSessionExpired, setShowSessionExpired] = useState(false)
-  const router = useRouter()
   const { toast } = useToast()
-  const { login, isAuthenticated } = useSession()
+  const { login } = useSession()
 
   // Check if user was redirected due to session expiry
   useEffect(() => {

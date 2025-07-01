@@ -64,14 +64,12 @@ export async function POST(request: NextRequest) {
     const inventory = inventorySnapshot.val() || {}
 
     let itemFound = false
-    let itemData = null
     let itemId = null
 
     // Search for the barcode in inventory
     for (const [id, item] of Object.entries(inventory)) {
-      if ((item as any).barcode === barcode) {
+      if ((item as Record<string, unknown>).barcode === barcode) {
         itemFound = true
-        itemData = item
         itemId = id
         break
       }

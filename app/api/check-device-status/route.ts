@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { database, ensureFirebaseInitialized } from "@/lib/firebase"
+import { ensureFirebaseInitialized } from "@/lib/firebase"
 import { ref, get, update } from "firebase/database"
 
 // Timeout in milliseconds (20 seconds for fast responsive detection)
@@ -37,11 +37,11 @@ export async function POST(request: NextRequest) {
     }
 
     const now = Date.now()
-    const updates: Record<string, any> = {}
+    const updates: Record<string, unknown> = {}
     let updatedCount = 0
     let offlineCount = 0
     let onlineCount = 0
-    const deviceStatuses: any[] = []
+    const deviceStatuses: Array<Record<string, unknown>> = []
 
     console.log(`🔍 Checking ${Object.keys(devices).length} devices for status updates...`)
 

@@ -1,8 +1,8 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { database, ensureFirebaseInitialized } from "@/lib/firebase"
+import { NextResponse } from "next/server"
+import { ensureFirebaseInitialized } from "@/lib/firebase"
 import { ref, get } from "firebase/database"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Ensure Firebase is initialized for server-side operation
     const db = ensureFirebaseInitialized()
