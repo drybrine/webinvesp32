@@ -181,9 +181,18 @@ if (typeof window !== 'undefined') {
     startDeviceStatusMonitor();
   }
 
-  // Stop monitor when page is about to unload
-  window.addEventListener('beforeunload', () => {
+  // Modern page lifecycle events (replaces deprecated beforeunload)
+  window.addEventListener('pagehide', () => {
+    console.log('📱 Page hiding, stopping device status monitor...');
     stopDeviceStatusMonitor();
+  });
+
+  // Handle page back/forward cache (bfcache)
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      console.log('📱 Page restored from bfcache, restarting device status monitor...');
+      startDeviceStatusMonitor();
+    }
   });
 
   // Handle visibility change (stop when tab is hidden, restart when visible)
@@ -193,6 +202,19 @@ if (typeof window !== 'undefined') {
       stopDeviceStatusMonitor();
     } else {
       console.log('📱 Page visible, resuming device status monitor...');
+      startDeviceStatusMonitor();
+    }
+  });
+
+  // Handle focus/blur events for additional reliability
+  window.addEventListener('blur', () => {
+    console.log('📱 Window lost focus, pausing device status monitor...');
+    stopDeviceStatusMonitor();
+  });
+
+  window.addEventListener('focus', () => {
+    if (!document.hidden) {
+      console.log('📱 Window gained focus, resuming device status monitor...');
       startDeviceStatusMonitor();
     }
   });

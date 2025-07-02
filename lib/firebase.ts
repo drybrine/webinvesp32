@@ -33,6 +33,58 @@ interface DbRefs {
 }
 export let dbRefs: DbRefs | null = null; // Initialize as null
 
+// Network connectivity checker
+const checkNetworkConnectivity = async (): Promise<boolean> => {
+  if (typeof window === "undefined") return true; // Assume server has connectivity
+  
+  try {
+    // Check if navigator.onLine is available and true
+    if (!navigator.onLine) {
+      console.log("🌐 Browser reports offline");
+      return false;
+    }
+    
+    // Try a simple fetch to verify actual connectivity
+    const response = await fetch('https://www.google.com/favicon.ico', {
+      mode: 'no-cors',
+      cache: 'no-cache',
+      signal: AbortSignal.timeout(5000), // 5 second timeout
+    });
+    return true;
+  } catch (error) {
+    console.log("🌐 Network connectivity check failed:", error);
+    return false;
+  }
+};
+
+// Delayed Firebase initialization with network checking
+const initializeFirebaseWithRetry = async (retryCount = 0): Promise<void> => {
+  const maxRetries = 3;
+  
+  if (retryCount > maxRetries) {
+    console.warn("🔥 Max retries reached for Firebase initialization");
+    return;
+  }
+  
+  // Check network connectivity first
+  const hasConnectivity = await checkNetworkConnectivity();
+  if (!hasConnectivity && retryCount < maxRetries) {
+    console.log(`🔥 No network connectivity, retrying in ${(retryCount + 1) * 2}s...`);
+    setTimeout(() => initializeFirebaseWithRetry(retryCount + 1), (retryCount + 1) * 2000);
+    return;
+  }
+  
+  try {
+    initializeFirebase();
+    console.log("🔥 Firebase initialized successfully with network check");
+  } catch (error) {
+    console.error("🔥 Firebase initialization failed:", error);
+    if (retryCount < maxRetries) {
+      setTimeout(() => initializeFirebaseWithRetry(retryCount + 1), (retryCount + 1) * 2000);
+    }
+  }
+};
+
 // Only initialize Firebase on the client side
 const initializeFirebase = () => {
   if (typeof window === "undefined") {
@@ -79,6 +131,23 @@ const initializeFirebase = () => {
     }
 
     console.log("✅ Firebase initialized successfully")
+    
+    // Add error handling for WebSocket connection issues
+    if (typeof window !== 'undefined') {
+      const originalConsoleError = console.error;
+      console.error = function(...args) {
+        // Filter out Firebase WebSocket DNS errors that are expected during initialization
+        const message = args.join(' ');
+        if (message.includes('ERR_NAME_NOT_RESOLVED') && 
+            message.includes('firebasedatabase.app')) {
+          console.warn('🔥 Firebase WebSocket connection issue (will retry):', args[0]);
+          return;
+        }
+        // Call the original console.error for all other errors
+        originalConsoleError.apply(console, args);
+      };
+    }
+    
   } catch (dbError) {
     console.warn("⚠️ Firebase database service not available:", dbError)
     database = null
@@ -127,9 +196,28 @@ const initializeFirebaseServer = () => {
   }
 }
 
-// Initialize Firebase immediately if we're on the client side
+// Initialize Firebase with network checking and retry logic
 if (typeof window !== "undefined") {
-  initializeFirebase()
+  // Use requestIdleCallback for better performance
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => {
+      initializeFirebaseWithRetry();
+    }, { timeout: 2000 });
+  } else {
+    // Fallback for browsers without requestIdleCallback
+    setTimeout(() => {
+      initializeFirebaseWithRetry();
+    }, 100);
+  }
+  
+  // Listen for online events to retry connection
+  window.addEventListener('online', () => {
+    console.log("🌐 Network came back online, reinitializing Firebase");
+    if (!isFirebaseConfigured()) {
+      initializeFirebaseWithRetry();
+    }
+  });
+  
 } else {
   // Initialize on server side for API routes
   initializeFirebaseServer()
@@ -269,6 +357,45 @@ export const firebaseHelpers = {
       throw error;
     }
   },
+}
+
+// Firebase cleanup utility for proper listener cleanup
+export class FirebaseCleanup {
+  private listeners: Array<() => void> = [];
+  
+  addListener(unsubscribe: () => void) {
+    this.listeners.push(unsubscribe);
+  }
+  
+  cleanup() {
+    console.log('🔥 Cleaning up Firebase listeners...', this.listeners.length);
+    this.listeners.forEach(unsubscribe => {
+      try {
+        unsubscribe();
+      } catch (error) {
+        console.warn('Error cleaning up Firebase listener:', error);
+      }
+    });
+    this.listeners = [];
+  }
+}
+
+// Global cleanup instance
+export const firebaseCleanup = new FirebaseCleanup();
+
+// Auto-cleanup when page lifecycle events occur
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    console.log('🔥 Page hiding, cleaning up Firebase connections...');
+    firebaseCleanup.cleanup();
+  });
+  
+  window.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      console.log('🔥 Page hidden, cleaning up Firebase connections...');
+      firebaseCleanup.cleanup();
+    }
+  });
 }
 
 // Check if Firebase is properly configured and available
