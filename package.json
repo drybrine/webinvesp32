@@ -6,11 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "analyze": "ANALYZE=true npm run build",
-    "type-check": "tsc --noEmit",
-    "build:production": "NODE_ENV=production next build",
-    "preview": "npm run build && npm run start"
+    "lint": "next lint"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
