@@ -23,6 +23,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseScans, useFirebaseInventory } from "@/hooks/use-firebase"
 import { ScanHistory } from "@/components/scan-history"
+import EnsureAuth from "@/components/ensure-auth"
 
 interface ProcessedScanRecord {
   id: string
@@ -35,7 +36,7 @@ interface ProcessedScanRecord {
   [key: string]: any // Allow other properties
 }
 
-export default function ScanPage() {
+function ScanPage() {
   const router = useRouter()
   const { scans, addScan, loading: scansLoading, error: scansError } = useFirebaseScans()
   const { items, loading: inventoryLoading, error: inventoryError } = useFirebaseInventory()
@@ -256,5 +257,13 @@ export default function ScanPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function ScanPageWithAuth() {
+  return (
+    <EnsureAuth>
+      <ScanPage />
+    </EnsureAuth>
   )
 }
