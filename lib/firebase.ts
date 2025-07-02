@@ -2,18 +2,48 @@ import { initializeApp, getApps, FirebaseApp } from "firebase/app"
 import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference } from "firebase/database" // Added update
 import { getAuth, Auth } from "firebase/auth"
 
-// Firebase configuration - using environment variables
+// Firebase configuration - using environment variables for security
 const firebaseConfig = {
-  apiKey: "AIzaSyBDMTHkz_BwbqKfkVQYvKEI3yfrOLa_jLY",
-  authDomain: "barcodescanesp32.firebaseapp.com",
-  databaseURL:
-    process.env.FIREBASE_DATABASE_URL || "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "barcodescanesp32",
-  storageBucket: "barcodescanesp32.firebasestorage.app",
-  messagingSenderId: "330721800882",
-  appId: "1:330721800882:web:ff7e05a769ab6cd32ccfab",
-  measurementId: "G-C2L2NFF1C2",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "barcodescanesp32.firebaseapp.com",
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "barcodescanesp32",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "barcodescanesp32.firebasestorage.app",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "330721800882",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:330721800882:web:ff7e05a769ab6cd32ccfab",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-C2L2NFF1C2",
 }
+
+// Validasi konfigurasi Firebase untuk keamanan
+const validateFirebaseConfig = () => {
+  const requiredFields: (keyof typeof firebaseConfig)[] = [
+    'apiKey', 'authDomain', 'databaseURL', 'projectId', 
+    'storageBucket', 'messagingSenderId', 'appId'
+  ];
+  
+  const missingFields = requiredFields.filter(field => !firebaseConfig[field]);
+  
+  if (missingFields.length > 0) {
+    console.error('❌ Firebase configuration incomplete. Missing fields:', missingFields);
+    console.error('💡 Please check your .env.local file and ensure all required environment variables are set.');
+    return false;
+  }
+  
+  // Validasi format API key
+  if (!firebaseConfig.apiKey.startsWith('AIza')) {
+    console.error('❌ Invalid Firebase API key format');
+    return false;
+  }
+  
+  // Validasi domain
+  if (!firebaseConfig.authDomain.includes('firebaseapp.com')) {
+    console.error('❌ Invalid Firebase auth domain');
+    return false;
+  }
+  
+  console.log('✅ Firebase configuration validated successfully');
+  return true;
+};
 
 // Initialize Firebase with error handling
 let app: FirebaseApp | null = null // Use FirebaseApp type
@@ -89,6 +119,12 @@ const initializeFirebaseWithRetry = async (retryCount = 0): Promise<void> => {
 const initializeFirebase = () => {
   if (typeof window === "undefined") {
     return // Don't initialize on server side
+  }
+
+  // Validasi konfigurasi sebelum inisialisasi
+  if (!validateFirebaseConfig()) {
+    console.error('🔥 Firebase initialization aborted due to invalid configuration');
+    return;
   }
 
   // Check if Firebase apps have already been initialized

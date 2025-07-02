@@ -187,6 +187,29 @@ npm run dev
 
 ## 🔥 Konfigurasi Firebase
 
+### 🔐 **PENTING: Setup Environment Variables**
+
+1. **Copy template environment variables**:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. **Edit .env.local dengan Firebase credentials Anda**:
+   ```bash
+   # Buka .env.local dan isi dengan nilai dari Firebase Console
+   NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key_here
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+   # ... dst
+   ```
+
+3. **Dapatkan Firebase Config**:
+   - Buka [Firebase Console](https://console.firebase.google.com/)
+   - Pilih project Anda → Project Settings → General
+   - Scroll ke "Your apps" → Web app → Config
+   - Copy semua values ke .env.local
+
+**⚠️ JANGAN COMMIT file .env.local ke Git!**
+
 ### 1. **Buat Firebase Project**
 1. Buka [Firebase Console](https://console.firebase.google.com/)
 2. Klik "Create a project"
