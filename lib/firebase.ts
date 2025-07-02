@@ -5,13 +5,13 @@ import { getAuth, Auth } from "firebase/auth"
 // Firebase configuration - using environment variables for security
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "barcodescanesp32.firebaseapp.com",
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "barcodescanesp32",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "barcodescanesp32.firebasestorage.app",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "330721800882",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:330721800882:web:ff7e05a769ab6cd32ccfab",
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-C2L2NFF1C2",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "",
 }
 
 // Validasi konfigurasi Firebase untuk keamanan
@@ -25,7 +25,7 @@ const validateFirebaseConfig = () => {
   
   if (missingFields.length > 0) {
     console.error('❌ Firebase configuration incomplete. Missing fields:', missingFields);
-    console.error('💡 Please check your .env.local file and ensure all required environment variables are set.');
+    console.error('💡 Please check your environment variables (Netlify for production, .env.local for local development) and ensure all required variables are set.');
     return false;
   }
   
@@ -196,6 +196,12 @@ const initializeFirebase = () => {
 // Server-side Firebase initialization
 const initializeFirebaseServer = () => {
   try {
+    // Validate configuration before server-side initialization
+    if (!validateFirebaseConfig()) {
+      console.error('🔥 Server-side Firebase initialization aborted due to invalid configuration');
+      return null;
+    }
+
     // Check if Firebase apps have already been initialized
     if (getApps().length === 0) {
       // No apps initialized, so initialize Firebase
@@ -263,7 +269,20 @@ if (typeof window !== "undefined") {
 export const ensureFirebaseInitialized = () => {
   if (!database && typeof window === "undefined") {
     // If we're on server side and database is not initialized, try to initialize
-    return initializeFirebaseServer()
+    // But only if we have valid configuration
+    const hasValidConfig = !!(
+      firebaseConfig.apiKey && 
+      firebaseConfig.authDomain && 
+      firebaseConfig.databaseURL && 
+      firebaseConfig.projectId
+    );
+    
+    if (hasValidConfig) {
+      return initializeFirebaseServer()
+    } else {
+      console.warn('🔥 Firebase configuration not available, skipping initialization');
+      return null;
+    }
   }
   return database
 }
