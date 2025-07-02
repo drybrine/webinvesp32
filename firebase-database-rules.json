@@ -1,33 +1,39 @@
 {
   "rules": {
     "inventory": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "scans": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "devices": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null"
     },
     "settings": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "analytics": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "transactions": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "attendance": {
-      ".read": true,
-      ".write": true,
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["nim", "timestamp", "deviceId"]
+    },
+    "public": {
+      "device-status": {
+        ".read": true,
+        ".write": false
+      }
     }
   }
 }
