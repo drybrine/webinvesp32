@@ -6,19 +6,70 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  images: {
-    unoptimized: true,
+  // Performance optimizations for Netlify
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
+  images: {
+    unoptimized: false, // Enable optimization for better performance
+    formats: ['image/webp', 'image/avif'],
+    minimumCacheTTL: 31536000, // 1 year
+    dangerouslyAllowSVG: true,
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
+  // Enable compression
+  compress: true,
+  // Static optimization
+  trailingSlash: false,
+  // Production optimizations
+  poweredByHeader: false,
   // API timeout configuration
   serverRuntimeConfig: {
     requestTimeout: 30000, // 30 seconds
   },
-  // Fast Refresh optimization
+  // Performance and optimization
   reactStrictMode: true,
-  // Webpack configuration to fix chunk loading issues
-  webpack: (config, { dev, isServer }) => {
-    // Fix for ChunkLoadError in development
-    if (dev && !isServer) {
+  // Webpack configuration optimized for production
+  webpack: (config, { dev, isServer, webpack }) => {
+    // Performance optimizations
+    if (!dev) {
+      config.optimization = {
+        ...config.optimization,
+        sideEffects: false,
+        usedExports: true,
+        splitChunks: {
+          chunks: 'all',
+          minSize: 20000,
+          maxSize: 244000,
+          cacheGroups: {
+            default: {
+              minChunks: 2,
+              priority: -20,
+              reuseExistingChunk: true,
+            },
+            vendor: {
+              test: /[\\/]node_modules[\\/]/,
+              name: 'vendors',
+              priority: -10,
+              chunks: 'all',
+            },
+            react: {
+              test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/,
+              name: 'react',
+              priority: 20,
+              chunks: 'all',
+            },
+            ui: {
+              test: /[\\/]components[\\/]ui[\\/]/,
+              name: 'ui',
+              priority: 30,
+              chunks: 'all',
+            },
+          },
+        },
+      }
+    } else {
+      // Development optimizations
       config.optimization = {
         ...config.optimization,
         splitChunks: {

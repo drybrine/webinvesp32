@@ -2,6 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Critical CSS optimizations */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  
+  body {
+    min-height: 100vh;
+    line-height: 1.5;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  * {
+    border-color: hsl(var(--border));
+  }
+  
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* Performance-optimized animations */
+@layer utilities {
+  .animate-fadeIn {
+    animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  .animate-pulse-strong {
+    animation: pulse-strong 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .animate-bounce-subtle {
+    animation: bounce-subtle 1s ease-in-out infinite;
+  }
+}
+
 /* Custom animations for enhanced responsiveness */
 @keyframes fadeIn {
   from {

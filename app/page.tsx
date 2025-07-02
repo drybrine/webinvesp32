@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react" // Added useRef
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react" // Added lazy, Suspense
 import { useRouter } from "next/navigation"
 import {
   Card,
