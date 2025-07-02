@@ -114,7 +114,7 @@ importers:
         specifier: ^2.0.5
         version: 2.0.5
       firebase:
-        specifier: latest
+        specifier: ^11.10.0
         version: 11.10.0
       input-otp:
         specifier: 1.4.1
