@@ -10,6 +10,7 @@ import { AdminGuard } from "@/components/AdminGuard"
 import { DeviceStatusMonitorProvider } from "@/components/device-status-monitor-provider"
 import ServiceWorkerRegistration from "@/components/service-worker-registration"
 import PerformanceMonitor from "@/components/performance-monitor"
+import AutoAuth from "@/components/auto-auth"
 
 // Optimized font loading
 const inter = Inter({ 
@@ -77,19 +78,21 @@ export default function RootLayout({
         <meta name="msapplication-tap-highlight" content="no" />
       </head>
       <body>
-        <ServiceWorkerRegistration />
-        {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
-        <DeviceStatusMonitorProvider>
-          <RealtimeScanProvider>
-            <RealtimeAttendanceProvider>
-              <AdminGuard>
-                <Navigation />
-                <main>{children}</main>
-                <Toaster />
-              </AdminGuard>
-            </RealtimeAttendanceProvider>
-          </RealtimeScanProvider>
-        </DeviceStatusMonitorProvider>
+        <AutoAuth>
+          <ServiceWorkerRegistration />
+          {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
+          <DeviceStatusMonitorProvider>
+            <RealtimeScanProvider>
+              <RealtimeAttendanceProvider>
+                <AdminGuard>
+                  <Navigation />
+                  <main>{children}</main>
+                  <Toaster />
+                </AdminGuard>
+              </RealtimeAttendanceProvider>
+            </RealtimeScanProvider>
+          </DeviceStatusMonitorProvider>
+        </AutoAuth>
       </body>
     </html>
   )
