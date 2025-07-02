@@ -103,6 +103,8 @@ export default function TransaksiPage() {
     updateItem,
     deleteItem,
   } = useFirebaseInventory()
+  
+  // Use scans hook - it will handle authentication internally now
   const { scans, loading: scansLoading, error: scansError } = useFirebaseScans()
   
   // Real-time device status monitoring

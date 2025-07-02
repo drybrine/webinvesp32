@@ -3,17 +3,19 @@
 import React, { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { onValue, off, ref } from "firebase/database"
-import { database, isFirebaseConfigured } from "@/lib/firebase"
+import { database, isFirebaseConfigured, auth } from "@/lib/firebase"
 import { useFirebaseAttendance } from "@/hooks/use-firebase"
 import { useToast } from "@/hooks/use-toast"
 import { startDeviceStatusMonitor, stopDeviceStatusMonitor } from "@/lib/device-status-monitor"
 import { RealtimeAttendanceContext, type RealtimeAttendanceContextType } from "@/hooks/use-realtime-attendance"
+import { onAuthStateChanged } from "firebase/auth"
 
 interface RealtimeAttendanceProviderProps {
   children: React.ReactNode
 }
 
-export function RealtimeAttendanceProvider({ children }: RealtimeAttendanceProviderProps) {
+// Inner component that uses Firebase hooks only when authenticated
+function AuthenticatedAttendanceProvider({ children }: RealtimeAttendanceProviderProps) {
   const pathname = usePathname()
   const { addAttendance, attendance } = useFirebaseAttendance()
   const { toast } = useToast()
@@ -248,4 +250,53 @@ export function RealtimeAttendanceProvider({ children }: RealtimeAttendanceProvi
       {children}
     </RealtimeAttendanceContext.Provider>
   )
+}
+
+// Main component that conditionally renders the authenticated provider
+export function RealtimeAttendanceProvider({ children }: RealtimeAttendanceProviderProps) {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthChecked, setIsAuthChecked] = useState(false)
+
+  useEffect(() => {
+    if (!auth) {
+      setIsAuthenticated(false)
+      setIsAuthChecked(true)
+      return
+    }
+
+    // Check current auth state
+    const checkAuth = () => {
+      setIsAuthenticated(!!auth?.currentUser)
+      setIsAuthChecked(true)
+    }
+
+    checkAuth()
+
+    // Listen for auth state changes
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user)
+      setIsAuthChecked(true)
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  // Default context when not authenticated
+  const defaultContextValue: RealtimeAttendanceContextType = {
+    isProcessing: false,
+    lastProcessedNim: null,
+    processCount: 0,
+  }
+
+  // If not authenticated or auth not checked yet, provide default context
+  if (!isAuthChecked || !isAuthenticated) {
+    return (
+      <RealtimeAttendanceContext.Provider value={defaultContextValue}>
+        {children}
+      </RealtimeAttendanceContext.Provider>
+    )
+  }
+
+  // If authenticated, use the full provider
+  return <AuthenticatedAttendanceProvider>{children}</AuthenticatedAttendanceProvider>
 }
