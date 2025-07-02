@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"; // Add useMemo
 import { ref, onValue, DataSnapshot, query, orderByChild, off, Unsubscribe, push, set } from "firebase/database"; // Added push, set
-import { firebaseHelpers, isFirebaseConfigured, database, dbRefs } from "@/lib/firebase"; // Ensure all are imported
+import { firebaseHelpers, isFirebaseConfigured, database, dbRefs, firebaseCleanup } from "@/lib/firebase"; // Ensure all are imported
 
 export interface InventoryItem {
   id: string
@@ -131,6 +131,11 @@ export function useFirebaseInventory() {
         setLoading(false);
       }
     );
+
+    // Register listener for global cleanup
+    if (unsubscribe) {
+      firebaseCleanup.addListener(unsubscribe);
+    }
 
     return () => {
       if (unsubscribe) {

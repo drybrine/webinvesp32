@@ -550,7 +550,7 @@ void sendBarcodeToServer(String barcode) {
     
     int httpResponseCode = http.POST(jsonString);
     
-    if (httpResponseCode > 0) {
+    if httpResponseCode > 0) {
       String response = http.getString();
       Serial.println("Server response: " + response);
     } else {
@@ -695,6 +695,47 @@ if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}
 ## 🔧 Troubleshooting
 
 ### **❗ Common Issues & Solutions**
+
+#### **🌐 Browser Network & WebSocket Errors**
+```bash
+❌ ERR_NAME_NOT_RESOLVED for Firebase WebSocket connections
+❌ WebSocket connection failed
+❌ DNS resolution errors
+```
+**Solutions:**
+1. **Network Connectivity Issues**:
+   - These errors are often temporary and resolve automatically
+   - The app implements automatic retry logic with exponential backoff
+   - Firebase will fall back to HTTP long-polling if WebSocket fails
+   
+2. **DNS Resolution Problems**:
+   ```javascript
+   // The app includes network checking before Firebase initialization
+   // Check browser network status
+   console.log('Navigator online:', navigator.onLine);
+   ```
+   
+3. **Firewall/Corporate Network**:
+   - Some corporate networks block WebSocket connections
+   - Firebase automatically falls back to HTTPS polling
+   - No action required - functionality will work via fallback
+   
+4. **Development Environment**:
+   - Restart development server if persistent
+   - Clear browser cache and cookies
+   - Check if running multiple dev servers on different ports
+
+**Note**: These WebSocket errors are usually cosmetic and don't affect functionality. Firebase automatically handles connection fallbacks.
+
+#### **⚠️ Browser Deprecation Warnings**
+```bash
+❌ Unload event listeners are deprecated
+❌ beforeunload will be removed
+```
+**Solutions:**
+- ✅ **Fixed**: Updated to use modern `pagehide` and `visibilitychange` events
+- ✅ **Modern Lifecycle**: Implemented proper page lifecycle management
+- ✅ **Firebase Cleanup**: Added robust listener cleanup on page unload
 
 #### **🔥 Firebase Connection Issues**
 ```bash
