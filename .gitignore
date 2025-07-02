@@ -23,3 +23,33 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env
+
+# Netlify
+.netlify/
+.netlify/state.json
+
+# Service Worker
+public/sw.js.map
+
+# Performance monitoring logs
+performance.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Cache directories
+.cache/
+.parcel-cache/
+.next/cache/
