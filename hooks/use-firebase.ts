@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react"; // Add useMemo
 import { ref, onValue, DataSnapshot, query, orderByChild, off, Unsubscribe, push, set } from "firebase/database"; // Added push, set
-import { firebaseHelpers, isFirebaseConfigured, database, dbRefs, firebaseCleanup } from "@/lib/firebase"; // Ensure all are imported
+import { firebaseHelpers, isFirebaseConfigured, database, dbRefs, firebaseCleanup, auth } from "@/lib/firebase"; // Ensure all are imported
+import { onAuthStateChanged, User } from "firebase/auth";
 
 export interface InventoryItem {
   id: string
@@ -85,6 +86,35 @@ const saveToStorage = (key: string, data: any) => {
     console.error("Error saving to localStorage:", error)
   }
 }
+
+// Helper function to wait for authentication
+const waitForAuth = (): Promise<User | null> => {
+  return new Promise((resolve) => {
+    if (!auth) {
+      // If auth is not available, resolve with null immediately
+      resolve(null);
+      return;
+    }
+
+    if (auth.currentUser) {
+      // User is already authenticated
+      resolve(auth.currentUser);
+      return;
+    }
+
+    // Wait for auth state change
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe(); // Clean up the listener
+      resolve(user);
+    });
+
+    // Timeout after 10 seconds to avoid hanging
+    setTimeout(() => {
+      unsubscribe();
+      resolve(null);
+    }, 10000);
+  });
+};
 
 export function useFirebaseInventory() {
   const [itemsData, setItemsData] = useState<InventoryItem[]>([]);
@@ -225,62 +255,83 @@ export function useFirebaseScans() {
 
   useEffect(() => {
     let unsubscribe: Unsubscribe | undefined;
-    if (!isFirebaseConfigured() || !database) {
-      console.log("Firebase not available, using local storage for scans");
-      // Load from local storage or use mock data
-      const storedScans = getFromStorage(STORAGE_KEYS.SCANS)
+    
+    const setupScansListener = async () => {
+      if (!isFirebaseConfigured() || !database) {
+        console.log("Firebase not available, using local storage for scans");
+        // Load from local storage or use mock data
+        const storedScans = getFromStorage(STORAGE_KEYS.SCANS)
 
-      if (storedScans && storedScans.length > 0) {
-        setScans(storedScans)
-      } else {
-        // Mock data for development
-        const mockScans: ScanRecord[] = [
-          {
-            id: "scan_1",
-            barcode: "1234567890123",
-            deviceId: "ESP32_001",
-            timestamp: Date.now() - 120000, // 2 minutes ago
-            processed: true,
-            itemFound: true,
-            itemId: "mock_1",
-          },
-          {
-            id: "scan_2",
-            barcode: "9876543210987",
-            deviceId: "ESP32_001",
-            timestamp: Date.now() - 300000, // 5 minutes ago
-            processed: true,
-            itemFound: true,
-            itemId: "mock_2",
-          },
-        ]
-        setScans(mockScans)
-        saveToStorage(STORAGE_KEYS.SCANS, mockScans)
+        if (storedScans && storedScans.length > 0) {
+          setScans(storedScans)
+        } else {
+          // Mock data for development
+          const mockScans: ScanRecord[] = [
+            {
+              id: "scan_1",
+              barcode: "1234567890123",
+              deviceId: "ESP32_001",
+              timestamp: Date.now() - 120000, // 2 minutes ago
+              processed: true,
+              itemFound: true,
+              itemId: "mock_1",
+            },
+            {
+              id: "scan_2",
+              barcode: "9876543210987",
+              deviceId: "ESP32_001",
+              timestamp: Date.now() - 300000, // 5 minutes ago
+              processed: true,
+              itemFound: true,
+              itemId: "mock_2",
+            },
+          ]
+          setScans(mockScans)
+          saveToStorage(STORAGE_KEYS.SCANS, mockScans)
+        }
+
+        setError(null)
+        setLoading(false)
+        return
       }
 
-      setError(null)
-      setLoading(false)
-      return
-    }
+      // Wait for authentication before setting up listener
+      try {
+        const user = await waitForAuth();
+        if (!user) {
+          console.warn("User not authenticated for scans");
+          setError("Authentication required");
+          setLoading(false);
+          return;
+        }
 
-    const scansRef = ref(database, "scans");
-    unsubscribe = onValue(
-      scansRef,
-      (snapshot: DataSnapshot) => {
-        const data = snapshot.val();
-        const loadedScans: ScanRecord[] = data
-          ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
-          : [];
-        setScans(loadedScans.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
-        setError(null);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("Firebase scans error:", err);
-        setError(err.message);
+        const scansRef = ref(database, "scans");
+        unsubscribe = onValue(
+          scansRef,
+          (snapshot: DataSnapshot) => {
+            const data = snapshot.val();
+            const loadedScans: ScanRecord[] = data
+              ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
+              : [];
+            setScans(loadedScans.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+            setError(null);
+            setLoading(false);
+          },
+          (err) => {
+            console.error("Firebase scans error:", err);
+            setError(err.message);
+            setLoading(false);
+          }
+        );
+      } catch (authError) {
+        console.error("Authentication error for scans:", authError);
+        setError("Authentication failed");
         setLoading(false);
       }
-    );
+    };
+
+    setupScansListener();
+
     return () => {
       if (unsubscribe) {
         unsubscribe();
@@ -424,42 +475,62 @@ export function useFirebaseTransactions() {
 
   useEffect(() => {
     let unsubscribe: Unsubscribe | undefined;
-    if (typeof window === "undefined") {
-      setLoading(false);
-      return;
-    }
-
-    if (!isFirebaseConfigured() || !database || !dbRefs || !dbRefs.transactions) {
-      console.warn("Firebase not configured or transactions ref not available for useFirebaseTransactions.");
-      const storedTransactions = getFromStorage(STORAGE_KEYS.TRANSACTIONS);
-      if (storedTransactions && storedTransactions.length > 0) {
-        setTransactions(storedTransactions.map((t: any) => ({ ...t, timestamp: t.timestamp || Date.now() })));
-      } else {
-        setTransactions([]);
-      }
-      setLoading(false);
-      return;
-    }
-
-    const transactionsQuery = query(dbRefs.transactions, orderByChild('timestamp'));
-    unsubscribe = onValue(
-      transactionsQuery,
-      (snapshot: DataSnapshot) => {
-        const data = snapshot.val();
-        const loadedTransactions: Transaction[] = data
-          ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
-          : [];
-        // Reverse sort to show newest first, or sort as needed
-        setTransactions(loadedTransactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
-        setError(null);
+    
+    const setupTransactionsListener = async () => {
+      if (typeof window === "undefined") {
         setLoading(false);
-      },
-      (errorObject: Error) => {
-        console.error("Firebase transactions error:", errorObject);
-        setError(errorObject.message);
+        return;
+      }
+
+      if (!isFirebaseConfigured() || !database || !dbRefs || !dbRefs.transactions) {
+        console.warn("Firebase not configured or transactions ref not available for useFirebaseTransactions.");
+        const storedTransactions = getFromStorage(STORAGE_KEYS.TRANSACTIONS);
+        if (storedTransactions && storedTransactions.length > 0) {
+          setTransactions(storedTransactions.map((t: any) => ({ ...t, timestamp: t.timestamp || Date.now() })));
+        } else {
+          setTransactions([]);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Wait for authentication before setting up listener
+      try {
+        const user = await waitForAuth();
+        if (!user) {
+          console.warn("User not authenticated for transactions");
+          setError("Authentication required");
+          setLoading(false);
+          return;
+        }
+
+        const transactionsQuery = query(dbRefs.transactions, orderByChild('timestamp'));
+        unsubscribe = onValue(
+          transactionsQuery,
+          (snapshot: DataSnapshot) => {
+            const data = snapshot.val();
+            const loadedTransactions: Transaction[] = data
+              ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
+              : [];
+            // Reverse sort to show newest first, or sort as needed
+            setTransactions(loadedTransactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+            setError(null);
+            setLoading(false);
+          },
+          (errorObject: Error) => {
+            console.error("Firebase transactions error:", errorObject);
+            setError(errorObject.message);
+            setLoading(false);
+          }
+        );
+      } catch (authError) {
+        console.error("Authentication error for transactions:", authError);
+        setError("Authentication failed");
         setLoading(false);
       }
-    );
+    };
+
+    setupTransactionsListener();
 
     return () => {
       if (unsubscribe) {
@@ -497,38 +568,58 @@ export function useFirebaseAttendance() {
 
   useEffect(() => {
     let unsubscribe: Unsubscribe | undefined;
-    if (typeof window === "undefined") {
-      setLoading(false);
-      return;
-    }
-
-    if (!isFirebaseConfigured() || !database) {
-      console.warn("Firebase not configured for attendance");
-      setLoading(false);
-      return;
-    }
-
-    const attendanceRef = ref(database, 'attendance');
-    const attendanceQuery = query(attendanceRef, orderByChild('timestamp'));
     
-    unsubscribe = onValue(
-      attendanceQuery,
-      (snapshot: DataSnapshot) => {
-        const data = snapshot.val();
-        const loadedAttendance: AttendanceRecord[] = data
-          ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
-          : [];
-        // Sort by timestamp, newest first
-        setAttendance(loadedAttendance.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
-        setError(null);
+    const setupAttendanceListener = async () => {
+      if (typeof window === "undefined") {
         setLoading(false);
-      },
-      (errorObject: Error) => {
-        console.error("Firebase attendance error:", errorObject);
-        setError(errorObject.message);
+        return;
+      }
+
+      if (!isFirebaseConfigured() || !database) {
+        console.warn("Firebase not configured for attendance");
+        setLoading(false);
+        return;
+      }
+
+      // Wait for authentication before setting up listener
+      try {
+        const user = await waitForAuth();
+        if (!user) {
+          console.warn("User not authenticated for attendance");
+          setError("Authentication required");
+          setLoading(false);
+          return;
+        }
+
+        const attendanceRef = ref(database, 'attendance');
+        const attendanceQuery = query(attendanceRef, orderByChild('timestamp'));
+        
+        unsubscribe = onValue(
+          attendanceQuery,
+          (snapshot: DataSnapshot) => {
+            const data = snapshot.val();
+            const loadedAttendance: AttendanceRecord[] = data
+              ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
+              : [];
+            // Sort by timestamp, newest first
+            setAttendance(loadedAttendance.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+            setError(null);
+            setLoading(false);
+          },
+          (errorObject: Error) => {
+            console.error("Firebase attendance error:", errorObject);
+            setError(errorObject.message);
+            setLoading(false);
+          }
+        );
+      } catch (authError) {
+        console.error("Authentication error for attendance:", authError);
+        setError("Authentication failed");
         setLoading(false);
       }
-    );
+    };
+
+    setupAttendanceListener();
 
     return () => {
       if (unsubscribe) {

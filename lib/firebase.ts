@@ -49,7 +49,7 @@ const validateFirebaseConfig = () => {
 // Initialize Firebase with error handling
 let app: FirebaseApp | null = null // Use FirebaseApp type
 export let database: Database | null = null
-let auth: Auth | null = null // Use Auth type
+export let auth: Auth | null = null // Use Auth type and export it
 let firebaseInitialized = false
 
 // Define a type for dbRefs
