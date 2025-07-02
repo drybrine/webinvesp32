@@ -92,34 +92,28 @@ const waitForAuth = (): Promise<User | null> => {
   return new Promise((resolve) => {
     if (!auth) {
       // If auth is not available, resolve with null immediately
-      console.warn("Auth not available");
       resolve(null);
       return;
     }
 
     if (auth.currentUser) {
       // User is already authenticated
-      console.log("User already authenticated:", auth.currentUser.uid);
       resolve(auth.currentUser);
       return;
     }
 
-    console.log("Waiting for authentication...");
-    
     // Wait for auth state change with multiple attempts
     let attempts = 0;
     const maxAttempts = 5;
     
     const checkAuth = () => {
       if (auth && auth.currentUser) {
-        console.log("Authentication detected:", auth.currentUser.uid);
         resolve(auth.currentUser);
         return;
       }
       
       attempts++;
       if (attempts >= maxAttempts) {
-        console.warn("Authentication timeout after", maxAttempts, "attempts");
         resolve(null);
         return;
       }
@@ -135,7 +129,6 @@ const waitForAuth = (): Promise<User | null> => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         unsubscribe(); // Clean up the listener
-        console.log("Auth state changed - user authenticated:", user.uid);
         resolve(user);
       }
     });
@@ -144,7 +137,6 @@ const waitForAuth = (): Promise<User | null> => {
     setTimeout(() => {
       unsubscribe();
       if (attempts < maxAttempts) {
-        console.warn("Authentication timeout");
         resolve(null);
       }
     }, 15000); // 15 second timeout
@@ -333,9 +325,16 @@ export function useFirebaseScans() {
       // Wait for authentication before setting up listener
       try {
         const user = await waitForAuth();
+        
         if (!user) {
-          console.warn("User not authenticated for scans");
-          setError("Authentication required");
+          // Fall back to local storage instead of erroring
+          const storedScans = getFromStorage(STORAGE_KEYS.SCANS)
+          if (storedScans && storedScans.length > 0) {
+            setScans(storedScans)
+          } else {
+            setScans([]) // Empty data instead of error
+          }
+          setError(null) // Don't set error, just use empty data
           setLoading(false);
           return;
         }
@@ -532,9 +531,16 @@ export function useFirebaseTransactions() {
       // Wait for authentication before setting up listener
       try {
         const user = await waitForAuth();
+        
         if (!user) {
-          console.warn("User not authenticated for transactions");
-          setError("Authentication required");
+          // Fall back to local storage instead of erroring
+          const storedTransactions = getFromStorage(STORAGE_KEYS.TRANSACTIONS);
+          if (storedTransactions && storedTransactions.length > 0) {
+            setTransactions(storedTransactions.map((t: any) => ({ ...t, timestamp: t.timestamp || Date.now() })));
+          } else {
+            setTransactions([]); // Empty data instead of error
+          }
+          setError(null); // Don't set error, just use empty data
           setLoading(false);
           return;
         }
@@ -619,9 +625,11 @@ export function useFirebaseAttendance() {
       // Wait for authentication before setting up listener
       try {
         const user = await waitForAuth();
+        
         if (!user) {
-          console.warn("User not authenticated for attendance");
-          setError("Authentication required");
+          // Don't error out, just provide empty data
+          setAttendance([]);
+          setError(null); // Don't set error, just use empty data
           setLoading(false);
           return;
         }
