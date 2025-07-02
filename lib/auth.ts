@@ -15,14 +15,34 @@ export const authenticateUser = async (): Promise<User | null> => {
     
     // Check if user is already signed in
     if (auth.currentUser) {
+      console.log("User already authenticated:", auth.currentUser.uid)
       return auth.currentUser
     }
     
-    // Sign in anonymously
-    const userCredential = await signInAnonymously(auth)
-    return userCredential.user
-  } catch (error) {
-    console.error("Authentication failed:", error)
+    // Sign in anonymously with retry logic for production
+    let retries = 3
+    while (retries > 0) {
+      try {
+        console.log("Attempting anonymous authentication...")
+        const userCredential = await signInAnonymously(auth)
+        console.log("Anonymous authentication successful:", userCredential.user.uid)
+        return userCredential.user
+      } catch (error: any) {
+        retries--
+        console.warn(`Authentication attempt failed (${3 - retries}/3):`, error.code || error.message)
+        
+        if (retries > 0) {
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        } else {
+          throw error
+        }
+      }
+    }
+    
+    return null
+  } catch (error: any) {
+    console.error("Authentication failed:", error.code || error.message)
     return null
   }
 }

@@ -184,22 +184,47 @@ const initializeFirebaseServer = () => {
 
 // Initialize Firebase with network checking and retry logic
 if (typeof window !== "undefined") {
-  // Initialize Firebase immediately
-  try {
-    initializeFirebase();
-  } catch (error) {
-    console.error("🔥 Failed to initialize Firebase:", error);
-  }
+  // Initialize Firebase immediately with retry logic
+  const initializeWithRetry = async (maxRetries = 3) => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔥 Firebase initialization attempt ${attempt}/${maxRetries}`);
+        initializeFirebase();
+        
+        // Force authentication immediately in production
+        if (process.env.NODE_ENV === "production") {
+          console.log("🔥 Production mode - forcing immediate authentication");
+          const { authenticateUser } = await import("./auth");
+          setTimeout(async () => {
+            try {
+              await authenticateUser();
+              console.log("✅ Production auto-auth completed");
+            } catch (error) {
+              console.warn("⚠️ Production auto-auth failed:", error);
+            }
+          }, 1000);
+        }
+        
+        break; // Success, exit retry loop
+      } catch (error) {
+        console.error(`🔥 Firebase initialization attempt ${attempt} failed:`, error);
+        if (attempt === maxRetries) {
+          console.error("🔥 All Firebase initialization attempts failed");
+        } else {
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+    }
+  };
+  
+  initializeWithRetry();
   
   // Listen for online events to retry connection
   window.addEventListener('online', () => {
     console.log("🌐 Network came back online, reinitializing Firebase");
     if (!isFirebaseConfigured()) {
-      try {
-        initializeFirebase();
-      } catch (error) {
-        console.error("🔥 Failed to reinitialize Firebase:", error);
-      }
+      initializeWithRetry();
     }
   });
   

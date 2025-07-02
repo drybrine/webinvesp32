@@ -92,27 +92,62 @@ const waitForAuth = (): Promise<User | null> => {
   return new Promise((resolve) => {
     if (!auth) {
       // If auth is not available, resolve with null immediately
+      console.warn("Auth not available");
       resolve(null);
       return;
     }
 
     if (auth.currentUser) {
       // User is already authenticated
+      console.log("User already authenticated:", auth.currentUser.uid);
       resolve(auth.currentUser);
       return;
     }
 
-    // Wait for auth state change
+    console.log("Waiting for authentication...");
+    
+    // Wait for auth state change with multiple attempts
+    let attempts = 0;
+    const maxAttempts = 5;
+    
+    const checkAuth = () => {
+      if (auth && auth.currentUser) {
+        console.log("Authentication detected:", auth.currentUser.uid);
+        resolve(auth.currentUser);
+        return;
+      }
+      
+      attempts++;
+      if (attempts >= maxAttempts) {
+        console.warn("Authentication timeout after", maxAttempts, "attempts");
+        resolve(null);
+        return;
+      }
+      
+      // Check again after delay
+      setTimeout(checkAuth, 1000);
+    };
+    
+    // Start checking
+    checkAuth();
+    
+    // Also listen for auth state changes
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe(); // Clean up the listener
-      resolve(user);
+      if (user) {
+        unsubscribe(); // Clean up the listener
+        console.log("Auth state changed - user authenticated:", user.uid);
+        resolve(user);
+      }
     });
 
-    // Timeout after 10 seconds to avoid hanging
+    // Cleanup timeout
     setTimeout(() => {
       unsubscribe();
-      resolve(null);
-    }, 10000);
+      if (attempts < maxAttempts) {
+        console.warn("Authentication timeout");
+        resolve(null);
+      }
+    }, 15000); // 15 second timeout
   });
 };
 

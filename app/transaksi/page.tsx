@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase" // Diganti
 import { firebaseHelpers } from "@/lib/firebase" // Ditambahkan
 import { saveAs } from "file-saver";
+import EnsureAuth from "@/components/ensure-auth"
 
 interface Transaction {
   id: string
@@ -37,7 +38,7 @@ interface Transaction {
   notes?: string
 }
 
-export default function TransaksiPage() {
+function TransaksiPage() {
   const { items: inventory, loading: inventoryLoading, updateItem: updateInventoryItem } = useFirebaseInventory()
   const {
     transactions,
@@ -726,5 +727,13 @@ export default function TransaksiPage() {
         </Dialog>
       </div>
     </div>
+  )
+}
+
+export default function TransaksiPageWithAuth() {
+  return (
+    <EnsureAuth>
+      <TransaksiPage />
+    </EnsureAuth>
   )
 }

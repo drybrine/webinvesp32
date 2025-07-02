@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirebaseAttendance, useFirebaseDevices } from "@/hooks/use-firebase"
 import { FirebasePermissionError } from "@/components/firebase-permission-error"
 import { useRealtimeAttendance } from "@/hooks/use-realtime-attendance"
+import EnsureAuth from "@/components/ensure-auth"
 
 interface AttendanceRecord {
   id: string
@@ -36,7 +37,7 @@ interface AttendanceRecord {
   scanned: boolean
 }
 
-export default function AbsensiPage() {
+function AbsensiPage() {
   const { attendance, addAttendance, loading, error } = useFirebaseAttendance()
   const { devices } = useFirebaseDevices()
   const { toast } = useToast()
@@ -427,5 +428,13 @@ export default function AbsensiPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function AbsensiPageWithAuth() {
+  return (
+    <EnsureAuth>
+      <AbsensiPage />
+    </EnsureAuth>
   )
 }
