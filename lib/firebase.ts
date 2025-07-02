@@ -1,6 +1,7 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app"
 import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference } from "firebase/database" // Added update
 import { getAuth, Auth } from "firebase/auth"
+import { authenticateUser } from "./auth"
 
 // Firebase configuration - using environment variables for security
 const firebaseConfig = {
@@ -168,6 +169,13 @@ const initializeFirebase = () => {
 
     console.log("✅ Firebase initialized successfully")
     
+    // Authenticate user for security rules
+    if (typeof window !== 'undefined') {
+      authenticateUser().catch(error => {
+        console.warn("⚠️ Authentication failed:", error)
+      })
+    }
+    
     // Add error handling for WebSocket connection issues
     if (typeof window !== 'undefined') {
       const originalConsoleError = console.error;
@@ -301,6 +309,12 @@ export const firebaseHelpers = {
       throw new Error("Firebase not available - using local storage or operation failed");
     }
 
+    // Check authentication
+    if (!auth?.currentUser) {
+      console.error("User not authenticated for addInventoryItem");
+      throw new Error("Authentication required");
+    }
+
     try {
       const newItemRef = push(dbRefs.inventory);
       await set(newItemRef, {
@@ -321,6 +335,13 @@ export const firebaseHelpers = {
       console.error("Firebase database not available for updateInventoryItem");
       throw new Error("Firebase not available - operation failed");
     }
+
+    // Check authentication
+    if (!auth?.currentUser) {
+      console.error("User not authenticated for updateInventoryItem");
+      throw new Error("Authentication required");
+    }
+
     try {
       const itemRef = ref(database, `inventory/${id}`);
       await update(itemRef, { // Menggunakan update untuk partial update
@@ -338,6 +359,12 @@ export const firebaseHelpers = {
     if (!database || !dbRefs || !dbRefs.scans) {
       console.error("Firebase not available or scans ref not initialized for addScanRecord");
       throw new Error("Firebase not available - using local storage or operation failed");
+    }
+
+    // Check authentication
+    if (!auth?.currentUser) {
+      console.error("User not authenticated for addScanRecord");
+      throw new Error("Authentication required");
     }
 
     try {
@@ -362,6 +389,12 @@ export const firebaseHelpers = {
       throw new Error("Firebase not available - using local storage or operation failed");
     }
 
+    // Check authentication
+    if (!auth?.currentUser) {
+      console.error("User not authenticated for updateDeviceStatus");
+      throw new Error("Authentication required");
+    }
+
     try {
       const deviceRef = ref(database, `devices/${deviceId}`);
       await set(deviceRef, {
@@ -379,6 +412,12 @@ export const firebaseHelpers = {
     if (!database || !dbRefs || !dbRefs.analytics) {
       console.error("Firebase not available or analytics ref not initialized for addAnalytics");
       throw new Error("Firebase not available - using local storage or operation failed");
+    }
+
+    // Check authentication
+    if (!auth?.currentUser) {
+      console.error("User not authenticated for addAnalytics");
+      throw new Error("Authentication required");
     }
 
     try {
@@ -399,6 +438,13 @@ export const firebaseHelpers = {
       console.error("Firebase not available or transactions ref not initialized for addTransaction");
       throw new Error("Firebase not available - operation failed");
     }
+
+    // Check authentication
+    if (!auth?.currentUser) {
+      console.error("User not authenticated for addTransaction");
+      throw new Error("Authentication required");
+    }
+
     try {
       const newTransactionRef = push(dbRefs.transactions);
       await set(newTransactionRef, {
