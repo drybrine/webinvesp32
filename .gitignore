@@ -18,6 +18,20 @@ yarn-error.log*
 
 # env files
 .env*
+!.env.example
+
+# Firebase sensitive files
+.env.local
+.env.production.local
+.env.development.local
+
+# Firebase service account keys (jika ada)
+*service-account*.json
+firebase-adminsdk*.json
+
+# Performance testing
+performance-report.json
+performance-test.js
 
 # typescript
 *.tsbuildinfo
