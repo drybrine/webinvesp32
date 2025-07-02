@@ -64,62 +64,22 @@ interface DbRefs {
 }
 export let dbRefs: DbRefs | null = null; // Initialize as null
 
-// Network connectivity checker
-const checkNetworkConnectivity = async (): Promise<boolean> => {
-  if (typeof window === "undefined") return true; // Assume server has connectivity
-  
-  try {
-    // Check if navigator.onLine is available and true
-    if (!navigator.onLine) {
-      console.log("🌐 Browser reports offline");
-      return false;
-    }
-    
-    // Try a simple fetch to verify actual connectivity
-    const response = await fetch('https://www.google.com/favicon.ico', {
-      mode: 'no-cors',
-      cache: 'no-cache',
-      signal: AbortSignal.timeout(5000), // 5 second timeout
-    });
-    return true;
-  } catch (error) {
-    console.log("🌐 Network connectivity check failed:", error);
-    return false;
-  }
-};
 
-// Delayed Firebase initialization with network checking
-const initializeFirebaseWithRetry = async (retryCount = 0): Promise<void> => {
-  const maxRetries = 3;
-  
-  if (retryCount > maxRetries) {
-    console.warn("🔥 Max retries reached for Firebase initialization");
-    return;
-  }
-  
-  // Check network connectivity first
-  const hasConnectivity = await checkNetworkConnectivity();
-  if (!hasConnectivity && retryCount < maxRetries) {
-    console.log(`🔥 No network connectivity, retrying in ${(retryCount + 1) * 2}s...`);
-    setTimeout(() => initializeFirebaseWithRetry(retryCount + 1), (retryCount + 1) * 2000);
-    return;
-  }
-  
-  try {
-    initializeFirebase();
-    console.log("🔥 Firebase initialized successfully with network check");
-  } catch (error) {
-    console.error("🔥 Firebase initialization failed:", error);
-    if (retryCount < maxRetries) {
-      setTimeout(() => initializeFirebaseWithRetry(retryCount + 1), (retryCount + 1) * 2000);
-    }
-  }
-};
+// Initialize Firebase immediately on client-side
+if (typeof window !== "undefined") {
+  // Initialize immediately when the module loads (moved to bottom after function declaration)
+  console.log("🔥 Preparing to initialize Firebase...");
+}
 
-// Only initialize Firebase on the client side
+// Initialize Firebase immediately on client side
 const initializeFirebase = () => {
   if (typeof window === "undefined") {
     return // Don't initialize on server side
+  }
+
+  // Skip if already initialized
+  if (firebaseInitialized) {
+    return;
   }
 
   // Validasi konfigurasi sebelum inisialisasi
@@ -128,16 +88,16 @@ const initializeFirebase = () => {
     return;
   }
 
-  // Check if Firebase apps have already been initialized
-  if (getApps().length === 0) {
-    // No apps initialized, so initialize Firebase
-    app = initializeApp(firebaseConfig)
-  } else {
-    // Firebase app already initialized, use the existing app
-    app = getApps()[0]
-  }
-
   try {
+    // Check if Firebase apps have already been initialized
+    if (getApps().length === 0) {
+      // No apps initialized, so initialize Firebase
+      app = initializeApp(firebaseConfig)
+    } else {
+      // Firebase app already initialized, use the existing app
+      app = getApps()[0]
+    }
+
     database = getDatabase(app)
     auth = getAuth(app)
     firebaseInitialized = true
@@ -150,15 +110,14 @@ const initializeFirebase = () => {
         devices: ref(database, "devices"),
         settings: ref(database, "settings"),
         analytics: ref(database, "analytics"),
-        transactions: ref(database, "transactions"), // Ditambahkan
-        attendance: ref(database, "attendance"), // Ditambahkan untuk absensi
+        transactions: ref(database, "transactions"),
+        attendance: ref(database, "attendance"),
       };
     }
 
     // Connect to emulator in development if needed
     if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true") {
       try {
-        // Ensure database is not null before connecting emulator
         if (database) {
           connectDatabaseEmulator(database, "localhost", 9000)
         }
@@ -168,36 +127,13 @@ const initializeFirebase = () => {
     }
 
     console.log("✅ Firebase initialized successfully")
-    
-    // Authenticate user for security rules
-    if (typeof window !== 'undefined') {
-      authenticateUser().catch(error => {
-        console.warn("⚠️ Authentication failed:", error)
-      })
-    }
-    
-    // Add error handling for WebSocket connection issues
-    if (typeof window !== 'undefined') {
-      const originalConsoleError = console.error;
-      console.error = function(...args) {
-        // Filter out Firebase WebSocket DNS errors that are expected during initialization
-        const message = args.join(' ');
-        if (message.includes('ERR_NAME_NOT_RESOLVED') && 
-            message.includes('firebasedatabase.app')) {
-          console.warn('🔥 Firebase WebSocket connection issue (will retry):', args[0]);
-          return;
-        }
-        // Call the original console.error for all other errors
-        originalConsoleError.apply(console, args);
-      };
-    }
-    
-  } catch (dbError) {
-    console.warn("⚠️ Firebase database service not available:", dbError)
+  } catch (error) {
+    console.error("❌ Firebase initialization failed:", error)
+    firebaseInitialized = false
     database = null
     auth = null
-    dbRefs = null; // Reset dbRefs on error
-    firebaseInitialized = false
+    dbRefs = null
+    throw error
   }
 }
 
@@ -248,23 +184,22 @@ const initializeFirebaseServer = () => {
 
 // Initialize Firebase with network checking and retry logic
 if (typeof window !== "undefined") {
-  // Use requestIdleCallback for better performance
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(() => {
-      initializeFirebaseWithRetry();
-    }, { timeout: 2000 });
-  } else {
-    // Fallback for browsers without requestIdleCallback
-    setTimeout(() => {
-      initializeFirebaseWithRetry();
-    }, 100);
+  // Initialize Firebase immediately
+  try {
+    initializeFirebase();
+  } catch (error) {
+    console.error("🔥 Failed to initialize Firebase:", error);
   }
   
   // Listen for online events to retry connection
   window.addEventListener('online', () => {
     console.log("🌐 Network came back online, reinitializing Firebase");
     if (!isFirebaseConfigured()) {
-      initializeFirebaseWithRetry();
+      try {
+        initializeFirebase();
+      } catch (error) {
+        console.error("🔥 Failed to reinitialize Firebase:", error);
+      }
     }
   });
   

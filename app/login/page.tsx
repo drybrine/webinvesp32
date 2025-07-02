@@ -34,6 +34,16 @@ export default function LoginPage() {
     }
   }, [toast])
 
+  // Auto-hide session expired message after 5 seconds
+  useEffect(() => {
+    if (showSessionExpired) {
+      const timer = setTimeout(() => {
+        setShowSessionExpired(false)
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [showSessionExpired])
+
   // Don't redirect here - let AdminGuard handle it after state update
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -41,7 +51,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const success = login(username, password)
+      const success = await login(username, password)
       
       if (success) {
         toast({ 
@@ -56,7 +66,8 @@ export default function LoginPage() {
           variant: "destructive" 
         })
       }
-    } catch {
+    } catch (error) {
+      console.error("Login error:", error)
       toast({ 
         title: "Error", 
         description: "Terjadi kesalahan saat login", 
