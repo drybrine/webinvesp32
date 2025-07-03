@@ -12,14 +12,16 @@ import ServiceWorkerRegistration from "@/components/service-worker-registration"
 import PerformanceMonitor from "@/components/performance-monitor"
 import AutoAuth from "@/components/auto-auth"
 
-// Optimized font loading
-const inter = Inter({ 
-  subsets: ["latin"],
-  display: 'swap', // Better font loading performance
-  preload: true,
-  fallback: ['system-ui', 'arial'],
-  adjustFontFallback: false,
-})
+// Temporary font loading fallback for build issues
+const inter = process.env.NODE_ENV === 'development' && process.env.CI ? 
+  { className: 'font-sans' } : 
+  Inter({ 
+    subsets: ["latin"],
+    display: 'swap',
+    preload: true,
+    fallback: ['system-ui', 'arial'],
+    adjustFontFallback: false,
+  })
 
 export const metadata: Metadata = {
   title: "StokManager - Sistem Manajemen Inventaris",

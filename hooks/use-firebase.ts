@@ -184,7 +184,18 @@ export function useFirebaseInventory() {
       },
       (err) => {
         console.error("Firebase inventory error:", err);
-        setError(err.message);
+        
+        // Enhanced error message based on error type
+        let errorMessage = err.message;
+        if (err.code === 'PERMISSION_DENIED') {
+          errorMessage = "permission_denied: Firebase rules do not allow access to inventory data";
+        } else if (err.code === 'NETWORK_ERROR' || err.message?.includes('network')) {
+          errorMessage = "network error: Unable to connect to Firebase";
+        } else if (err.code?.includes('auth') || err.message?.includes('auth')) {
+          errorMessage = "auth error: Authentication required for inventory access";
+        }
+        
+        setError(errorMessage);
         setLoading(false);
       }
     );
@@ -651,13 +662,24 @@ export function useFirebaseAttendance() {
           },
           (errorObject: Error) => {
             console.error("Firebase attendance error:", errorObject);
-            setError(errorObject.message);
+            
+            // Enhanced error message based on error type  
+            let errorMessage = errorObject.message;
+            if (errorObject.message?.includes('permission_denied') || errorObject.message?.includes('Permission denied')) {
+              errorMessage = "permission_denied: Firebase rules do not allow access to attendance data";
+            } else if (errorObject.message?.includes('network') || errorObject.message?.includes('offline')) {
+              errorMessage = "network error: Unable to connect to Firebase for attendance data";
+            } else if (errorObject.message?.includes('auth') || errorObject.message?.includes('Authentication')) {
+              errorMessage = "auth error: Authentication required for attendance access";
+            }
+            
+            setError(errorMessage);
             setLoading(false);
           }
         );
-      } catch (authError) {
+      } catch (authError: any) {
         console.error("Authentication error for attendance:", authError);
-        setError("Authentication failed");
+        setError("auth error: Authentication failed - unable to access attendance data");
         setLoading(false);
       }
     };
