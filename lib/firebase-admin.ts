@@ -12,26 +12,18 @@ export const initializeFirebaseAdmin = () => {
 
   try {
     // Check if we have service account credentials
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY!);
+
+    // Initialize with service account (production - Vercel, Netlify, etc.)
+    console.log('🔧 Initializing Firebase Admin with service account...')
     
-    if (serviceAccount) {
-      // Initialize with service account (production - Vercel, Netlify, etc.)
-      console.log('🔧 Initializing Firebase Admin with service account...')
-      const serviceAccountKey = JSON.parse(serviceAccount) as ServiceAccount
-      
-      if (getApps().length === 0) {
-        adminApp = initializeApp({
-          credential: cert(serviceAccountKey),
-          databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL
-        }, 'admin')
-      } else {
-        adminApp = getApps().find((app: App) => app.name === 'admin') || getApps()[0]
-      }
+    if (getApps().length === 0) {
+      adminApp = initializeApp({
+        credential: cert(serviceAccount),
+        databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL
+      }, 'admin')
     } else {
-      // Development mode - use default credentials or client SDK
-      console.log('🔧 Development mode: Using client SDK for server operations')
-      console.log('💡 To use Firebase Admin SDK, set FIREBASE_SERVICE_ACCOUNT_KEY environment variable')
-      return null
+      adminApp = getApps().find((app: App) => app.name === 'admin') || getApps()[0]
     }
 
     adminDatabase = getDatabase(adminApp)
