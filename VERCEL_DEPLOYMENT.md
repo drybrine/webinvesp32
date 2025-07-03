@@ -109,7 +109,7 @@ For server-side Firebase operations:
    - Check deployment logs for any errors
 
 2. **Test Firebase Connection**
-   - Visit your deployed app: `https://your-project.vercel.app`
+   - Visit your deployed app: `https://webinesp32.vercel.app`
    - Go to `/pengaturan` page
    - Click "Test Firebase Connection"
    - Verify database operations work

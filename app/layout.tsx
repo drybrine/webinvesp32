@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     title: "StokManager - Sistem Manajemen Inventaris",
     description: "Pemindai barcode real-time dengan integrasi ESP32",
   },
-  metadataBase: new URL('https://stokmanager.netlify.app'),
+  metadataBase: new URL('https://webinesp32.vercel.app'),
 }
 
 export const viewport = {

@@ -538,7 +538,7 @@ const char* ssid = "YOUR_WIFI_SSID";
 const char* password = "YOUR_WIFI_PASSWORD";
 
 // Server Configuration  
-const char* serverUrl = "https://your-stokmanager-app.netlify.app";
+const char* serverUrl = "https://webinesp32.vercel.app";
 const char* apiEndpoint = "/api/barcode-scan";
 
 // Device Configuration
@@ -1017,7 +1017,7 @@ Page                     Size       First Load JS
 - 📧 Email: support@webinvesp32.com
 
 ### **Links & Resources**
-- 🌐 **Live Demo**: [https://stokmanager.vercel.app](https://stokmanager.vercel.app)
+- 🌐 **Live Demo**: [https://webinesp32.vercel.app](https://webinesp32.vercel.app)
 - 📚 **Documentation**: [GitHub Wiki](https://github.com/yourusername/webinvesp32/wiki)
 - 🔥 **Firebase Console**: [https://console.firebase.google.com](https://console.firebase.google.com)
 - 💬 **Community**: [GitHub Discussions](https://github.com/yourusername/webinvesp32/discussions)

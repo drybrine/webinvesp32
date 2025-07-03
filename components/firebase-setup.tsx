@@ -121,7 +121,7 @@ void setup() {
   
   // Set Firebase URL
   strcpy(deviceConfig.firebaseUrl, "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app");
-  strcpy(deviceConfig.serverUrl, "https://your-netlify-app.netlify.app"); // Ganti dengan URL aplikasi Netlify Anda
+  strcpy(deviceConfig.serverUrl, "https://webinesp32.vercel.app"); // Ganti dengan URL aplikasi Vercel Anda
   
   saveDeviceConfig();
 }`
