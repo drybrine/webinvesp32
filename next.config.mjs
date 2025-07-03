@@ -6,7 +6,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Performance optimizations for Netlify
+  // Performance optimizations for Vercel and Netlify
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },

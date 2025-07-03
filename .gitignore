@@ -19,6 +19,7 @@ yarn-error.log*
 # env files
 .env*
 !.env.example
+!.env.vercel
 
 # Firebase sensitive files
 .env.local
@@ -41,6 +42,9 @@ next-env.d.ts
 # Netlify
 .netlify/
 .netlify/state.json
+
+# Vercel
+.vercel
 
 # Service Worker
 public/sw.js.map

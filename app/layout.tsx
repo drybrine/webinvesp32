@@ -1,6 +1,7 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+// Temporarily disable Google Fonts for build
+// import { Inter } from "next/font/google"
 import "./globals.css"
 import Navigation from "@/components/navigation"
 import { Toaster } from "@/components/ui/toaster"
@@ -12,14 +13,14 @@ import ServiceWorkerRegistration from "@/components/service-worker-registration"
 import PerformanceMonitor from "@/components/performance-monitor"
 import AutoAuth from "@/components/auto-auth"
 
-// Optimized font loading
-const inter = Inter({ 
-  subsets: ["latin"],
-  display: 'swap', // Better font loading performance
-  preload: true,
-  fallback: ['system-ui', 'arial'],
-  adjustFontFallback: false,
-})
+// Temporarily use system fonts for build
+// const inter = Inter({ 
+//   subsets: ["latin"],
+//   display: 'swap', // Better font loading performance
+//   preload: true,
+//   fallback: ['system-ui', 'arial'],
+//   adjustFontFallback: false,
+// })
 
 export const metadata: Metadata = {
   title: "StokManager - Sistem Manajemen Inventaris",
@@ -59,10 +60,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="id" className={inter.className}>
+    <html lang="id" className="font-sans">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet" />
         <link rel="dns-prefetch" href="//fonts.googleapis.com" />
         <link rel="dns-prefetch" href="//fonts.gstatic.com" />
         <link rel="manifest" href="/manifest.json" />
