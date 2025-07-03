@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Analyze Next.js bundle",
+			"command": "npx next build && npx next analyze",
+			"group": "build",
+			"isBackground": false
+		}
+	]
+}
