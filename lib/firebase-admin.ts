@@ -1,6 +1,5 @@
-import { initializeApp, getApps, cert, ServiceAccount } from 'firebase-admin/app'
-import { getDatabase } from 'firebase-admin/database'
-import type { App } from 'firebase-admin/app'
+import { initializeApp, getApps, cert, ServiceAccount, App } from 'firebase-admin/app';
+import { getDatabase } from 'firebase-admin/database';
 
 // Server-side Firebase Admin configuration
 let adminApp: App | null = null
