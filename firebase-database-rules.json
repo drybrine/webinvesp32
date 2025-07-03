@@ -1,7 +1,9 @@
 {
   "rules": {
+    ".read": false,
+    ".write": false,
     "inventory": {
-      ".read": true,
+      ".read": "auth != null",
       ".write": "auth != null"
     },
     "scans": {

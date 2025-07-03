@@ -19,6 +19,7 @@ import {
   UserCheck,
   Smartphone
 } from "lucide-react"
+import { useFirebaseErrorHandling } from "@/hooks/use-firebase-error-handling"
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseAttendance, useFirebaseDevices } from "@/hooks/use-firebase"
 import { FirebasePermissionError } from "@/components/firebase-permission-error"
@@ -41,6 +42,10 @@ function AbsensiPage() {
   const { attendance, addAttendance, loading, error } = useFirebaseAttendance()
   const { devices } = useFirebaseDevices()
   const { toast } = useToast()
+  const firebaseErrorHandling = useFirebaseErrorHandling({
+    enableConnectionMonitoring: true,
+    maxRetries: 3
+  })
   
   const [searchTerm, setSearchTerm] = useState("")
   const [manualNim, setManualNim] = useState("")
@@ -164,15 +169,73 @@ function AbsensiPage() {
     )
   }
 
+  // Enhanced error handling
   if (error) {
+    // Handle Firebase errors with the new error handling system
+    const isRecoverable = firebaseErrorHandling.handleError(error, 'attendance')
+    
     if (typeof error === 'string' && error.includes('permission_denied')) {
-      return <FirebasePermissionError error={error} onRetry={() => window.location.reload()} />
+      return <FirebasePermissionError 
+        error={error} 
+        onRetry={async () => {
+          firebaseErrorHandling.clearError()
+          const success = await firebaseErrorHandling.retry(async () => {
+            window.location.reload()
+          })
+          if (!success) {
+            toast({
+              title: "Retry Failed",
+              description: "Unable to recover from error. Please check your connection and try again.",
+              variant: "destructive"
+            })
+          }
+        }}
+        showConnectionStatus={true}
+      />
     }
     
     return (
       <div className="min-h-screen gradient-surface p-4 flex items-center justify-center">
-        <div className="text-center text-destructive">
-          <p>Gagal memuat data: {error}</p>
+        <div className="text-center">
+          <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
+            <h2 className="text-lg font-semibold text-destructive mb-2">Error Loading Data</h2>
+            <p className="text-muted-foreground mb-4">
+              {firebaseErrorHandling.error || error || "An unknown error occurred"}
+            </p>
+            <div className="flex gap-2 justify-center">
+              <Button 
+                onClick={() => window.location.reload()}
+                disabled={firebaseErrorHandling.isRetrying}
+              >
+                {firebaseErrorHandling.isRetrying ? "Retrying..." : "Reload Page"}
+              </Button>
+              {firebaseErrorHandling.canRetry && (
+                <Button 
+                  variant="outline"
+                  onClick={async () => {
+                    const success = await firebaseErrorHandling.retry(async () => {
+                      window.location.reload()
+                    })
+                    if (!success) {
+                      toast({
+                        title: "Retry Failed",
+                        description: "Unable to recover. Please check your connection.",
+                        variant: "destructive"
+                      })
+                    }
+                  }}
+                  disabled={firebaseErrorHandling.isRetrying}
+                >
+                  Auto Retry ({firebaseErrorHandling.retryCount}/{3})
+                </Button>
+              )}
+            </div>
+            {!firebaseErrorHandling.isOnline && (
+              <p className="text-sm text-yellow-600 mt-2">
+                ⚠️ Device is offline. Some features may not work.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     )
