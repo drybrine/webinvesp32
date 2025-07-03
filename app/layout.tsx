@@ -1,4 +1,5 @@
 import type React from "react"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import type { Metadata } from "next"
 // Temporarily disable Google Fonts for build
 // import { Inter } from "next/font/google"
@@ -95,6 +96,7 @@ export default function RootLayout({
             </RealtimeScanProvider>
           </DeviceStatusMonitorProvider>
         </AutoAuth>
+        <SpeedInsights />
       </body>
     </html>
   )
