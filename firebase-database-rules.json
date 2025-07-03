@@ -1,6 +1,6 @@
 {
   "rules": {
-    ".read": false,
+    ".read": "auth != null",
     ".write": false,
     "inventory": {
       ".read": "auth != null",

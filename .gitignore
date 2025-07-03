@@ -40,8 +40,7 @@ next-env.d.ts
 .env
 
 # Netlify
-.netlify/
-.netlify/state.json
+
 
 # Vercel
 .vercel

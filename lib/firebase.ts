@@ -240,20 +240,8 @@ if (typeof window !== "undefined") {
 export const ensureFirebaseInitialized = () => {
   if (!database && typeof window === "undefined") {
     // If we're on server side and database is not initialized, try to initialize
-    // But only if we have valid configuration
-    const hasValidConfig = !!(
-      firebaseConfig.apiKey && 
-      firebaseConfig.authDomain && 
-      firebaseConfig.databaseURL && 
-      firebaseConfig.projectId
-    );
-    
-    if (hasValidConfig) {
-      return initializeFirebaseServer()
-    } else {
-      console.warn('🔥 Firebase configuration not available, skipping initialization');
-      return null;
-    }
+    console.log("🔥 Database not initialized on server, attempting re-initialization...");
+    return initializeFirebaseServer()
   }
   return database
 }
