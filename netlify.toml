@@ -1,10 +1,10 @@
 [build]
   command = "npm run build"
-  publish = ".next"
+  publish = ""
 
 [build.environment]
   NEXT_PRIVATE_TARGET = "server"
-  NODE_VERSION = "18"
+  NODE_VERSION = "18.20.8"
   # Optimize npm for faster builds
   NPM_CONFIG_FUND = "false"
   NPM_CONFIG_AUDIT = "false"
@@ -79,8 +79,4 @@
     Access-Control-Allow-Headers = "Content-Type, Authorization"
     Cache-Control = "no-cache, no-store, must-revalidate"
 
-# Redirect rules for SPA behavior
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# Next.js routing is handled by @netlify/plugin-nextjs
