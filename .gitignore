@@ -19,7 +19,6 @@ yarn-error.log*
 # env files
 .env*
 !.env.example
-!.env.vercel
 
 # Firebase sensitive files
 .env.local
@@ -38,9 +37,6 @@ performance-test.js
 *.tsbuildinfo
 next-env.d.ts
 .env
-
-# Netlify
-
 
 # Vercel
 .vercel
@@ -71,3 +67,6 @@ Thumbs.db
 .parcel-cache/
 .next/cache/
 serviceAccountKey.json.json
+
+# Vercel environment variables
+.env.vercel
