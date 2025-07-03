@@ -392,6 +392,8 @@ npm run build
 # Environment variables
 FIREBASE_DATABASE_URL=your-database-url
 CRON_SECRET=your-secret-key
+# Install dev dependencies on Netlify
+NPM_CONFIG_PRODUCTION=false
 ```
 
 ### **Vercel**
