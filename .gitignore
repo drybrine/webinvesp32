@@ -70,3 +70,4 @@ Thumbs.db
 .cache/
 .parcel-cache/
 .next/cache/
+serviceAccountKey.json.json
