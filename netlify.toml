@@ -8,6 +8,8 @@
   # Optimize npm for faster builds
   NPM_CONFIG_FUND = "false"
   NPM_CONFIG_AUDIT = "false"
+  # Ensure dev dependencies are installed
+  NPM_CONFIG_PRODUCTION = "false"
   # Disable unnecessary package managers
   DISABLE_YARN = "true"
   DISABLE_PNPM = "true"
