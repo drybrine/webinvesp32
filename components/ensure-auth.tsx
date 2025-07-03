@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { authenticateUser, isAuthenticated } from '@/lib/auth'
+import { authenticateUser, isAuthenticated, ensureAuthentication } from '@/lib/auth'
 import { isFirebaseConfigured } from '@/lib/firebase'
 
 interface EnsureAuthProps {
@@ -14,7 +14,7 @@ export default function EnsureAuth({ children, fallback }: EnsureAuthProps) {
   const [authError, setAuthError] = useState<string | null>(null)
 
   useEffect(() => {
-    const ensureAuthentication = async () => {
+    const ensureAuth = async () => {
       if (!isFirebaseConfigured()) {
         console.warn("Firebase not configured")
         setAuthError("Firebase not configured")
@@ -30,9 +30,9 @@ export default function EnsureAuth({ children, fallback }: EnsureAuthProps) {
           return
         }
 
-        // Force authentication
-        console.log("Forcing authentication...")
-        const user = await authenticateUser()
+        // Use enhanced authentication with persistence
+        console.log("Ensuring authentication...")
+        const user = await ensureAuthentication()
         
         if (user) {
           console.log("Authentication successful:", user.uid)
@@ -48,7 +48,7 @@ export default function EnsureAuth({ children, fallback }: EnsureAuthProps) {
       }
     }
 
-    ensureAuthentication()
+    ensureAuth()
   }, [])
 
   if (isAuthenticating) {

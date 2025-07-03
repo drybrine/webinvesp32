@@ -24,6 +24,7 @@ import { useFirebaseAttendance, useFirebaseDevices } from "@/hooks/use-firebase"
 import { FirebasePermissionError } from "@/components/firebase-permission-error"
 import { useRealtimeAttendance } from "@/hooks/use-realtime-attendance"
 import EnsureAuth from "@/components/ensure-auth"
+import { ensureAuthentication } from "@/lib/auth"
 
 interface AttendanceRecord {
   id: string
@@ -164,15 +165,57 @@ function AbsensiPage() {
     )
   }
 
+  // Enhanced auth retry function
+  const handleAuthRetry = async () => {
+    try {
+      const user = await ensureAuthentication()
+      if (user) {
+        toast({
+          title: "✅ Authentication Successful",
+          description: "Berhasil autentikasi, mencoba reload data...",
+        })
+        // Reload the page to refresh all data
+        window.location.reload()
+      } else {
+        throw new Error("Authentication failed")
+      }
+    } catch (error) {
+      toast({
+        title: "❌ Authentication Failed", 
+        description: "Gagal melakukan autentikasi ulang",
+        variant: "destructive"
+      })
+    }
+  }
+
   if (error) {
-    if (typeof error === 'string' && error.includes('permission_denied')) {
-      return <FirebasePermissionError error={error} onRetry={() => window.location.reload()} />
+    // Enhanced error detection and handling
+    const errorString = typeof error === 'string' ? error : error?.toString() || 'Unknown error'
+    const isPermissionError = errorString.includes('permission_denied') || errorString.includes('Permission denied')
+    const isAuthError = errorString.includes('auth') || errorString.includes('Authentication')
+    const isNetworkError = errorString.includes('network') || errorString.includes('offline') || errorString.includes('connection')
+    
+    if (isPermissionError || isAuthError || isNetworkError) {
+      return (
+        <FirebasePermissionError 
+          error={errorString} 
+          onRetry={() => window.location.reload()}
+          onAuthRetry={handleAuthRetry}
+        />
+      )
     }
     
     return (
       <div className="min-h-screen gradient-surface p-4 flex items-center justify-center">
         <div className="text-center text-destructive">
-          <p>Gagal memuat data: {error}</p>
+          <p>Gagal memuat data: {errorString}</p>
+          <Button 
+            onClick={() => window.location.reload()} 
+            variant="outline" 
+            className="mt-4"
+          >
+            Retry
+          </Button>
         </div>
       </div>
     )

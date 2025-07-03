@@ -16,32 +16,32 @@ export async function GET() {
     const rules = {
       "rules": {
         "inventory": {
-          ".read": true,
-          ".write": true
+          ".read": "auth != null",
+          ".write": "auth != null"
         },
         "scans": {
-          ".read": true,
-          ".write": true
+          ".read": "auth != null",
+          ".write": "auth != null"
         },
         "devices": {
           ".read": true,
-          ".write": true
+          ".write": "auth != null"
         },
         "settings": {
-          ".read": true,
-          ".write": true
+          ".read": "auth != null",
+          ".write": "auth != null"
         },
         "analytics": {
-          ".read": true,
-          ".write": true
+          ".read": "auth != null",
+          ".write": "auth != null"
         },
         "transactions": {
-          ".read": true,
-          ".write": true
+          ".read": "auth != null",
+          ".write": "auth != null"
         },
         "attendance": {
-          ".read": true,
-          ".write": true,
+          ".read": "auth != null",
+          ".write": "auth != null",
           ".indexOn": ["nim", "timestamp", "deviceId"]
         }
       }
@@ -57,7 +57,7 @@ export async function GET() {
           step2: "Go to Firebase Console > Database > Rules",
           step3: "Paste the rules and click 'Publish'",
           step4: "Wait a few minutes for rules to propagate",
-          note: "This will give full read/write access to all collections including attendance"
+          note: "These rules require authentication for data access while keeping device status public for API monitoring"
         }
       },
       { status: 200, headers: corsHeaders }

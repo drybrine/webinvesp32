@@ -474,15 +474,40 @@ export const isFirebaseConfigured = () => {
   );
 }
 
-// Get Firebase status
+// Get Firebase status with detailed information
 export const getFirebaseStatus = () => {
   const configured = !!(firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.databaseURL && firebaseConfig.projectId);
   return {
     initialized: firebaseInitialized,
     // available implies initialized and database object exists
-    available: firebaseInitialized && !!database,
+    available: firebaseInitialized && !!database && !!auth,
     configured: configured,
-    hasValidConfig: !!firebaseConfig.databaseURL, // This check might be redundant if 'configured' is true
+    hasValidConfig: !!firebaseConfig.databaseURL,
     databaseUrl: firebaseConfig.databaseURL,
+    errors: getConfigurationErrors(),
   }
+}
+
+// Get detailed configuration errors
+export const getConfigurationErrors = (): string[] => {
+  const errors: string[] = []
+  
+  if (!firebaseConfig.apiKey) errors.push("Missing API key")
+  if (!firebaseConfig.authDomain) errors.push("Missing auth domain")
+  if (!firebaseConfig.databaseURL) errors.push("Missing database URL")
+  if (!firebaseConfig.projectId) errors.push("Missing project ID")
+  
+  if (firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('AIza')) {
+    errors.push("Invalid API key format")
+  }
+  
+  if (firebaseConfig.authDomain && !firebaseConfig.authDomain.includes('firebaseapp.com')) {
+    errors.push("Invalid auth domain format")
+  }
+  
+  if (!firebaseInitialized) errors.push("Firebase not initialized")
+  if (!database) errors.push("Database not connected")
+  if (!auth) errors.push("Auth not initialized")
+  
+  return errors
 }
