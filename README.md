@@ -124,7 +124,7 @@
 ## 🚀 Quick Start
 
 ### Prasyarat
-- Node.js 18+ 
+- Node.js 20+
 - npm atau yarn
 - Firebase account
 - ESP32 device (optional)
