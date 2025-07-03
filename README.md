@@ -376,10 +376,52 @@ webinvesp32/
 
 ## 📦 Deployment
 
-### **Netlify (Recommended)**
+### **Vercel (Recommended for Firebase Projects)**
+1. **Fork repository ke GitHub**
+2. **Connect ke Vercel**
+   - Buka [Vercel Dashboard](https://vercel.com/dashboard)
+   - Klik "New Project"
+   - Import repository dari GitHub
+   
+3. **Configure Firebase Environment Variables**
+   - Buka Project Settings → Environment Variables
+   - Tambahkan semua environment variables dari `.env.example`:
+   
+   ```env
+   NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key_here
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+   NEXT_PUBLIC_FIREBASE_DATABASE_URL=https://your_project_id-default-rtdb.region.firebasedatabase.app
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+   NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
+   NODE_ENV=production
+   ```
+
+4. **Optional: Firebase Admin SDK (for server-side operations)**
+   - Buka Firebase Console → Project Settings → Service Accounts
+   - Generate Private Key
+   - Copy semua content JSON ke environment variable:
+   ```env
+   FIREBASE_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"your_project_id",...}
+   ```
+
+5. **Deploy!**
+   - Vercel akan otomatis build dan deploy
+   - Konfigurasi sudah optimal untuk Firebase + Next.js
+
+**🚀 Keunggulan Vercel untuk Firebase:**
+- Edge functions yang cepat
+- Automatic SSL dan CDN
+- Optimasi untuk Next.js + Firebase
+- Environment variables yang aman
+- Monitoring dan analytics built-in
+
+### **Netlify (Alternative)**
 1. Fork repository ke GitHub
 2. Connect ke Netlify
-3. Set environment variables
+3. Set environment variables (sama seperti Vercel)
 4. Deploy!
 
 ```bash
@@ -390,16 +432,9 @@ npm run build
 .next
 
 # Environment variables
-FIREBASE_DATABASE_URL=your-database-url
-CRON_SECRET=your-secret-key
-```
-
-### **Vercel**
-```bash
-npm install -g vercel
-vercel
-
-# atau deploy langsung dari GitHub
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key_here
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+# ... semua environment variables lainnya
 ```
 
 ### **Manual Deployment**
@@ -408,6 +443,18 @@ vercel
 npm run build
 
 # Upload folder .next ke hosting
+```
+
+### **Quick Deploy dengan Vercel CLI**
+```bash
+# Install Vercel CLI
+npm install -g vercel
+
+# Deploy dari terminal
+vercel
+
+# Atau deploy dengan environment variables
+vercel --env NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key_here
 ```
 
 ## 🏗️ Arsitektur

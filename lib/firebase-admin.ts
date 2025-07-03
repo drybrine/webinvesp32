@@ -16,7 +16,8 @@ export const initializeFirebaseAdmin = () => {
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
     
     if (serviceAccount) {
-      // Initialize with service account (production)
+      // Initialize with service account (production - Vercel, Netlify, etc.)
+      console.log('🔧 Initializing Firebase Admin with service account...')
       const serviceAccountKey = JSON.parse(serviceAccount) as ServiceAccount
       
       if (getApps().length === 0) {
@@ -30,6 +31,7 @@ export const initializeFirebaseAdmin = () => {
     } else {
       // Development mode - use default credentials or client SDK
       console.log('🔧 Development mode: Using client SDK for server operations')
+      console.log('💡 To use Firebase Admin SDK, set FIREBASE_SERVICE_ACCOUNT_KEY environment variable')
       return null
     }
 
@@ -39,6 +41,7 @@ export const initializeFirebaseAdmin = () => {
     return { app: adminApp, database: adminDatabase }
   } catch (error) {
     console.error('❌ Failed to initialize Firebase Admin:', error)
+    console.error('💡 Check your FIREBASE_SERVICE_ACCOUNT_KEY environment variable')
     return null
   }
 }

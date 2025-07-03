@@ -26,7 +26,10 @@ const validateFirebaseConfig = () => {
   
   if (missingFields.length > 0) {
     console.error('❌ Firebase configuration incomplete. Missing fields:', missingFields);
-    console.error('💡 Please check your environment variables (Netlify for production, .env.local for local development) and ensure all required variables are set.');
+    console.error('💡 Please check your environment variables:');
+    console.error('   • Vercel: Set in Project Settings → Environment Variables');
+    console.error('   • Netlify: Set in Site Settings → Environment Variables');
+    console.error('   • Local: Copy .env.example to .env.local and fill in values');
     return false;
   }
   
