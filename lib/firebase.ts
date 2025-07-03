@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app"
-import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference } from "firebase/database" // Added update
+import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference, onValue } from "firebase/database"
 import { getAuth, Auth } from "firebase/auth"
 import { authenticateUser } from "./auth"
 
@@ -484,5 +484,121 @@ export const getFirebaseStatus = () => {
     configured: configured,
     hasValidConfig: !!firebaseConfig.databaseURL, // This check might be redundant if 'configured' is true
     databaseUrl: firebaseConfig.databaseURL,
+  }
+}
+
+// Connection monitoring and auto-recovery
+let connectionRetryInterval: NodeJS.Timeout | null = null
+let isMonitoringConnection = false
+
+// Monitor Firebase connection and auto-retry on failure
+export const startConnectionMonitoring = () => {
+  if (typeof window === "undefined" || isMonitoringConnection) {
+    return
+  }
+
+  isMonitoringConnection = true
+  console.log("🔄 Starting Firebase connection monitoring...")
+
+  const checkConnection = async () => {
+    try {
+      if (!isFirebaseConfigured() || !database) {
+        console.warn("Firebase not configured, attempting re-initialization...")
+        initializeFirebase()
+        return
+      }
+
+      // Test connection with a simple read operation
+      const testRef = ref(database, ".info/connected")
+      const unsubscribe = onValue(testRef, 
+        (snapshot) => {
+          const isConnected = snapshot.val()
+          if (isConnected) {
+            console.log("✅ Firebase connection verified")
+            if (connectionRetryInterval) {
+              clearInterval(connectionRetryInterval)
+              connectionRetryInterval = null
+            }
+          } else {
+            console.warn("⚠️ Firebase connection lost")
+          }
+          unsubscribe()
+        },
+        (error) => {
+          console.error("❌ Firebase connection test failed:", error)
+          // Try to re-authenticate
+          import("./auth").then(({ ensureAuthenticated }) => {
+            ensureAuthenticated().catch(err => 
+              console.error("Failed to re-authenticate:", err)
+            )
+          })
+        }
+      )
+    } catch (error) {
+      console.error("❌ Connection check failed:", error)
+    }
+  }
+
+  // Initial check
+  checkConnection()
+
+  // Set up periodic checking
+  connectionRetryInterval = setInterval(checkConnection, 30000) // Check every 30 seconds
+}
+
+// Stop connection monitoring
+export const stopConnectionMonitoring = () => {
+  if (connectionRetryInterval) {
+    clearInterval(connectionRetryInterval)
+    connectionRetryInterval = null
+  }
+  isMonitoringConnection = false
+}
+
+// Enhanced error handler for Firebase operations
+export const handleFirebaseError = (error: any, operation: string) => {
+  console.error(`❌ Firebase ${operation} error:`, error)
+  
+  const errorCode = error?.code || ''
+  const errorMessage = error?.message || error?.toString() || 'Unknown error'
+  
+  // Handle specific Firebase errors
+  switch (errorCode) {
+    case 'permission-denied':
+      return {
+        type: 'permission',
+        message: 'Permission denied - check Firebase rules and authentication',
+        recoverable: true,
+        action: 'reauth'
+      }
+    case 'network-request-failed':
+    case 'unavailable':
+      return {
+        type: 'network',
+        message: 'Network error - check internet connection',
+        recoverable: true,
+        action: 'retry'
+      }
+    case 'unauthenticated':
+      return {
+        type: 'auth',
+        message: 'Authentication required',
+        recoverable: true,
+        action: 'reauth'
+      }
+    case 'database-rules':
+      return {
+        type: 'rules',
+        message: 'Database rules deny access',
+        recoverable: false,
+        action: 'config'
+      }
+    default:
+      return {
+        type: 'unknown',
+        message: errorMessage,
+        recoverable: false,
+        action: 'none'
+      }
   }
 }
