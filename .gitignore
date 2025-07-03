@@ -70,3 +70,4 @@ serviceAccountKey.json.json
 
 # Vercel environment variables
 .env.vercel
+.env.local
