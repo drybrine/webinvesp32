@@ -11,7 +11,6 @@ import { SessionIndicator } from "@/components/session-indicator"
 const navigation = [
 	{ name: "Dashboard", href: "/", icon: BarChart3, color: "from-blue-500 to-purple-500" },
 	{ name: "Transaksi", href: "/transaksi", icon: Receipt, color: "from-emerald-500 to-teal-500" },
-	{ name: "Absensi", href: "/absensi", icon: UserCheck, color: "from-orange-500 to-red-500" },
 	{ name: "Pengaturan", href: "/pengaturan", icon: Settings, color: "from-purple-500 to-pink-500" },
 ]
 
