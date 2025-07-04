@@ -68,7 +68,7 @@ export default function ScanPage() {
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
         <div className="text-center text-red-600">
-          <p>Gagal memuat data: { (typeof scansError === 'string' ? scansError : (scansError as any)?.message) || (typeof inventoryError === 'string' ? inventoryError : (inventoryError as any)?.message) }</p>
+          <p>Gagal memuat data: {scansError || inventoryError}</p>
         </div>
       </div>
     )

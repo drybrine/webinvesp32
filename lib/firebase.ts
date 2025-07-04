@@ -30,7 +30,7 @@ const validateFirebaseConfig = () => {
   }
   
   // Validasi format API key
-  if (!firebaseConfig.apiKey.startsWith('AIza')) {
+  if (firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('AIza')) {
     console.error('❌ Invalid Firebase API key format');
     return false;
   }
@@ -276,7 +276,7 @@ export { initializeFirebaseServer }
 // Helper functions for common operations with error handling
 export const firebaseHelpers = {
   // Add new inventory item
-  addInventoryItem: async (item: any) => {
+  addInventoryItem: async (item: Record<string, unknown>) => {
     if (!database || !dbRefs || !dbRefs.inventory) {
       console.error("Firebase not available or inventory ref not initialized for addInventoryItem");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -315,7 +315,7 @@ export const firebaseHelpers = {
   },
 
   // Add scan record
-  addScanRecord: async (scanData: any) => {
+  addScanRecord: async (scanData: Record<string, unknown>) => {
     if (!database || !dbRefs || !dbRefs.scans) {
       console.error("Firebase not available or scans ref not initialized for addScanRecord");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -337,7 +337,7 @@ export const firebaseHelpers = {
   },
 
   // Update device status
-  updateDeviceStatus: async (deviceId: string, status: any) => {
+  updateDeviceStatus: async (deviceId: string, status: Record<string, unknown>) => {
     if (!database) { // dbRefs.devices might not be directly needed
       console.error("Firebase database not available for updateDeviceStatus");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -356,7 +356,7 @@ export const firebaseHelpers = {
   },
 
   // Add analytics data
-  addAnalytics: async (type: string, data: any) => {
+  addAnalytics: async (type: string, data: Record<string, unknown>) => {
     if (!database || !dbRefs || !dbRefs.analytics) {
       console.error("Firebase not available or analytics ref not initialized for addAnalytics");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -375,7 +375,7 @@ export const firebaseHelpers = {
     }
   },
 
-  addTransaction: async (transactionData: any) => {
+  addTransaction: async (transactionData: Record<string, unknown>) => {
     if (!database || !dbRefs || !dbRefs.transactions) {
       console.error("Firebase not available or transactions ref not initialized for addTransaction");
       throw new Error("Firebase not available - operation failed");

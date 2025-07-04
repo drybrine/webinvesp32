@@ -44,7 +44,7 @@ export function BarcodeScanner({ onDetected, className = "" }: BarcodeScannerPro
         },
         locate: true,
       },
-      (err: any) => {
+      (err: Error | null) => {
         if (err) {
           console.error("Error starting Quagga:", err)
           toast({
@@ -68,14 +68,18 @@ export function BarcodeScanner({ onDetected, className = "" }: BarcodeScannerPro
     )
 
     // Add detection event listener
-    Quagga.onDetected((result: any) => {
+    Quagga.onDetected((result: { codeResult?: { code: string }; box?: { x: number; y: number; width: number; height: number } }) => {
       if (result && result.codeResult && result.codeResult.code) {
         const code = result.codeResult.code
         onDetected(code)
 
         // Play beep sound
-        const beep = new Audio("/beep.mp3")
-        beep.play().catch((e) => console.log("Error playing beep:", e))
+        try {
+          const beep = new Audio("/beep.mp3")
+          beep.play().catch((e) => console.log("Error playing beep:", e))
+        } catch (e) {
+          console.log("Audio not available:", e)
+        }
 
         // Highlight detected barcode
         const drawingCanvas = document.querySelector("canvas.drawingBuffer") as HTMLCanvasElement
