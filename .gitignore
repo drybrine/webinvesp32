@@ -25,7 +25,7 @@ yarn-error.log*
 .env.production.local
 .env.development.local
 
-# Firebase service account keys (jika ada)
+# Firebase service account keys (if any)
 *service-account*.json
 firebase-adminsdk*.json
 
@@ -37,10 +37,6 @@ performance-test.js
 *.tsbuildinfo
 next-env.d.ts
 .env
-
-# Netlify
-.netlify/
-.netlify/state.json
 
 # Service Worker
 public/sw.js.map
