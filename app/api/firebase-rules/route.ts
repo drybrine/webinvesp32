@@ -38,11 +38,6 @@ export async function GET() {
         "transactions": {
           ".read": true,
           ".write": true
-        },
-        "attendance": {
-          ".read": true,
-          ".write": true,
-          ".indexOn": ["nim", "timestamp", "deviceId"]
         }
       }
     }
@@ -57,7 +52,6 @@ export async function GET() {
           step2: "Go to Firebase Console > Database > Rules",
           step3: "Paste the rules and click 'Publish'",
           step4: "Wait a few minutes for rules to propagate",
-          note: "This will give full read/write access to all collections including attendance"
         }
       },
       { status: 200, headers: corsHeaders }

@@ -23,11 +23,6 @@
     "transactions": {
       ".read": true,
       ".write": true
-    },
-    "attendance": {
-      ".read": true,
-      ".write": true,
-      ".indexOn": ["nim", "timestamp", "deviceId"]
     }
   }
 }

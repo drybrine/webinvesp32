@@ -30,7 +30,7 @@ const validateFirebaseConfig = () => {
   }
   
   // Validasi format API key
-  if (firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('AIza')) {
+  if (!firebaseConfig.apiKey.startsWith('AIza')) {
     console.error('❌ Invalid Firebase API key format');
     return false;
   }
@@ -59,7 +59,6 @@ interface DbRefs {
   settings: DatabaseReference;
   analytics: DatabaseReference;
   transactions: DatabaseReference; // Ditambahkan
-  attendance: DatabaseReference; // Ditambahkan untuk absensi
 }
 export let dbRefs: DbRefs | null = null; // Initialize as null
 
@@ -150,7 +149,6 @@ const initializeFirebase = () => {
         settings: ref(database, "settings"),
         analytics: ref(database, "analytics"),
         transactions: ref(database, "transactions"), // Ditambahkan
-        attendance: ref(database, "attendance"), // Ditambahkan untuk absensi
       };
     }
 
@@ -217,7 +215,6 @@ const initializeFirebaseServer = () => {
         settings: ref(database, "settings"),
         analytics: ref(database, "analytics"),
         transactions: ref(database, "transactions"),
-        attendance: ref(database, "attendance"),
       };
     }
 
@@ -276,7 +273,7 @@ export { initializeFirebaseServer }
 // Helper functions for common operations with error handling
 export const firebaseHelpers = {
   // Add new inventory item
-  addInventoryItem: async (item: Record<string, unknown>) => {
+  addInventoryItem: async (item: any) => {
     if (!database || !dbRefs || !dbRefs.inventory) {
       console.error("Firebase not available or inventory ref not initialized for addInventoryItem");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -315,7 +312,7 @@ export const firebaseHelpers = {
   },
 
   // Add scan record
-  addScanRecord: async (scanData: Record<string, unknown>) => {
+  addScanRecord: async (scanData: any) => {
     if (!database || !dbRefs || !dbRefs.scans) {
       console.error("Firebase not available or scans ref not initialized for addScanRecord");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -337,7 +334,7 @@ export const firebaseHelpers = {
   },
 
   // Update device status
-  updateDeviceStatus: async (deviceId: string, status: Record<string, unknown>) => {
+  updateDeviceStatus: async (deviceId: string, status: any) => {
     if (!database) { // dbRefs.devices might not be directly needed
       console.error("Firebase database not available for updateDeviceStatus");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -356,7 +353,7 @@ export const firebaseHelpers = {
   },
 
   // Add analytics data
-  addAnalytics: async (type: string, data: Record<string, unknown>) => {
+  addAnalytics: async (type: string, data: any) => {
     if (!database || !dbRefs || !dbRefs.analytics) {
       console.error("Firebase not available or analytics ref not initialized for addAnalytics");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -375,7 +372,7 @@ export const firebaseHelpers = {
     }
   },
 
-  addTransaction: async (transactionData: Record<string, unknown>) => {
+  addTransaction: async (transactionData: any) => {
     if (!database || !dbRefs || !dbRefs.transactions) {
       console.error("Firebase not available or transactions ref not initialized for addTransaction");
       throw new Error("Firebase not available - operation failed");

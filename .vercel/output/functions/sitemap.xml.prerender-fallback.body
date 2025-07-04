@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url>
+<loc>https://stokmanager.netlify.app</loc>
+<lastmod>2025-07-04T13:59:38.698Z</lastmod>
+<changefreq>daily</changefreq>
+<priority>1</priority>
+</url>
+<url>
+<loc>https://stokmanager.netlify.app/login</loc>
+<lastmod>2025-07-04T13:59:38.698Z</lastmod>
+<changefreq>monthly</changefreq>
+<priority>0.8</priority>
+</url>
+<url>
+<loc>https://stokmanager.netlify.app/scan</loc>
+<lastmod>2025-07-04T13:59:38.698Z</lastmod>
+<changefreq>daily</changefreq>
+<priority>0.9</priority>
+</url>
+<url>
+<loc>https://stokmanager.netlify.app/transaksi</loc>
+<lastmod>2025-07-04T13:59:38.698Z</lastmod>
+<changefreq>daily</changefreq>
+<priority>0.9</priority>
+</url>
+<url>
+<loc>https://stokmanager.netlify.app/pengaturan</loc>
+<lastmod>2025-07-04T13:59:38.698Z</lastmod>
+<changefreq>weekly</changefreq>
+<priority>0.7</priority>
+</url>
+</urlset>
