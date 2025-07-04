@@ -7,7 +7,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4.17-06B6D4)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-> 🚀 **Sistem manajemen inventaris dan absensi real-time dengan integrasi ESP32 dan pemindai barcode**
+> 🚀 **Sistem manajemen inventaris dengan integrasi ESP32 dan pemindai barcode**
 > 
 > **StokManager** adalah solusi lengkap untuk manajemen stok dan inventory dengan teknologi IoT yang modern, menggabungkan web application berbasis Next.js dengan hardware ESP32 untuk scanning barcode real-time.
 
@@ -37,12 +37,6 @@
 - ✅ **Stock Tracking & Analytics**
 - ✅ **Transaction History** dengan export Excel
 - ✅ **QR Code Generation** untuk produk
-
-### 👥 **Sistem Absensi**
-- ✅ **NIM-based Attendance** untuk mahasiswa/karyawan
-- ✅ **Real-time Status Monitoring**
-- ✅ **Device Heartbeat Tracking**
-- ✅ **Attendance Analytics & Reporting**
 
 ### 📱 **Web Application Features**
 - ✅ **Responsive Design** (Mobile & Desktop)
@@ -111,7 +105,6 @@
 │  ⏰ Session: 23:45 remaining       │
 ├─────────────────────────────────────┤
 │  🔍 [Scan Barcode]                 │
-│  👥 [Absensi]                      │
 │  ⚙️  [Pengaturan]                   │
 └─────────────────────────────────────┘
 ```
@@ -241,13 +234,6 @@ Buka Firebase Console → Database → Rules:
         ".validate": "newData.hasChildren(['deviceId', 'lastSeen', 'status'])"
       }
     },
-    "attendance": {
-      ".read": true,
-      ".write": true,
-      "$attendanceId": {
-        ".validate": "newData.hasChildren(['nim', 'timestamp', 'deviceId'])"
-      }
-    },
     "settings": {
       ".read": true,
       ".write": true
@@ -307,8 +293,6 @@ webinvesp32/
 │   ├── page.tsx                # Dashboard utama (inventory management)
 │   ├── layout.tsx              # Root layout dengan providers
 │   ├── loading.tsx             # Global loading component
-│   ├── absensi/               # Sistem absensi
-│   │   └── page.tsx           # QR code attendance scanning
 │   ├── scan/                  # Riwayat scanning
 │   │   └── page.tsx           # History dan analytics
 │   ├── transaksi/             # Manajemen transaksi
@@ -320,7 +304,6 @@ webinvesp32/
 │   │   └── page.tsx           # Login interface
 │   └── api/                   # API endpoints
 │       ├── barcode-scan/      # ESP32 scan endpoint
-│       ├── attendance/        # Attendance processing
 │       ├── devices-status/    # Device monitoring
 │       ├── firebase-*/        # Firebase utilities
 │       └── heartbeat/         # Device heartbeat
@@ -444,7 +427,6 @@ POST /api/heartbeat             # Device heartbeat
 ### **Scanning & Data**
 ```http
 POST /api/barcode-scan          # Process barcode scan
-POST /api/attendance            # Process attendance
 GET  /api/attendance-export     # Export attendance data
 ```
 
@@ -670,20 +652,7 @@ void sendHeartbeat() {
 2. Ketik barcode secara manual jika diperlukan
 3. Submit data untuk disimpan ke database
 
-### **3. 👥 Sistem Absensi**
-1. Buka halaman `/absensi`
-2. Pastikan ESP32 dalam mode "attendance"
-3. Scan QR code NIM mahasiswa/karyawan
-4. Status kehadiran update real-time
-5. Export laporan absensi jika diperlukan
-
-### **4. 📈 Riwayat & Analytics**
-- **Melihat Riwayat**: Akses `/scan` untuk history transaksi
-- **Filter Data**: Gunakan filter berdasarkan tanggal, device, dll
-- **Export Laporan**: Download data dalam format Excel/CSV
-- **Real-time Monitoring**: Pantau aktivitas scanning live
-
-### **5. ⚙️ Pengaturan Sistem**
+### **3. ⚙️ Pengaturan Sistem**
 1. **Firebase Setup**:
    - Akses `/pengaturan`
    - Test koneksi Firebase
@@ -929,7 +898,6 @@ database.ref('scans').on('value', (snapshot) => {
 ```
 Page                     Size       First Load JS
 ├ ○ /                   13.2 kB         244 kB    # Dashboard inventaris
-├ ○ /absensi           5.98 kB         196 kB    # Sistem absensi  
 ├ ○ /login             4.17 kB         113 kB    # Authentication
 ├ ○ /pengaturan        11.4 kB         202 kB    # Settings & config
 ├ ○ /scan              5.34 kB         221 kB    # Scan history

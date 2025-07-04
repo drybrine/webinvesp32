@@ -5,7 +5,6 @@ import "./globals.css"
 import Navigation from "@/components/navigation"
 import { Toaster } from "@/components/ui/toaster"
 import { RealtimeScanProvider } from "@/components/realtime-scan-provider"
-import { RealtimeAttendanceProvider } from "@/components/realtime-attendance-provider"
 import { AdminGuard } from "@/components/AdminGuard"
 import { DeviceStatusMonitorProvider } from "@/components/device-status-monitor-provider"
 import ServiceWorkerRegistration from "@/components/service-worker-registration"
@@ -66,7 +65,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="//fonts.gstatic.com" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/placeholder-logo.svg" />
+        <link rel="apple-touch-icon" href="/placeholder-logo.png" />
         <meta name="theme-color" content="#ffffff" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -81,13 +80,11 @@ export default function RootLayout({
         {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
         <DeviceStatusMonitorProvider>
           <RealtimeScanProvider>
-            <RealtimeAttendanceProvider>
-              <AdminGuard>
-                <Navigation />
-                <main>{children}</main>
-                <Toaster />
-              </AdminGuard>
-            </RealtimeAttendanceProvider>
+            <AdminGuard>
+              <Navigation />
+              <main>{children}</main>
+              <Toaster />
+            </AdminGuard>
           </RealtimeScanProvider>
         </DeviceStatusMonitorProvider>
       </body>
