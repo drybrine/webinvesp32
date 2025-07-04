@@ -55,7 +55,7 @@ export function ScanHistory({ scans, loading = false }: ScanHistoryProps) {
   })
 
   // Format date for display
-  const formatDate = (timestamp: any) => {
+  const formatDate = (timestamp: number | string) => {
     if (!timestamp) return "Unknown"
     const date = new Date(timestamp)
     return date.toLocaleString("id-ID", {
