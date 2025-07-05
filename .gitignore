@@ -1,0 +1,69 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+acli.exe
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env*
+!.env.example
+
+# Firebase sensitive files
+.env.local
+.env.production.local
+.env.development.local
+
+# Firebase service account keys (jika ada)
+*service-account*.json
+firebase-adminsdk*.json
+
+# Performance testing
+performance-report.json
+performance-test.js
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+.env
+
+# Netlify
+.netlify/
+.netlify/state.json
+
+# Service Worker
+public/sw.js.map
+
+# Performance monitoring logs
+performance.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Cache directories
+.cache/
+.parcel-cache/
+.next/cache/
