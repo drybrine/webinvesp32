@@ -394,13 +394,28 @@ FIREBASE_DATABASE_URL=your-database-url
 CRON_SECRET=your-secret-key
 ```
 
-### **Vercel**
+### **Vercel (Recommended)**
 ```bash
+# Install Vercel CLI
 npm install -g vercel
-vercel
 
-# atau deploy langsung dari GitHub
+# Login to Vercel
+vercel login
+
+# Deploy to production
+npm run deploy
+
+# Deploy preview
+npm run deploy-preview
+
+# Or deploy directly from GitHub (recommended)
+# 1. Push to GitHub
+# 2. Import repository in Vercel dashboard
+# 3. Configure environment variables
+# 4. Auto-deploy on every push
 ```
+
+> 📖 **Detailed Guide**: See [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md) for complete setup instructions
 
 ### **Manual Deployment**
 ```bash
