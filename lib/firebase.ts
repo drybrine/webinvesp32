@@ -234,17 +234,8 @@ const initializeFirebaseServer = () => {
 
 // Initialize Firebase with network checking and retry logic
 if (typeof window !== "undefined") {
-  // Use requestIdleCallback for better performance
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(() => {
-      initializeFirebaseWithRetry();
-    }, { timeout: 2000 });
-  } else {
-    // Fallback for browsers without requestIdleCallback
-    setTimeout(() => {
-      initializeFirebaseWithRetry();
-    }, 100);
-  }
+  // Initialize immediately for better UX on dashboard
+  initializeFirebaseWithRetry();
   
   // Listen for online events to retry connection
   window.addEventListener('online', () => {
@@ -434,30 +425,42 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Check if Firebase is properly configured and available
-export const isFirebaseConfigured = () => {
-  // firebaseInitialized is key here, as it's set only after successful client-side init
-  return (
-    typeof window !== "undefined" &&
-    firebaseInitialized &&
-    !!app && // Check if app object exists
-    !!database && // Check if database object exists
-    firebaseConfig.apiKey &&
-    firebaseConfig.authDomain &&
-    firebaseConfig.databaseURL &&
-    firebaseConfig.projectId
-  );
-}
+// Function to check if Firebase is properly configured and initialized
+export const isFirebaseConfigured = (): boolean => {
+  return firebaseInitialized && database !== null && dbRefs !== null;
+};
 
-// Get Firebase status
+// Function to wait for Firebase to be ready
+export const waitForFirebaseReady = (timeout: number = 5000): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (isFirebaseConfigured()) {
+      resolve(true);
+      return;
+    }
+    
+    const checkInterval = 100;
+    let elapsed = 0;
+    
+    const interval = setInterval(() => {
+      elapsed += checkInterval;
+      
+      if (isFirebaseConfigured()) {
+        clearInterval(interval);
+        resolve(true);
+      } else if (elapsed >= timeout) {
+        clearInterval(interval);
+        resolve(false);
+      }
+    }, checkInterval);
+  });
+};
+
+// Firebase connection status
 export const getFirebaseStatus = () => {
-  const configured = !!(firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.databaseURL && firebaseConfig.projectId);
   return {
     initialized: firebaseInitialized,
-    // available implies initialized and database object exists
-    available: firebaseInitialized && !!database,
-    configured: configured,
-    hasValidConfig: !!firebaseConfig.databaseURL, // This check might be redundant if 'configured' is true
-    databaseUrl: firebaseConfig.databaseURL,
-  }
-}
+    hasDatabase: database !== null,
+    hasRefs: dbRefs !== null,
+    isConfigured: isFirebaseConfigured(),
+  };
+};
