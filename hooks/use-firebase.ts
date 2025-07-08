@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"; // Add useMemo
 import { ref, onValue, DataSnapshot, query, orderByChild, off, Unsubscribe, push, set } from "firebase/database"; // Added push, set
-import { firebaseHelpers, isFirebaseConfigured, database, dbRefs, firebaseCleanup } from "@/lib/firebase"; // Ensure all are imported
+import { firebaseHelpers, isFirebaseConfigured, database, dbRefs, firebaseCleanup, waitForFirebaseReady } from "@/lib/firebase"; // Ensure all are imported
 
 export interface InventoryItem {
   id: string
@@ -99,43 +99,56 @@ export function useFirebaseInventory() {
       return;
     }
 
-    if (!isFirebaseConfigured() || !database) {
-      console.log("Firebase not available, using local storage for inventory");
-      const storedItems = getFromStorage(STORAGE_KEYS.INVENTORY);
-      setItemsData(storedItems && storedItems.length > 0 ? storedItems : []);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-
-    const inventoryRef = ref(database, "inventory");
-    unsubscribe = onValue(
-      inventoryRef,
-      (snapshot: DataSnapshot) => {
-        try {
-          const data = snapshot.val();
-          const loadedItems: InventoryItem[] = data
-            ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
-            : [];
-          setItemsData(loadedItems);
-          setError(null);
-        } catch (err: any) {
-          console.error("Error processing inventory snapshot:", err);
-          setError(err.message || "Failed to parse inventory data");
-        }
+    const initializeInventory = async () => {
+      // Wait for Firebase to be ready before proceeding
+      const firebaseReady = await waitForFirebaseReady(5000);
+      
+      if (!firebaseReady || !isFirebaseConfigured() || !database) {
+        console.log("Firebase not available, using local storage for inventory");
+        const storedItems = getFromStorage(STORAGE_KEYS.INVENTORY);
+        setItemsData(storedItems && storedItems.length > 0 ? storedItems : []);
+        setError(null);
         setLoading(false);
-      },
-      (err) => {
-        console.error("Firebase inventory error:", err);
-        setError(err.message);
+        return;
+      }
+
+      try {
+        const inventoryRef = ref(database, "inventory");
+        unsubscribe = onValue(
+          inventoryRef,
+          (snapshot: DataSnapshot) => {
+            try {
+              const data = snapshot.val();
+              const loadedItems: InventoryItem[] = data
+                ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
+                : [];
+              setItemsData(loadedItems);
+              setError(null);
+            } catch (err: any) {
+              console.error("Error processing inventory snapshot:", err);
+              setError(err.message || "Failed to parse inventory data");
+            }
+            setLoading(false);
+          },
+          (err) => {
+            console.error("Firebase inventory error:", err);
+            setError(err.message);
+            setLoading(false);
+          }
+        );
+
+        // Register listener for global cleanup
+        if (unsubscribe) {
+          firebaseCleanup.addListener(unsubscribe);
+        }
+      } catch (err: any) {
+        console.error("Error setting up inventory listener:", err);
+        setError(err.message || "Failed to setup inventory listener");
         setLoading(false);
       }
-    );
+    };
 
-    // Register listener for global cleanup
-    if (unsubscribe) {
-      firebaseCleanup.addListener(unsubscribe);
-    }
+    initializeInventory();
 
     return () => {
       if (unsubscribe) {
@@ -225,62 +238,93 @@ export function useFirebaseScans() {
 
   useEffect(() => {
     let unsubscribe: Unsubscribe | undefined;
-    if (!isFirebaseConfigured() || !database) {
-      console.log("Firebase not available, using local storage for scans");
-      // Load from local storage or use mock data
-      const storedScans = getFromStorage(STORAGE_KEYS.SCANS)
-
-      if (storedScans && storedScans.length > 0) {
-        setScans(storedScans)
-      } else {
-        // Mock data for development
-        const mockScans: ScanRecord[] = [
-          {
-            id: "scan_1",
-            barcode: "1234567890123",
-            deviceId: "ESP32_001",
-            timestamp: Date.now() - 120000, // 2 minutes ago
-            processed: true,
-            itemFound: true,
-            itemId: "mock_1",
-          },
-          {
-            id: "scan_2",
-            barcode: "9876543210987",
-            deviceId: "ESP32_001",
-            timestamp: Date.now() - 300000, // 5 minutes ago
-            processed: true,
-            itemFound: true,
-            itemId: "mock_2",
-          },
-        ]
-        setScans(mockScans)
-        saveToStorage(STORAGE_KEYS.SCANS, mockScans)
-      }
-
-      setError(null)
-      setLoading(false)
-      return
+    
+    if (typeof window === "undefined") {
+      setLoading(false);
+      return;
     }
 
-    const scansRef = ref(database, "scans");
-    unsubscribe = onValue(
-      scansRef,
-      (snapshot: DataSnapshot) => {
-        const data = snapshot.val();
-        const loadedScans: ScanRecord[] = data
-          ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
-          : [];
-        setScans(loadedScans.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+    const initializeScans = async () => {
+      // Wait for Firebase to be ready before proceeding
+      const firebaseReady = await waitForFirebaseReady(5000);
+      
+      if (!firebaseReady || !isFirebaseConfigured() || !database) {
+        console.log("Firebase not available, using local storage for scans");
+        // Load from local storage or use mock data
+        const storedScans = getFromStorage(STORAGE_KEYS.SCANS)
+
+        if (storedScans && storedScans.length > 0) {
+          setScans(storedScans)
+        } else {
+          // Mock data for development
+          const mockScans: ScanRecord[] = [
+            {
+              id: "scan_1",
+              barcode: "1234567890123",
+              deviceId: "ESP32_001",
+              timestamp: Date.now() - 120000, // 2 minutes ago
+              processed: true,
+              itemFound: true,
+              itemId: "mock_1",
+            },
+            {
+              id: "scan_2",
+              barcode: "9876543210987",
+              deviceId: "ESP32_001",
+              timestamp: Date.now() - 300000, // 5 minutes ago
+              processed: false,
+              itemFound: false,
+            },
+          ]
+          setScans(mockScans)
+        }
         setError(null);
         setLoading(false);
-      },
-      (err) => {
-        console.error("Firebase scans error:", err);
-        setError(err.message);
+        return;
+      }
+
+      try {
+        const scansRef = ref(database, "scans");
+        const scansQuery = query(scansRef, orderByChild("timestamp"));
+        
+        unsubscribe = onValue(
+          scansQuery,
+          (snapshot: DataSnapshot) => {
+            try {
+              const data = snapshot.val();
+              const loadedScans: ScanRecord[] = data
+                ? Object.keys(data)
+                    .map((key) => ({ ...data[key], id: key }))
+                    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                : [];
+              setScans(loadedScans);
+              setError(null);
+            } catch (err: any) {
+              console.error("Error processing scans snapshot:", err);
+              setError(err.message || "Failed to parse scans data");
+            }
+            setLoading(false);
+          },
+          (err) => {
+            console.error("Firebase scans error:", err);
+            setError(err.message);
+            setLoading(false);
+          }
+        );
+
+        // Register listener for global cleanup
+        if (unsubscribe) {
+          firebaseCleanup.addListener(unsubscribe);
+        }
+      } catch (err: any) {
+        console.error("Error setting up scans listener:", err);
+        setError(err.message || "Failed to setup scans listener");
         setLoading(false);
       }
-    );
+    };
+
+    initializeScans();
+
     return () => {
       if (unsubscribe) {
         unsubscribe();

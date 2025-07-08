@@ -221,7 +221,7 @@ export default function TransaksiPage() {
         } catch (error) {
           // Only log significant errors, not every network glitch
           if (error instanceof Error && !error.message.includes('timeout')) {
-            console.log('🔄 Dashboard auto-refresh error:', error.message);
+            // Auto-refresh error occurred
           }
         }
       }
@@ -233,7 +233,7 @@ export default function TransaksiPage() {
   // Listen for device status updates from background monitor
   useEffect(() => {
     const handleDeviceStatusUpdate = (event: CustomEvent) => {
-      console.log('📡 Dashboard received device status update:', event.detail);
+      // Dashboard received device status update
       // The Firebase hook will automatically refresh when the database changes
     };
 
@@ -244,26 +244,45 @@ export default function TransaksiPage() {
     };
   }, []);
 
-  // Debug: Log device status changes for dashboard
-  useEffect(() => {
-    console.log('📱 Dashboard devices update:', {
-      devicesCount: devices?.length || 0,
-      onlineDevices,
-      devices: devices?.map(d => ({
-        deviceId: d.deviceId,
-        status: d.status,
-        lastSeen: d.lastSeen,
-        timeDiff: d.lastSeen ? Math.floor((Date.now() - new Date(d.lastSeen).getTime()) / 1000) : 'never'
-      }))
-    });
-  }, [devices, onlineDevices]);
+
 
   if (inventoryLoading || scansLoading || devicesLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Memuat sistem inventaris...</p>
+          <p className="text-gray-600">
+            {inventoryLoading ? "Memuat data inventaris..." : 
+             scansLoading ? "Memuat data scan..." : 
+             devicesLoading ? "Memuat status perangkat..." : 
+             "Memuat sistem inventaris..."}
+          </p>
+          <p className="text-sm text-gray-500 mt-2">
+            Menunggu koneksi Firebase...
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error with retry option if Firebase connection fails
+  if (inventoryError || scansError || devicesError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <p className="font-bold">Terjadi kesalahan saat memuat data:</p>
+            <p className="text-sm mt-2">{inventoryError || scansError || devicesError}</p>
+          </div>
+          <Button 
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            Muat Ulang Halaman
+          </Button>
+          <p className="text-sm text-gray-500 mt-2">
+            Periksa koneksi internet Anda dan coba lagi
+          </p>
         </div>
       </div>
     )
@@ -548,6 +567,13 @@ export default function TransaksiPage() {
                   <p className="mobile-text lg:text-lg text-muted-foreground font-medium mt-1 sm:mt-2">
                     Kelola stok barang dengan teknologi terdepan
                   </p>
+                  {/* Firebase Status Indicator */}
+                  <div className="flex items-center mt-2 text-xs sm:text-sm">
+                    <div className={`w-2 h-2 rounded-full mr-2 ${firebaseStatus.isConfigured ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                    <span className={`${firebaseStatus.isConfigured ? 'text-green-600' : 'text-red-600'}`}>
+                      {firebaseStatus.isConfigured ? 'Database Terhubung' : 'Mode Offline'}
+                    </span>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center justify-center md:justify-start mobile-space-x">
@@ -583,12 +609,12 @@ export default function TransaksiPage() {
         <div className="mb-8 space-y-4 animate-fade-in-up animation-delay-200">
           {/* Firebase Status Alert */}
           <Alert className={`glass-card shadow-medium border-l-4 transition-all duration-300 ${
-            firebaseStatus.available 
+            firebaseStatus.isConfigured 
               ? "border-l-emerald-500 hover:shadow-large" 
               : "border-l-amber-500 hover:shadow-large"
           }`}>
             <div className="flex items-center">
-              {firebaseStatus.available ? (
+              {firebaseStatus.isConfigured ? (
                 <div className="relative">
                   <Wifi className="h-5 w-5 text-emerald-600" />
                   <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full animate-ping"></div>
@@ -598,7 +624,7 @@ export default function TransaksiPage() {
               )}
               <AlertDescription className="ml-3 text-sm font-medium">
                 <strong className="text-foreground">Status Backend:</strong>{" "}
-                {firebaseStatus.available ? (
+                {firebaseStatus.isConfigured ? (
                   <span className="text-emerald-700 font-semibold">Terhubung - Real-time sync aktif</span>
                 ) : (
                   <span className="text-amber-700 font-semibold">Tidak terhubung ke Firebase</span>

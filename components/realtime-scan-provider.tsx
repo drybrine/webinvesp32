@@ -25,7 +25,6 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
 
   useEffect(() => {
     if (!isFirebaseConfigured() || !database) {
-      console.log("Firebase not available for realtime scans")
       return
     }
 
@@ -34,6 +33,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
 
     const unsubscribe = onValue(scansRef, (snapshot) => {
       const data = snapshot.val()
+      
       if (data) {
         // Get the most recent scan
         const scansArray = Object.keys(data)
@@ -46,12 +46,12 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
         if (scansArray.length > 0) {
           const latestScan = scansArray[0]
           
-          // Check if this is a new scan (within last 5 seconds)
+          // Check if this is a new scan (within last 30 seconds)
           const now = Date.now()
           const scanTime = latestScan.timestamp || 0
-          const isRecentScan = now - scanTime < 5000
+          const isRecentScan = now - scanTime < 30000
 
-          // Check if the scan is from inventory mode - IMPORTANT
+          // Check if the scan is from inventory mode
           const isScanFromInventoryMode = (
             latestScan.mode === "inventory" || 
             latestScan.type === "inventory_scan" || 
@@ -60,11 +60,8 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
           
           if (!isScanFromInventoryMode) {
             // Skip processing scans from attendance mode
-            console.log(`⏭️ Skipping non-inventory scan in scan provider: ${latestScan.barcode} (mode: ${latestScan.mode || "unknown"}, type: ${latestScan.type || "unknown"})`)
             return
           }
-          
-          console.log(`📦 Processing inventory scan: ${latestScan.barcode} (mode: ${latestScan.mode || "unknown"}, type: ${latestScan.type || "unknown"})`)
 
           if (isRecentScan && latestScan.barcode !== lastScannedBarcode) {
             setLastScannedBarcode(latestScan.barcode)
@@ -84,6 +81,8 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
           }
         }
       }
+    }, (error) => {
+      console.error("Firebase realtime scan error:", error)
     })
 
     return () => {
@@ -91,7 +90,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
         off(scansRef, "value", unsubscribe)
       }
     }
-  }, [lastScannedBarcode, isPopupDisabled])
+  }, [lastScannedBarcode, isPopupDisabled, pathname])
 
   const handleClosePopup = () => {
     setShowPopup(false)

@@ -56,6 +56,7 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
   useEffect(() => {
     if (barcode) {
       const foundProduct = items.find((item) => item.barcode === barcode)
+      
       setProduct(foundProduct || null)
       if (foundProduct) {
         setViewMode("quickAction") // Default ke quick action jika produk ada
@@ -81,10 +82,32 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
 
   const handleAddProduct = async () => {
     try {
-      if (!newProduct) {
-        toast({ title: "Error", description: "Data produk tidak lengkap.", variant: "destructive" });
+      // Validasi input yang diperlukan
+      if (!newProduct.name.trim()) {
+        toast({ title: "Error", description: "Nama produk harus diisi.", variant: "destructive" });
         return;
       }
+      
+      if (!newProduct.barcode?.trim()) {
+        toast({ title: "Error", description: "Barcode harus diisi.", variant: "destructive" });
+        return;
+      }
+      
+      if (newProduct.price < 0) {
+        toast({ title: "Error", description: "Harga tidak boleh negatif.", variant: "destructive" });
+        return;
+      }
+      
+      if (newProduct.quantity < 0) {
+        toast({ title: "Error", description: "Stok awal tidak boleh negatif.", variant: "destructive" });
+        return;
+      }
+      
+      if (newProduct.minStock < 0) {
+        toast({ title: "Error", description: "Stok minimum tidak boleh negatif.", variant: "destructive" });
+        return;
+      }
+      
       // Cek jika barcode sudah ada (meskipun seharusnya tidak terjadi jika alur dari scan)
       if (items.some(item => item.barcode === newProduct.barcode)) {
         toast({ title: "Error", description: "Barcode sudah terdaftar untuk produk lain.", variant: "destructive" });
@@ -98,9 +121,13 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
       };
       
       await addItem(productToAdd);
-      toast({ title: "✅ Produk Ditambahkan", description: `${newProduct.name} berhasil ditambahkan.` });
+      toast({ 
+        title: "✅ Produk Ditambahkan", 
+        description: `${newProduct.name} berhasil ditambahkan dengan stok awal ${newProduct.quantity} unit.` 
+      });
       onClose();
     } catch (error) {
+      console.error("Error adding product:", error);
       toast({ title: "Error", description: "Gagal menambahkan produk.", variant: "destructive" });
     }
   };
@@ -709,61 +736,158 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
 
       case "addNew":
         return (
-          <div className="space-y-6">
-            <DialogHeader>
-              <DialogTitle>Tambah Produk Baru</DialogTitle>
-              <DialogDescription>Barcode <span className="font-mono">{barcode}</span> tidak ditemukan. Tambahkan sebagai produk baru.</DialogDescription>
-            </DialogHeader>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto p-1">
-              <div className="space-y-2">
-                <Label htmlFor="barcode-new">Barcode *</Label>
-                <Input id="barcode-new" name="barcode" value={newProduct.barcode} onChange={handleInputChange} readOnly className="bg-gray-100 dark:bg-gray-700"/>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="name">Nama Produk *</Label>
-                <Input id="name" name="name" value={newProduct.name} onChange={handleInputChange} placeholder="Nama produk" />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="description">Deskripsi</Label>
-                <Input id="description" name="description" value={newProduct.description} onChange={handleInputChange} placeholder="Deskripsi singkat produk" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="category">Kategori</Label>
-                 <select id="category" name="category" value={newProduct.category} onChange={handleInputChange} className="w-full px-3 py-2 border border-input bg-background rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-ring dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                  <option value="Umum">Umum</option>
-                  <option value="Elektronik">Elektronik</option>
-                  <option value="Pakaian">Pakaian</option>
-                  <option value="Makanan">Makanan</option>
-                  <option value="Minuman">Minuman</option>
-                  <option value="ATK">ATK</option>
-                  <option value="Lainnya">Lainnya</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Stok Awal *</Label>
-                <Input id="quantity" name="quantity" type="number" value={newProduct.quantity} onChange={handleInputChange} placeholder="0" min="0"/>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="minStock">Stok Minimum *</Label>
-                <Input id="minStock" name="minStock" type="number" value={newProduct.minStock} onChange={handleInputChange} placeholder="5" min="0"/>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="price">Harga (Rp) *</Label>
-                <Input id="price" name="price" type="number" value={newProduct.price} onChange={handleInputChange} placeholder="0" min="0"/>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="location">Lokasi</Label>
-                <Input id="location" name="location" value={newProduct.location} onChange={handleInputChange} placeholder="Rak A1" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="supplier">Pemasok</Label>
-                <Input id="supplier" name="supplier" value={newProduct.supplier} onChange={handleInputChange} placeholder="Nama pemasok" />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <PackagePlus className="h-5 w-5" />
+                Tambah Produk Baru
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Barcode <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">{barcode}</span> tidak ditemukan. Tambahkan sebagai produk baru.
+              </p>
+            </div>
+            
+            <div className="max-h-[50vh] overflow-y-auto pr-2">
+              <div className="space-y-4">
+                {/* Barcode dan Nama Produk */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="barcode-new" className="text-sm font-medium">Barcode *</Label>
+                    <Input 
+                      id="barcode-new" 
+                      name="barcode" 
+                      value={newProduct.barcode} 
+                      onChange={handleInputChange} 
+                      readOnly 
+                      className="bg-gray-100 dark:bg-gray-700 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="name" className="text-sm font-medium">Nama Produk *</Label>
+                    <Input 
+                      id="name" 
+                      name="name" 
+                      value={newProduct.name} 
+                      onChange={handleInputChange} 
+                      placeholder="Nama produk" 
+                      className="text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Deskripsi */}
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-sm font-medium">Deskripsi</Label>
+                  <Input 
+                    id="description" 
+                    name="description" 
+                    value={newProduct.description} 
+                    onChange={handleInputChange} 
+                    placeholder="Deskripsi singkat produk" 
+                    className="text-sm"
+                  />
+                </div>
+
+                {/* Kategori dan Stok Awal */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category" className="text-sm font-medium">Kategori</Label>
+                    <select 
+                      id="category" 
+                      name="category" 
+                      value={newProduct.category} 
+                      onChange={handleInputChange} 
+                      className="w-full px-3 py-2 text-sm border border-input bg-background rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-ring dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                    >
+                      <option value="Umum">Umum</option>
+                      <option value="Elektronik">Elektronik</option>
+                      <option value="Pakaian">Pakaian</option>
+                      <option value="Makanan">Makanan</option>
+                      <option value="Minuman">Minuman</option>
+                      <option value="ATK">ATK</option>
+                      <option value="Lainnya">Lainnya</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity" className="text-sm font-medium">Stok Awal *</Label>
+                    <Input 
+                      id="quantity" 
+                      name="quantity" 
+                      type="number" 
+                      value={newProduct.quantity} 
+                      onChange={handleInputChange} 
+                      placeholder="0" 
+                      min="0"
+                      className="text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Stok Minimum dan Harga */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="minStock" className="text-sm font-medium">Stok Minimum *</Label>
+                    <Input 
+                      id="minStock" 
+                      name="minStock" 
+                      type="number" 
+                      value={newProduct.minStock} 
+                      onChange={handleInputChange} 
+                      placeholder="5" 
+                      min="0"
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="price" className="text-sm font-medium">Harga (Rp) *</Label>
+                    <Input 
+                      id="price" 
+                      name="price" 
+                      type="number" 
+                      value={newProduct.price} 
+                      onChange={handleInputChange} 
+                      placeholder="0" 
+                      min="0"
+                      className="text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Lokasi dan Pemasok */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="location" className="text-sm font-medium">Lokasi</Label>
+                    <Input 
+                      id="location" 
+                      name="location" 
+                      value={newProduct.location} 
+                      onChange={handleInputChange} 
+                      placeholder="Rak A1" 
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="supplier" className="text-sm font-medium">Pemasok</Label>
+                    <Input 
+                      id="supplier" 
+                      name="supplier" 
+                      value={newProduct.supplier} 
+                      onChange={handleInputChange} 
+                      placeholder="Nama pemasok" 
+                      className="text-sm"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-            <DialogFooter className="pt-4">
+            
+            <div className="flex justify-end gap-2 pt-4 border-t dark:border-gray-700">
               <Button variant="outline" onClick={onClose}>Batal</Button>
-              <Button onClick={handleAddProduct}>Tambah Produk</Button>
-            </DialogFooter>
+              <Button onClick={handleAddProduct} className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Tambah Produk
+              </Button>
+            </div>
           </div>
         );
       
@@ -859,21 +983,22 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle>
+      <DialogContent className="sm:max-w-[500px] md:max-w-[600px] lg:max-w-[700px] max-h-[85vh] overflow-hidden">
+        <DialogHeader className="pb-3">
+          <DialogTitle className="text-lg">
             {viewMode === 'addNew' ? 'Tambah Produk Baru' : 
              viewMode === 'quickAction' ? 'Aksi Cepat' :
              viewMode === 'manualAdjust' ? 'Penyesuaian Manual' : 
              product ? product.name : 'Informasi Produk'}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-sm">
             {viewMode === 'addNew' ? 'Tambahkan produk baru ke inventaris' : 
              viewMode === 'quickAction' ? 'Ubah stok dengan cepat' :
              viewMode === 'manualAdjust' ? 'Sesuaikan stok secara manual' :
              'Detail informasi produk'}
           </DialogDescription>
         </DialogHeader>
+        
         {renderContent()}
       </DialogContent>
     </Dialog>
