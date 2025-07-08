@@ -32,7 +32,7 @@ export default function Error({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {process.env.NODE_ENV === 'development' && (
+          {process.env.NODE_ENV === 'production' && (
             <div className="p-3 bg-gray-100 rounded-md">
               <p className="text-sm text-gray-600 font-mono break-all">
                 {error.message}

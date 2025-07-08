@@ -78,7 +78,7 @@ export default function RootLayout({
       </head>
       <body>
         <ServiceWorkerRegistration />
-        {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
+        {process.env.NODE_ENV === 'production' && <PerformanceMonitor />}
         <DeviceStatusMonitorProvider>
           <RealtimeScanProvider>
             <RealtimeAttendanceProvider>
