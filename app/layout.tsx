@@ -10,6 +10,7 @@ import { AdminGuard } from "@/components/AdminGuard"
 import { DeviceStatusMonitorProvider } from "@/components/device-status-monitor-provider"
 import ServiceWorkerRegistration from "@/components/service-worker-registration"
 import PerformanceMonitor from "@/components/performance-monitor"
+import { MobileDebugOverlay } from "@/components/mobile-debug-overlay"
 
 // Optimized font loading
 const inter = Inter({ 
@@ -48,6 +49,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
+  viewportFit: "cover",
   themeColor: "#ffffff",
   colorScheme: "light",
 }
@@ -86,6 +88,7 @@ export default function RootLayout({
                 <Navigation />
                 <main>{children}</main>
                 <Toaster />
+                <MobileDebugOverlay />
               </AdminGuard>
             </RealtimeAttendanceProvider>
           </RealtimeScanProvider>

@@ -64,6 +64,14 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
           }
 
           if (isRecentScan && latestScan.barcode !== lastScannedBarcode) {
+            console.log('Mobile Debug - New scan detected:', {
+              barcode: latestScan.barcode,
+              timestamp: latestScan.timestamp,
+              isPopupDisabled,
+              pathname,
+              userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown'
+            })
+            
             setLastScannedBarcode(latestScan.barcode)
             setCurrentBarcode(latestScan.barcode)
             setScanCount(prev => prev + 1)
@@ -71,7 +79,15 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
             
             // Only show popup if not on disabled pages
             if (!isPopupDisabled) {
+              console.log('Mobile Debug - Showing popup for barcode:', latestScan.barcode)
               setShowPopup(true)
+              
+              // Add body class to prevent scroll on mobile
+              if (typeof document !== 'undefined') {
+                document.body.classList.add('dialog-open')
+              }
+            } else {
+              console.log('Mobile Debug - Popup disabled on page:', pathname)
             }
 
             // Reset scanning state after 2 seconds
@@ -93,8 +109,14 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   }, [lastScannedBarcode, isPopupDisabled, pathname])
 
   const handleClosePopup = () => {
+    console.log('Mobile Debug - Closing popup')
     setShowPopup(false)
     setCurrentBarcode("")
+    
+    // Remove body class when dialog closes
+    if (typeof document !== 'undefined') {
+      document.body.classList.remove('dialog-open')
+    }
   }
 
   const contextValue: RealtimeScanContextType = {

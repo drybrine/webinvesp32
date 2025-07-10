@@ -567,13 +567,6 @@ export default function TransaksiPage() {
                   <p className="mobile-text lg:text-lg text-muted-foreground font-medium mt-1 sm:mt-2">
                     Kelola stok barang dengan teknologi terdepan
                   </p>
-                  {/* Firebase Status Indicator */}
-                  <div className="flex items-center mt-2 text-xs sm:text-sm">
-                    <div className={`w-2 h-2 rounded-full mr-2 ${firebaseStatus.isConfigured ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                    <span className={`${firebaseStatus.isConfigured ? 'text-green-600' : 'text-red-600'}`}>
-                      {firebaseStatus.isConfigured ? 'Database Terhubung' : 'Mode Offline'}
-                    </span>
-                  </div>
                 </div>
               </div>
               <div className="flex items-center justify-center md:justify-start mobile-space-x">
