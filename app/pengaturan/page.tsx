@@ -144,7 +144,7 @@ export default function PengaturanPage() {
       if (snapshot.val() === true) {
         toast({
           title: "Koneksi Berhasil",
-          description: "Database terhubung dengan baik",
+          description: "Koneksi database berhasil diverifikasi",
         })
       } else {
         toast({
