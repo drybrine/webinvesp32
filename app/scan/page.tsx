@@ -23,6 +23,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseScans, useFirebaseInventory } from "@/hooks/use-firebase"
 import { ScanHistory } from "@/components/scan-history"
+import { MobilePopupTester } from "@/components/mobile-popup-tester"
 
 interface ProcessedScanRecord {
   id: string
@@ -234,20 +235,27 @@ export default function ScanPage() {
           
           <CardContent className="p-6 sm:p-8 pt-0">
             {processedScans.length === 0 ? (
-              <div className="text-center py-16 sm:py-20">
-                <div className="relative mx-auto mb-6">
-                  <div className="absolute -inset-1 gradient-primary rounded-full blur opacity-20"></div>
-                  <div className="relative w-20 h-20 mx-auto glass-card rounded-full flex items-center justify-center shadow-large">
-                    <Package className="h-10 w-10 text-muted-foreground" />
+              <div className="space-y-8">
+                <div className="text-center py-16 sm:py-20">
+                  <div className="relative mx-auto mb-6">
+                    <div className="absolute -inset-1 gradient-primary rounded-full blur opacity-20"></div>
+                    <div className="relative w-20 h-20 mx-auto glass-card rounded-full flex items-center justify-center shadow-large">
+                      <Package className="h-10 w-10 text-muted-foreground" />
+                    </div>
                   </div>
+                  <h3 className="text-xl font-bold text-foreground mb-3">Belum ada riwayat transaksi</h3>
+                  <p className="text-muted-foreground mb-2 font-medium">
+                    Riwayat scan barang masuk dan keluar akan muncul di sini
+                  </p>
+                  <p className="text-sm text-muted-foreground/70">
+                    Mulai scan barcode untuk melihat aktivitas real-time
+                  </p>
                 </div>
-                <h3 className="text-xl font-bold text-foreground mb-3">Belum ada riwayat transaksi</h3>
-                <p className="text-muted-foreground mb-2 font-medium">
-                  Riwayat scan barang masuk dan keluar akan muncul di sini
-                </p>
-                <p className="text-sm text-muted-foreground/70">
-                  Mulai scan barcode untuk melihat aktivitas real-time
-                </p>
+                
+                {/* Mobile Popup Tester - Only show on mobile screens */}
+                <div className="block sm:hidden">
+                  <MobilePopupTester />
+                </div>
               </div>
             ) : (
               <ScanHistory scans={processedScans} />

@@ -72,6 +72,16 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
     }
   }, [barcode, items, isOpen]) // Tambahkan isOpen agar reset saat popup dibuka kembali
 
+  // Handle body scroll prevention for mobile
+  useEffect(() => {
+    if (isOpen && typeof document !== 'undefined') {
+      document.body.classList.add('dialog-open')
+      return () => {
+        document.body.classList.remove('dialog-open')
+      }
+    }
+  }, [isOpen])
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setNewProduct(prev => ({
@@ -637,17 +647,19 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
       case "quickAction":
         if (!product) return <p>Produk tidak ditemukan.</p>; // Fallback
         return (
-          <div className="space-y-6">
+          <div className="space-y-3 sm:space-y-6">
             {/* Product Summary Card */}
-            <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center">
-                  <Package className="h-8 w-8 text-gray-500 dark:text-gray-400" />
+            <div className="p-3 sm:p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center">
+                  <Package className="h-6 w-6 sm:h-8 sm:w-8 text-gray-500 dark:text-gray-400" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold">{product.name}</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Barcode: <span className="font-mono">{product.barcode}</span></p>
-                  <Badge variant={product.quantity <= product.minStock ? "destructive" : "secondary"}>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base sm:text-lg font-semibold truncate">{product.name}</h3>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">
+                    Barcode: <span className="font-mono">{product.barcode}</span>
+                  </p>
+                  <Badge variant={product.quantity <= product.minStock ? "destructive" : "secondary"} className="text-xs">
                     Stok: {product.quantity}
                   </Badge>
                 </div>
@@ -655,51 +667,51 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
             </div>
     
             {/* Quick Actions */}
-            <div className="space-y-3">
-              <Label htmlFor="quickActionAmount">Jumlah Aksi Cepat</Label>
+            <div className="space-y-2 sm:space-y-3">
+              <Label htmlFor="quickActionAmount" className="text-sm">Jumlah Aksi Cepat</Label>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => setQuickActionAmount(Math.max(1, quickActionAmount - 1))}>
-                  <Minus className="h-4 w-4" />
+                <Button variant="outline" size="sm" onClick={() => setQuickActionAmount(Math.max(1, quickActionAmount - 1))}>
+                  <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
                 </Button>
                 <Input
                   id="quickActionAmount"
                   type="number"
                   value={quickActionAmount}
                   onChange={(e) => setQuickActionAmount(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-20 text-center"
+                  className="w-16 sm:w-20 text-center text-sm"
                   min="1"
                 />
-                <Button variant="outline" size="icon" onClick={() => setQuickActionAmount(quickActionAmount + 1)}>
-                  <Plus className="h-4 w-4" />
+                <Button variant="outline" size="sm" onClick={() => setQuickActionAmount(quickActionAmount + 1)}>
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                 </Button>
               </div>
             </div>
     
-            <div className="grid grid-cols-2 gap-4">
-              <Button onClick={handleStockIn} className="bg-green-600 hover:bg-green-700 text-white">
-                <Plus className="h-4 w-4 mr-2" /> Stock In
+            <div className="grid grid-cols-2 gap-2 sm:gap-4">
+              <Button onClick={handleStockIn} className="bg-green-600 hover:bg-green-700 text-white text-sm py-2">
+                <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" /> Stock In
               </Button>
-              <Button onClick={handleStockOut} className="bg-red-600 hover:bg-red-700 text-white" disabled={product.quantity < quickActionAmount}>
-                <Minus className="h-4 w-4 mr-2" /> Stock Out
+              <Button onClick={handleStockOut} className="bg-red-600 hover:bg-red-700 text-white text-sm py-2" disabled={product.quantity < quickActionAmount}>
+                <Minus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" /> Stock Out
               </Button>
             </div>
     
             {product.quantity < quickActionAmount && viewMode === 'quickAction' && (
-              <div className="p-3 bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded-md">
+              <div className="p-2 sm:p-3 bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded-md">
                 <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span className="text-sm">Stok tidak mencukupi untuk stock out sebanyak {quickActionAmount} unit</span>
+                  <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="text-xs sm:text-sm">Stok tidak mencukupi untuk stock out sebanyak {quickActionAmount} unit</span>
                 </div>
               </div>
             )}
              {/* Alternative Actions */}
-            <div className="flex justify-center gap-2 pt-4 border-t dark:border-gray-700">
-              <Button variant="outline" size="sm" onClick={() => setViewMode('info')}>
-                <Package className="h-4 w-4 mr-1" />
+            <div className="flex flex-col sm:flex-row justify-center gap-2 pt-3 sm:pt-4 border-t dark:border-gray-700">
+              <Button variant="outline" size="sm" onClick={() => setViewMode('info')} className="text-xs sm:text-sm">
+                <Package className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                 Detail Produk
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setViewMode('manualAdjust')}>
-                <Zap className="h-4 w-4 mr-1" />
+              <Button variant="outline" size="sm" onClick={() => setViewMode('manualAdjust')} className="text-xs sm:text-sm">
+                <Zap className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                 Manual Adjust
               </Button>
             </div>
@@ -983,15 +995,19 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[500px] md:max-w-[600px] lg:max-w-[700px] max-h-[85vh] overflow-hidden">
-        <DialogHeader className="pb-3">
-          <DialogTitle className="text-lg">
+      <DialogContent 
+        className="fixed left-[50%] top-[50%] z-[9999] flex flex-col w-[95vw] max-w-[500px] translate-x-[-50%] translate-y-[-50%] gap-2 border bg-background p-3 shadow-lg duration-200 sm:max-w-[500px] md:max-w-[600px] lg:max-w-[700px] max-h-[85vh] overflow-hidden sm:gap-4 sm:p-4 sm:max-h-[90vh]"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogHeader className="pb-2 sm:pb-3">
+          <DialogTitle className="text-sm sm:text-base md:text-lg pr-8">
             {viewMode === 'addNew' ? 'Tambah Produk Baru' : 
              viewMode === 'quickAction' ? 'Aksi Cepat' :
              viewMode === 'manualAdjust' ? 'Penyesuaian Manual' : 
              product ? product.name : 'Informasi Produk'}
           </DialogTitle>
-          <DialogDescription className="text-sm">
+          <DialogDescription className="text-xs sm:text-sm">
             {viewMode === 'addNew' ? 'Tambahkan produk baru ke inventaris' : 
              viewMode === 'quickAction' ? 'Ubah stok dengan cepat' :
              viewMode === 'manualAdjust' ? 'Sesuaikan stok secara manual' :
@@ -999,7 +1015,9 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
           </DialogDescription>
         </DialogHeader>
         
-        {renderContent()}
+        <div className="flex-1 overflow-y-auto max-h-[calc(85vh-100px)] sm:max-h-[calc(90vh-120px)]">
+          {renderContent()}
+        </div>
       </DialogContent>
     </Dialog>
   )
