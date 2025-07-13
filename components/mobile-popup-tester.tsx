@@ -16,32 +16,48 @@ export function MobilePopupTester() {
     setIsSimulating(true)
     
     try {
+      // Reset scan states first on mobile
+      console.log('🔄 Resetting scan states for fresh test...')
+      
       // Simulate adding a scan to Firebase
       const scanData = {
         barcode: testBarcode,
         timestamp: Date.now(),
-        deviceId: "mobile-test",
+        deviceId: "mobile-test-esp32",
         mode: "inventory",
         type: "inventory_scan",
-        source: "mobile_test"
+        source: "mobile_test_esp32",
+        location: "Mobile Test Location"
       }
       
-      console.log('Simulating scan with data:', scanData)
+      console.log('🧪 Simulating ESP32 scan with data:', scanData)
       
       // Add to Firebase
       await firebaseHelpers.addScanRecord(scanData)
       
+      // Force a small delay to ensure Firebase processes the data
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Also trigger vibration if supported
+      if ('navigator' in window && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate([200, 100, 200])
+        } catch (e) {
+          console.log('Vibration not supported')
+        }
+      }
+      
       toast({
-        title: "🧪 Test Scan Berhasil",
-        description: `Barcode ${testBarcode} berhasil disimulasikan. Popup seharusnya muncul sekarang.`,
-        duration: 3000,
+        title: "🧪 ESP32 Test Scan Berhasil",
+        description: `Barcode ${testBarcode} berhasil disimulasikan dari ESP32. Quick Action Popup seharusnya muncul dalam 1-2 detik.`,
+        duration: 5000,
       })
       
     } catch (error) {
-      console.error('Error simulating scan:', error)
+      console.error('Error simulating ESP32 scan:', error)
       toast({
-        title: "❌ Test Scan Gagal",
-        description: "Terjadi error saat simulasi scan",
+        title: "❌ ESP32 Test Scan Gagal",
+        description: "Terjadi error saat simulasi scan ESP32",
         variant: "destructive",
       })
     } finally {
@@ -54,10 +70,10 @@ export function MobilePopupTester() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <TestTube className="w-5 h-5" />
-          Mobile Popup Tester
+          ESP32 Mobile Popup Tester
         </CardTitle>
         <CardDescription>
-          Test popup pada mobile dengan simulasi scan barcode
+          Test quick action popup pada mobile dengan simulasi scan barcode ESP32
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -86,14 +102,15 @@ export function MobilePopupTester() {
           ) : (
             <>
               <Zap className="w-4 h-4 mr-2" />
-              Simulate Scan
+              Simulate ESP32 Scan
             </>
           )}
         </Button>
         
         <div className="text-xs text-gray-500 text-center">
-          Setelah klik tombol, popup produk seharusnya muncul.<br/>
-          Jika tidak muncul, aktifkan debug overlay (triple tap).
+          Setelah klik tombol, quick action popup seharusnya muncul.<br/>
+          Aktifkan ESP32 Debug Panel (triple tap) untuk melihat status.<br/>
+          Pastikan berada di halaman selain /absensi.
         </div>
       </CardContent>
     </Card>
