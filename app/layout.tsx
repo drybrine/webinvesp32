@@ -11,6 +11,7 @@ import { DeviceStatusMonitorProvider } from "@/components/device-status-monitor-
 import ServiceWorkerRegistration from "@/components/service-worker-registration"
 import PerformanceMonitor from "@/components/performance-monitor"
 import { MobileDebugOverlay } from "@/components/mobile-debug-overlay"
+import { ESP32DebugPanel } from "@/components/esp32-debug-panel"
 
 // Optimized font loading
 const inter = Inter({ 
@@ -89,6 +90,7 @@ export default function RootLayout({
                 <main>{children}</main>
                 <Toaster />
                 <MobileDebugOverlay />
+                <ESP32DebugPanel />
               </AdminGuard>
             </RealtimeAttendanceProvider>
           </RealtimeScanProvider>

@@ -76,8 +76,30 @@ export function ProductInfoPopup({ barcode, isOpen, onClose }: ProductInfoPopupP
   useEffect(() => {
     if (isOpen && typeof document !== 'undefined') {
       document.body.classList.add('dialog-open')
+      
+      // Enhanced mobile detection and handling
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                      window.innerWidth <= 768 || 
+                      'ontouchstart' in window
+      
+      if (isMobile) {
+        console.log('📱 ProductInfoPopup: Applying mobile styles')
+        document.body.style.overflow = 'hidden'
+        document.body.style.position = 'fixed'
+        document.body.style.width = '100%'
+        document.body.style.height = '100%'
+        document.body.style.touchAction = 'none'
+      }
+      
       return () => {
         document.body.classList.remove('dialog-open')
+        if (isMobile) {
+          document.body.style.overflow = ''
+          document.body.style.position = ''
+          document.body.style.width = ''
+          document.body.style.height = ''
+          document.body.style.touchAction = ''
+        }
       }
     }
   }, [isOpen])
