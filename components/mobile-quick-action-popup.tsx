@@ -59,14 +59,6 @@ export function MobileQuickActionPopup({ barcode, isOpen, onClose }: MobileQuick
       if (!foundProduct) {
         setNewProduct(prev => ({ ...prev, name: `Product ${barcode}` }))
       }
-      
-      // Debug logging for mobile
-      console.log('Mobile Quick Action Popup:', {
-        barcode,
-        foundProduct: !!foundProduct,
-        productName: foundProduct?.name,
-        isMobile: /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-      })
     }
   }, [barcode, items, isOpen])
 
@@ -288,7 +280,7 @@ export function MobileQuickActionPopup({ barcode, isOpen, onClose }: MobileQuick
         </Button>
         <Button 
           onClick={handleStockOut} 
-          disabled={isLoading || (product && product.quantity < quickActionAmount)}
+          disabled={isLoading || !!(product && product.quantity < quickActionAmount)}
           className="bg-red-600 hover:bg-red-700 text-white h-12 text-sm"
         >
           {isLoading ? (

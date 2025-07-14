@@ -6,10 +6,19 @@
 [![Firebase](https://img.shields.io/badge/Firebase-Latest-orange)](https://firebase.google.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4.17-06B6D4)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Production Ready](https://img.shields.io/badge/Production-Ready-brightgreen)](https://vercel.com/)
 
 > 🚀 **Sistem manajemen inventaris dan absensi real-time dengan integrasi ESP32 dan pemindai barcode**
 > 
 > **StokManager** adalah solusi lengkap untuk manajemen stok dan inventory dengan teknologi IoT yang modern, menggabungkan web application berbasis Next.js dengan hardware ESP32 untuk scanning barcode real-time.
+
+## 🌟 **PRODUCTION READY** - Siap Deploy!
+
+✅ **Build Status**: Passing  
+✅ **Environment**: Configured for Vercel  
+✅ **Firebase**: Connected & Optimized  
+✅ **Performance**: Optimized Bundle Size  
+✅ **Security**: Production Headers Configured  
 
 ## 📋 Daftar Isi
 
@@ -18,6 +27,7 @@
 - [📱 Demo & Screenshot](#-demo--screenshot)
 - [🚀 Quick Start](#-quick-start)
 - [⚙️ Instalasi](#️-instalasi)
+- [📦 Production Deployment](#-production-deployment)
 - [🔥 Konfigurasi Firebase](#-konfigurasi-firebase)
 - [🛠️ Development](#️-development)
 - [📦 Deployment](#-deployment)
@@ -982,7 +992,57 @@ Page                     Size       First Load JS
 - [Next.js Documentation](https://nextjs.org/docs)
 - [shadcn/ui Components](https://ui.shadcn.com/)
 
-## 📄 License
+## � Production Deployment
+
+### 🚀 Deploy to Vercel (Recommended)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2F100percentsrgb%2Fwebinvesp32&branch=555)
+
+**Environment Variables Required:**
+```bash
+NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyBDMTHkz_BwbqKfkVQYvKEI3yfrOLa_jLY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=barcodescanesp32.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_DATABASE_URL=https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=barcodescanesp32
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=barcodescanesp32.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=330721800882
+NEXT_PUBLIC_FIREBASE_APP_ID=1:330721800882:web:f270138ef40229ec2ccfab
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-7J89KNJCCT
+```
+
+### 📋 Deployment Checklist
+
+- [x] **Build**: Passing (`npm run build`)
+- [x] **Environment Variables**: Configured in `next.config.mjs`
+- [x] **Vercel Config**: `vercel.json` with optimized settings
+- [x] **Firebase**: Production configuration ready
+- [x] **Performance**: Bundle optimized (280kB total)
+- [x] **Security**: CORS headers and CSP configured
+- [x] **Debug Cleanup**: All debug components removed
+
+### 🔧 Manual Build & Test
+
+```bash
+# Build for production
+npm run build
+
+# Test production build locally  
+npm start
+
+# Check bundle size
+npm run build -- --analyze
+```
+
+### 📈 Performance Metrics
+
+- **First Load JS**: 280kB (optimized)
+- **Static Pages**: 19 routes generated
+- **Build Time**: ~2-3 minutes
+- **Bundle Chunks**: Vendor splitting enabled
+
+> 📖 **For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md)**
+
+## �📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
