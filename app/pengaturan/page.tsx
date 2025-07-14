@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Settings, Wifi, Database, Shield, Download, RefreshCw, WifiOff } from "lucide-react"
+import { Settings, Wifi, Database, Shield, Download, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseDevices } from "@/hooks/use-firebase" 
 import { ref, get, set } from "firebase/database"
@@ -299,7 +299,7 @@ export default function PengaturanPage() {
         </div>
 
         <Tabs defaultValue="general" className="space-y-3 sm:space-y-4 lg:space-y-6">
-          {/* Simplified Tab Navigation - 3 tabs only */}
+          {/* Tab Navigation - 3 tabs */}
           <div className="w-full">
             <TabsList className="grid w-full grid-cols-3 bg-white/80 backdrop-blur-sm border border-gray-200/50 shadow-lg rounded-xl p-1 gap-1 h-auto">
               <TabsTrigger value="general" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200 text-xs sm:text-sm px-1 sm:px-2 py-2 min-h-[40px] flex items-center justify-center">
@@ -411,13 +411,13 @@ export default function PengaturanPage() {
                     </div>
                   ) : devicesError ? (
                     <div className="text-center py-8">
-                      <WifiOff className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                      <Wifi className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                       <p className="text-red-500">Error memuat data perangkat</p>
                       <p className="text-sm text-gray-500 mt-2">{devicesError}</p>
                     </div>
                   ) : !devices || devices.length === 0 ? (
                     <div className="text-center py-8">
-                      <WifiOff className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                      <Wifi className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                       <p className="text-gray-500">Tidak ada perangkat ESP32 yang terdaftar</p>
                       <p className="text-sm text-gray-400 mt-2">
                         Perangkat akan muncul secara otomatis saat mengirim heartbeat pertama

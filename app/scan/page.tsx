@@ -23,8 +23,6 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseScans, useFirebaseInventory } from "@/hooks/use-firebase"
 import { ScanHistory } from "@/components/scan-history"
-import { MobilePopupTester } from "@/components/mobile-popup-tester"
-import { FirebaseConnectionTester } from "@/components/firebase-connection-tester"
 
 interface ProcessedScanRecord {
   id: string
@@ -251,12 +249,6 @@ export default function ScanPage() {
                   <p className="text-sm text-muted-foreground/70">
                     Mulai scan barcode untuk melihat aktivitas real-time
                   </p>
-                </div>
-                
-                {/* Mobile Testing Tools - Only show on mobile screens */}
-                <div className="block sm:hidden space-y-4">
-                  <MobilePopupTester />
-                  <FirebaseConnectionTester />
                 </div>
               </div>
             ) : (

@@ -10,8 +10,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "barcodescanesp32",
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "barcodescanesp32.firebasestorage.app",
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "330721800882",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:330721800882:web:ff7e05a769ab6cd32ccfab",
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-C2L2NFF1C2",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:330721800882:web:f270138ef40229ec2ccfab",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-7J89KNJCCT",
 }
 
 // Validasi konfigurasi Firebase untuk keamanan
@@ -305,7 +305,7 @@ export const firebaseHelpers = {
     }
   },
 
-  // Add scan record
+  // Add scan record (matching ESP32 .ino structure exactly)
   addScanRecord: async (scanData: any) => {
     if (!database || !dbRefs || !dbRefs.scans) {
       console.error("Firebase not available or scans ref not initialized for addScanRecord");
@@ -314,12 +314,20 @@ export const firebaseHelpers = {
 
     try {
       const newScanRef = push(dbRefs.scans);
-      await set(newScanRef, {
+      
+      // Create data structure matching ESP32 .ino exactly
+      const esp32CompatibleData = {
         ...scanData,
         id: newScanRef.key,
-        timestamp: serverTimestamp(),
-        processed: false, // Default value
-      });
+        timestamp: scanData.timestamp || serverTimestamp(),
+        processed: scanData.processed !== undefined ? scanData.processed : false, // Match ESP32 default
+        location: scanData.location || "Warehouse-Scanner", // Match ESP32 default location
+        mode: scanData.mode || "inventory", // Match ESP32 default mode
+        type: scanData.type || "inventory_scan", // Match ESP32 default type
+      };
+      
+      await set(newScanRef, esp32CompatibleData);
+      console.log("✅ Scan record added with ESP32 compatible structure:", esp32CompatibleData);
       return newScanRef.key;
     } catch (error) {
       console.error("Error adding scan record:", error);
