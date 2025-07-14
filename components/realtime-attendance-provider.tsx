@@ -81,11 +81,8 @@ export function RealtimeAttendanceProvider({ children }: RealtimeAttendanceProvi
           const isScanFromAttendanceMode = (latestScan.mode === "attendance" || latestScan.type === "attendance_scan")
           if (!isScanFromAttendanceMode) {
             // Skip processing scans from inventory mode
-            console.log(`⏭️ Skipping non-attendance scan in attendance provider: ${latestScan.barcode} (mode: ${latestScan.mode || "unknown"}, type: ${latestScan.type || "unknown"})`)
             return
           }
-          
-          console.log(`📝 Processing attendance scan: ${latestScan.barcode} (mode: ${latestScan.mode || "unknown"}, type: ${latestScan.type || "unknown"})`)
 
           // Create unique scan identifier
           const scanKey = `${latestScan.barcode}-${Math.floor(scanTime / 1000)}`
@@ -95,13 +92,11 @@ export function RealtimeAttendanceProvider({ children }: RealtimeAttendanceProvi
           // 1. Debounce check - prevent processing same barcode within DEBOUNCE_DELAY
           if (lastProcessedNim === latestScan.barcode && 
               (currentTime - lastProcessedTime) < DEBOUNCE_DELAY) {
-            console.log(`🚫 Debounced duplicate scan: ${latestScan.barcode} (${currentTime - lastProcessedTime}ms ago)`)
             return
           }
           
           // 2. Check if this exact scan was already processed
           if (processedScans.has(scanKey)) {
-            console.log(`🚫 Already processed scan: ${latestScan.barcode} (${scanKey})`)
             return
           }
           
@@ -112,13 +107,10 @@ export function RealtimeAttendanceProvider({ children }: RealtimeAttendanceProvi
           )
           
           if (duplicateKey) {
-            console.log(`🚫 Duplicate NIM within timeout: ${latestScan.barcode} (previous: ${duplicateKey})`)
             return
           }
           
           if (isRecentScan) {
-            console.log(`✅ Processing new ESP32 scan: ${latestScan.barcode} (${scanKey})`)
-            
             // Show immediate detection notification
             toast({
               title: "📱 QR Code Terdeteksi!",

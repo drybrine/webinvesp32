@@ -408,16 +408,6 @@ export function useFirebaseDevices() {
           ? Object.keys(data).map((key) => ({ ...data[key], deviceId: key })) // Assuming deviceId is the key
           : [];
         
-        // Debug: Log loaded device data
-        console.log('🔍 Firebase devices loaded:', loadedDevices);
-        loadedDevices.forEach(device => {
-          console.log(`📱 Device ${device.deviceId}:`, {
-            firstSeen: (device as any).firstSeen,
-            status: device.status,
-            lastSeen: device.lastSeen
-          });
-        });
-        
         setDevices(loadedDevices);
         setError(null);
         setLoading(false);
