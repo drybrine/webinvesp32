@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react" // Added lazy, Suspense
-import { useRouter } from "next/navigation"
+import { useState, useEffect, useMemo, useRef } from "react"
 import {
   Card,
   CardContent,
@@ -41,7 +40,7 @@ import {
   Package,
   DollarSign,
   AlertCircle,
-  Scan,
+
   Plus,
   Search,
   Eye,
@@ -50,9 +49,7 @@ import {
   Minus,
   Filter,
   Download,
-  ChevronDown,
-  ChevronUp,
-  Barcode as BarcodeIcon,
+
   Wifi,
   WifiOff,
   Smartphone,
@@ -94,7 +91,6 @@ interface StockAdjustment {
 }
 
 export default function TransaksiPage() {
-  const router = useRouter()
   const {
     items: inventory,
     loading: inventoryLoading,
@@ -103,18 +99,18 @@ export default function TransaksiPage() {
     updateItem,
     deleteItem,
   } = useFirebaseInventory()
-  const { scans, loading: scansLoading, error: scansError } = useFirebaseScans()
+  const { loading: scansLoading, error: scansError } = useFirebaseScans()
   
   // Real-time device status monitoring
   const {
     devices,
     loading: devicesLoading,
     error: devicesError,
-    lastUpdate,
-    connectionStatus,
-    refresh: refreshDeviceStatus,
+
+
+
     onlineDevices: realtimeOnlineDevices,
-    offlineDevices,
+
     totalDevices
   } = useRealtimeDeviceStatus()
 
@@ -218,11 +214,8 @@ export default function TransaksiPage() {
           if (!response.ok) {
             console.warn('🔄 Dashboard auto-refresh failed:', response.status, response.statusText);
           }
-        } catch (error) {
-          // Only log significant errors, not every network glitch
-          if (error instanceof Error && !error.message.includes('timeout')) {
-            // Auto-refresh error occurred
-          }
+        } catch {
+          // Auto-refresh error occurred - silently handle network issues
         }
       }
     }, 10000); // 10 seconds to match fast detection
@@ -232,7 +225,7 @@ export default function TransaksiPage() {
 
   // Listen for device status updates from background monitor
   useEffect(() => {
-    const handleDeviceStatusUpdate = (event: CustomEvent) => {
+    const handleDeviceStatusUpdate = () => {
       // Dashboard received device status update
       // The Firebase hook will automatically refresh when the database changes
     };
@@ -338,7 +331,7 @@ export default function TransaksiPage() {
         title: "Berhasil",
         description: "Item berhasil ditambahkan",
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Gagal menambahkan item",
@@ -385,7 +378,7 @@ export default function TransaksiPage() {
         title: "Berhasil",
         description: "Item berhasil diperbarui",
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Gagal memperbarui item",
@@ -405,7 +398,7 @@ export default function TransaksiPage() {
         title: "Berhasil",
         description: "Item berhasil dihapus",
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Gagal menghapus item",
@@ -451,8 +444,7 @@ export default function TransaksiPage() {
         title: "Berhasil",
         description: `Stok ${itemName} ${type === "add" ? "ditambah" : "dikurangi"} sebanyak ${amount}. Transaksi dicatat.`,
       })
-    } catch (error) {
-      console.error("Error adjusting stock or recording transaction:", error);
+    } catch {
       toast({
         title: "Error",
         description: "Gagal mengubah stok atau mencatat transaksi.",
@@ -530,20 +522,6 @@ export default function TransaksiPage() {
         document.body.removeChild(link);
     }
     toast({ title: "Export Berhasil", description: `${filteredInventory.length} item diexport ke ${fileName}` });
-  };
-
-  // Add this function near your other utility functions (at the top of your component)
-  interface DeviceStatus {
-    deviceId?: string;
-    lastHeartbeat?: number | string | Date;
-    lastSeen?: number | string | Date;
-    ipAddress?: string;
-  }
-  
-  const checkDeviceStatus = (device: DeviceStatus) => {
-    const lastSeen = device.lastHeartbeat || device.lastSeen;
-    const now = Date.now();
-    return lastSeen && (now - new Date(lastSeen).getTime() < 60000) ? "online" : "offline";
   };
 
   return (

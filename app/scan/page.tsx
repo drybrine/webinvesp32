@@ -1,7 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import {
   Card,
   CardContent,
@@ -10,50 +9,85 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
-  History,
+  Package,
   Search,
   Filter,
   Download,
-  Calendar,
-  Package,
+  CheckCircle,
   Clock,
+  Wifi,
+  Activity,
 } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { useFirebaseScans, useFirebaseInventory } from "@/hooks/use-firebase"
+import {
+  useFirebaseScans,
+  ScanRecord,
+} from "@/hooks/use-firebase"
+import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
+import { getFirebaseStatus } from "@/lib/firebase"
 import { ScanHistory } from "@/components/scan-history"
 
-interface ProcessedScanRecord {
-  id: string
-  barcode: string
-  timestamp: number
-  deviceId?: string
-  itemFound?: boolean
-  productName?: string
-  location?: string
-  [key: string]: any // Allow other properties
+interface ScanStats {
+  totalScans: number
+  newScans: number
+  processedScans: number
+  errorScans: number
+  lastScanTime?: string
+  averageProcessingTime?: string
 }
 
 export default function ScanPage() {
-  const router = useRouter()
-  const { scans, addScan, loading: scansLoading, error: scansError } = useFirebaseScans()
-  const { items, loading: inventoryLoading, error: inventoryError } = useFirebaseInventory()
+  const [searchTerm, setSearchTerm] = useState("")
+  const [scanStats, setScanStats] = useState<ScanStats>({
+    totalScans: 0,
+    newScans: 0,
+    processedScans: 0,
+    errorScans: 0,
+  })
 
-  const { toast } = useToast()
+  const {
+    scans,
+    loading: scansLoading,
+    error: scansError,
+  } = useFirebaseScans()
 
-  const processedScans = useMemo(() => {
-    if (inventoryLoading || !items) return scans.map(s => ({...s, productName: 'Memuat...'})); // Handle inventory loading
-    return scans.map((scan) => {
-      const matchingItem = items.find((item) => item.id === scan.itemId || item.barcode === scan.barcode)
-      return {
-        ...scan,
-        productName: matchingItem?.name || undefined,
-      }
-    })
-  }, [scans, items, inventoryLoading])
+  const {
+    loading: devicesLoading,
+    error: devicesError,
+  } = useRealtimeDeviceStatus()
 
-  if (scansLoading || inventoryLoading) {
+  const firebaseStatus = getFirebaseStatus()
+
+  useEffect(() => {
+    const updateStats = () => {
+      const total = scans.length;
+      const newScans = scans.filter(s => !s.processed).length;
+      const processedScans = scans.filter(s => s.processed).length;
+      const errorScans = 0; // No error status in current ScanRecord type
+
+      setScanStats({
+        totalScans: total,
+        newScans: newScans,
+        processedScans: processedScans,
+        errorScans: errorScans,
+      });
+    };
+
+    updateStats();
+    const interval = setInterval(updateStats, 1000); // Update every second
+    return () => clearInterval(interval);
+  }, [scans]);
+
+  const processedScans = scans.map(s => ({
+    ...s, 
+    itemName: s.itemFound ? 'Item Found' : 'Not Found',
+    itemCategory: 'Unknown',
+    itemLocation: s.location || 'Unknown',
+    timeAgo: new Date(s.timestamp).toLocaleString(),
+    status: s.processed ? 'processed' : 'new' as 'new' | 'processed' | 'error'
+  }));
+
+  if (scansLoading || devicesLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
         <div className="text-center">
@@ -64,11 +98,11 @@ export default function ScanPage() {
     )
   }
 
-  if (scansError || inventoryError) {
+  if (scansError || devicesError) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
         <div className="text-center text-red-600">
-          <p>Gagal memuat data: { (typeof scansError === 'string' ? scansError : (scansError as any)?.message) || (typeof inventoryError === 'string' ? inventoryError : (inventoryError as any)?.message) }</p>
+          <p>Gagal memuat data: {scansError || devicesError}</p>
         </div>
       </div>
     )
@@ -83,7 +117,7 @@ export default function ScanPage() {
             <div className="relative">
               <div className="absolute -inset-1 gradient-primary rounded-full blur opacity-30 animate-pulse"></div>
               <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 gradient-secondary rounded-full flex items-center justify-center shadow-colored">
-                <History className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-white animate-float" />
+                <Activity className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-white animate-float" />
               </div>
             </div>
             <div className="text-center md:text-left">
@@ -110,13 +144,13 @@ export default function ScanPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">Total Scan</CardTitle>
                 <div className="p-2 gradient-primary rounded-lg shadow-sm">
-                  <History className="h-4 w-4 text-white" />
+                  <Package className="h-4 w-4 text-white" />
                 </div>
               </div>
             </CardHeader>
             <CardContent className="relative z-10 pt-0">
               <div className="space-y-2">
-                <div className="text-2xl sm:text-3xl font-bold gradient-text">{processedScans.length}</div>
+                <div className="text-2xl sm:text-3xl font-bold gradient-text">{scanStats.totalScans}</div>
                 <p className="text-xs text-muted-foreground font-medium">Semua waktu</p>
                 <div className="w-full bg-muted/50 rounded-full h-1">
                   <div className="gradient-primary h-1 rounded-full w-full animate-pulse"></div>
@@ -131,7 +165,7 @@ export default function ScanPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">Hari Ini</CardTitle>
                 <div className="p-2 gradient-secondary rounded-lg shadow-sm">
-                  <Calendar className="h-4 w-4 text-white" />
+                  <Clock className="h-4 w-4 text-white" />
                 </div>
               </div>
             </CardHeader>
@@ -156,14 +190,14 @@ export default function ScanPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">Scan Berhasil</CardTitle>
                 <div className="p-2 gradient-accent rounded-lg shadow-sm">
-                  <Package className="h-4 w-4 text-white" />
+                  <CheckCircle className="h-4 w-4 text-white" />
                 </div>
               </div>
             </CardHeader>
             <CardContent className="relative z-10 pt-0">
               <div className="space-y-2">
                 <div className="text-2xl sm:text-3xl font-bold gradient-text">
-                  {processedScans.filter(scan => scan.productName && scan.productName !== 'Memuat...').length}
+                  {processedScans.filter(scan => scan.status === 'processed').length}
                 </div>
                 <p className="text-xs text-muted-foreground font-medium">Item ditemukan</p>
                 <div className="w-full bg-muted/50 rounded-full h-1">
@@ -179,22 +213,22 @@ export default function ScanPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">Status Real-time</CardTitle>
                 <div className="p-2 bg-orange-500 rounded-lg shadow-sm">
-                  <Clock className="h-4 w-4 text-white" />
+                  <Wifi className="h-4 w-4 text-white" />
                 </div>
               </div>
             </CardHeader>
             <CardContent className="relative z-10 pt-0">
               <div className="space-y-2">
-                <div className="text-lg sm:text-xl font-bold text-orange-600">
-                  {processedScans.length > 0 ? 'Aktif' : 'Standby'}
-                </div>
-                <p className="text-xs text-muted-foreground font-medium">
-                  {processedScans.length > 0 ? 'Ada aktivitas' : 'Menunggu scan'}
-                </p>
-                <div className="w-full bg-muted/50 rounded-full h-1">
-                  <div className={`h-1 rounded-full ${processedScans.length > 0 ? 'bg-orange-500 animate-pulse' : 'bg-gray-400'} transition-all duration-300`} 
-                       style={{ width: processedScans.length > 0 ? '90%' : '30%' }}></div>
-                </div>
+                                  <div className="text-lg sm:text-xl font-bold text-orange-600">
+                   {firebaseStatus.isConfigured ? 'Aktif' : 'Offline'}
+                  </div>
+                  <p className="text-xs text-muted-foreground font-medium">
+                   {firebaseStatus.isConfigured ? 'Ada aktivitas' : 'Menunggu scan'}
+                  </p>
+                  <div className="w-full bg-muted/50 rounded-full h-1">
+                   <div className={`h-1 rounded-full ${firebaseStatus.isConfigured ? 'bg-orange-500 animate-pulse' : 'bg-gray-400'} transition-all duration-300`} 
+                        style={{ width: firebaseStatus.isConfigured ? '90%' : '30%' }}></div>
+                  </div>
               </div>
             </CardContent>
           </Card>
@@ -225,9 +259,12 @@ export default function ScanPage() {
             {/* Enhanced Search */}
             <div className="mt-6 relative">
               <Search className="absolute left-4 top-4 h-5 w-5 text-muted-foreground" />
-              <Input
+              <input
+                type="text"
                 placeholder="Cari berdasarkan barcode, nama produk, atau ID..."
                 className="pl-12 h-12 glass-card border-0 shadow-medium focus:shadow-large transition-all duration-300 font-medium"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </CardHeader>

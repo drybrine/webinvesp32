@@ -44,7 +44,7 @@ export function BarcodeScanner({ onDetected, className = "" }: BarcodeScannerPro
         },
         locate: true,
       },
-      (err: any) => {
+      (err: Error) => {
         if (err) {
           console.error("Error starting Quagga:", err)
           toast({
@@ -68,7 +68,7 @@ export function BarcodeScanner({ onDetected, className = "" }: BarcodeScannerPro
     )
 
     // Add detection event listener
-    Quagga.onDetected((result: any) => {
+    Quagga.onDetected((result: { codeResult?: { code?: string }, box?: { x: number, y: number, width: number, height: number } }) => {
       if (result && result.codeResult && result.codeResult.code) {
         const code = result.codeResult.code
         onDetected(code)

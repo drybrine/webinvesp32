@@ -216,6 +216,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         barcode: barcode || "",
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        lastUpdated: Date.now(),
       }
 
       await addItem(productData)

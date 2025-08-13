@@ -12,7 +12,7 @@ const nextConfig = {
   // Performance optimizations for Vercel
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
-    optimizeCss: true, // Enable CSS optimization
+    // optimizeCss: true, // Disabled - causes critters module error
   },
   images: {
     unoptimized: false, // Enable optimization for better performance
@@ -151,7 +151,11 @@ const nextConfig = {
         test: /[\\/]node_modules[\\/]/,
         name(module) {
           // Get the name of the package
-          const packageName = module.context.match(/[\\/]node_modules[\\/](.*?)([\\/]|$)/)[1]
+          const match = module.context.match(/[\\/]node_modules[\\/](.*?)([\\/]|$)/)
+          if (!match || !match[1]) {
+            return 'vendor-misc'
+          }
+          const packageName = match[1]
           // Group by package name to avoid too many chunks
           return `vendor-${packageName.replace('@', '').replace('/', '-')}`
         },
