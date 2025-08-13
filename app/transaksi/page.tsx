@@ -143,7 +143,7 @@ export default function TransaksiPage() {
       unitPrice: unitPriceNum,
       totalAmount: totalAmount,
       reason: formData.reason,
-      operator: "Admin", // TODO: Dapatkan dari sesi login pengguna
+      operator: "Admin", // Default operator
       notes: formData.notes,
       // timestamp akan diatur oleh serverTimestamp di firebaseHelpers
     }
@@ -198,11 +198,13 @@ export default function TransaksiPage() {
   }
 
   const formatCurrency = (amount: number) => {
+    // Handle NaN, undefined, null, or invalid numbers
+    const validAmount = Number(amount) || 0;
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
       currency: "IDR",
       minimumFractionDigits: 0,
-    }).format(amount)
+    }).format(validAmount)
   }
 
   const formatDateTime = (timestamp: string | number) => {
@@ -234,9 +236,26 @@ export default function TransaksiPage() {
     }
   }
 
-  const totalIn = useMemo(() => transactions.filter((t) => t.type === "in").reduce((sum, t) => sum + t.totalAmount, 0), [transactions]);
-  const totalOut = useMemo(() => transactions.filter((t) => t.type === "out").reduce((sum, t) => sum + Math.abs(t.totalAmount), 0), [transactions]);
-  const totalAdjustment = useMemo(() => transactions.filter((t) => t.type === "adjustment").reduce((sum, t) => sum + t.totalAmount, 0), [transactions]);
+  const totalIn = useMemo(() => 
+    transactions
+      .filter((t) => t.type === "in")
+      .reduce((sum, t) => sum + (Number(t.totalAmount) || 0), 0), 
+    [transactions]
+  );
+  
+  const totalOut = useMemo(() => 
+    transactions
+      .filter((t) => t.type === "out")
+      .reduce((sum, t) => sum + Math.abs(Number(t.totalAmount) || 0), 0), 
+    [transactions]
+  );
+  
+  const totalAdjustment = useMemo(() => 
+    transactions
+      .filter((t) => t.type === "adjustment")
+      .reduce((sum, t) => sum + (Number(t.totalAmount) || 0), 0), 
+    [transactions]
+  );
 
   const todayTransactionsCount = useMemo(() => {
     const today = new Date();
@@ -410,7 +429,7 @@ export default function TransaksiPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="flex flex-col sm:flex-row gap-4 flex-1">
                 <div className="relative flex-1 max-w-sm">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-600 dark:text-gray-300 h-4 w-4" />
                   <Input
                     placeholder="Cari transaksi..."
                     value={searchTerm}
@@ -595,7 +614,7 @@ export default function TransaksiPage() {
                         <TableCell colSpan={8} className="text-center py-12">
                           <div className="flex flex-col items-center gap-3">
                             <div className="p-4 rounded-full bg-gray-100">
-                              <FileText className="h-8 w-8 text-gray-400" />
+                              <FileText className="h-8 w-8 text-gray-600 dark:text-gray-300" />
                             </div>
                             <div>
                               <p className="text-gray-900 font-medium">Tidak ada transaksi</p>

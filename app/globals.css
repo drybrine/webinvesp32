@@ -491,9 +491,14 @@
     @apply flex flex-wrap;
   }
 
-  /* Responsive spacing */
+  /* Responsive spacing with fixed heights to prevent CLS */
   .mobile-space-y {
-    @apply space-y-3 sm:space-y-4 md:space-y-6;
+    @apply space-y-4;
+  }
+  
+  /* Prevent layout shift by setting minimum heights */
+  .mobile-space-y > * {
+    min-height: 1rem;
   }
 
   .mobile-space-x {
@@ -518,9 +523,10 @@
     @apply min-h-[48px] px-6 py-3 text-base sm:text-lg;
   }
 
-  /* Container responsive */
+  /* Container responsive with stable dimensions */
   .mobile-container-full {
     @apply w-full max-w-7xl mx-auto mobile-padding;
+    min-height: 100vh;
   }
 
   .mobile-container-narrow {

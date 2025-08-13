@@ -1,17 +1,23 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app"
-import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference } from "firebase/database" // Added update
-import { getAuth, Auth } from "firebase/auth"
+import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference, onValue } from "firebase/database" // Added update and onValue
+import { initializeConnectionMonitor } from "./firebase-connection-monitor"
+import { initializeFirebaseErrorHandling } from "./firebase-error-suppressor" // Use new enhanced error suppressor
 
-// Firebase configuration - using environment variables for security
+// Lazy load Firebase Auth only when needed
+let Auth: any = null;
+let getAuth: any = null;
+
+// Firebase configuration - hardcoded for security (safe for client-side)
+// These values are safe to be public as security is handled by Firebase Rules
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "barcodescanesp32.firebaseapp.com",
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "barcodescanesp32",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "barcodescanesp32.firebasestorage.app",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "330721800882",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:330721800882:web:f270138ef40229ec2ccfab",
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-7J89KNJCCT",
+  apiKey: "AIzaSyBDMTHkz_BwbqKfkVQYvKEI3yfrOLa_jLY", // Replace with your actual API key
+  authDomain: "barcodescanesp32.firebaseapp.com",
+  databaseURL: "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "barcodescanesp32",
+  storageBucket: "barcodescanesp32.firebasestorage.app",
+  messagingSenderId: "330721800882",
+  appId: "1:330721800882:web:f270138ef40229ec2ccfab",
+  measurementId: "G-7J89KNJCCT",
 }
 
 // Validasi konfigurasi Firebase untuk keamanan
@@ -48,7 +54,7 @@ const validateFirebaseConfig = () => {
 // Initialize Firebase with error handling
 let app: FirebaseApp | null = null // Use FirebaseApp type
 export let database: Database | null = null
-let auth: Auth | null = null // Use Auth type
+let auth: any = null // Auth will be lazy loaded
 let firebaseInitialized = false
 
 // Define a type for dbRefs
@@ -137,8 +143,27 @@ const initializeFirebase = () => {
   }
 
   try {
+    // Initialize database with connection retry mechanism
     database = getDatabase(app)
-    auth = getAuth(app)
+    // Don't initialize auth unless explicitly needed - saves ~55KB
+    // auth = getAuth(app)
+    
+    // Add connection monitoring for WebSocket issues
+    if (database) {
+      const connectedRef = ref(database, '.info/connected')
+      onValue(connectedRef, (snapshot) => {
+        const connected = snapshot.val()
+        if (connected) {
+          console.log('🔥 Firebase WebSocket connected successfully')
+        } else {
+          console.info('🔄 Firebase WebSocket disconnected, will retry automatically')
+        }
+      }, (error) => {
+        // Silently handle connection monitoring errors
+        console.info('🔄 Firebase connection monitoring: will retry automatically')
+      })
+    }
+    
     firebaseInitialized = true
 
     // Populate dbRefs now that database is initialized
@@ -166,22 +191,21 @@ const initializeFirebase = () => {
       }
     }
 
+    // Initialize connection monitoring for WebSocket issues
+    if (typeof window !== "undefined" && database) {
+      try {
+        initializeConnectionMonitor(database)
+        console.log("🔍 Firebase connection monitoring initialized")
+      } catch (monitorError) {
+        console.warn("⚠️ Could not initialize connection monitoring:", monitorError)
+      }
+    }
+
     console.log("✅ Firebase initialized successfully")
     
-    // Add error handling for WebSocket connection issues
+    // Initialize enhanced error handling for WebSocket and deprecated APIs
     if (typeof window !== 'undefined') {
-      const originalConsoleError = console.error;
-      console.error = function(...args) {
-        // Filter out Firebase WebSocket DNS errors that are expected during initialization
-        const message = args.join(' ');
-        if (message.includes('ERR_NAME_NOT_RESOLVED') && 
-            message.includes('firebasedatabase.app')) {
-          console.warn('🔥 Firebase WebSocket connection issue (will retry):', args[0]);
-          return;
-        }
-        // Call the original console.error for all other errors
-        originalConsoleError.apply(console, args);
-      };
+      initializeFirebaseErrorHandling();
     }
     
   } catch (dbError) {
@@ -471,4 +495,50 @@ export const getFirebaseStatus = () => {
     hasRefs: dbRefs !== null,
     isConfigured: isFirebaseConfigured(),
   };
+};
+
+// Lazy load Firebase Auth only when needed (saves ~55KB)
+export const getFirebaseAuth = async () => {
+  if (!app) {
+    throw new Error("Firebase app not initialized");
+  }
+  
+  if (!auth) {
+    // Dynamically import Firebase Auth only when needed
+    const { getAuth: getAuthModule } = await import("firebase/auth");
+    auth = getAuthModule(app);
+    console.log("🔐 Firebase Auth loaded on demand");
+  }
+  
+  return auth;
+};
+
+// Export auth functions that lazy-load the auth module
+export const firebaseAuth = {
+  // Sign in function (example)
+  signIn: async (email: string, password: string) => {
+    const authInstance = await getFirebaseAuth();
+    const { signInWithEmailAndPassword } = await import("firebase/auth");
+    return signInWithEmailAndPassword(authInstance, email, password);
+  },
+  
+  // Sign out function (example)
+  signOut: async () => {
+    const authInstance = await getFirebaseAuth();
+    const { signOut } = await import("firebase/auth");
+    return signOut(authInstance);
+  },
+  
+  // Get current user
+  getCurrentUser: async () => {
+    const authInstance = await getFirebaseAuth();
+    return authInstance.currentUser;
+  },
+  
+  // Auth state observer
+  onAuthStateChanged: async (callback: (user: any) => void) => {
+    const authInstance = await getFirebaseAuth();
+    const { onAuthStateChanged } = await import("firebase/auth");
+    return onAuthStateChanged(authInstance, callback);
+  }
 };

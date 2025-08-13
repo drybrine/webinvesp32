@@ -354,9 +354,9 @@ export default function ScannerIntegration() {
         <CardContent>
           {scans.length === 0 ? (
             <div className="text-center py-8">
-              <Package className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+              <Package className="w-12 h-12 mx-auto text-gray-600 dark:text-gray-300 mb-4" />
               <p className="text-gray-500">Belum ada pemindaian</p>
-              <p className="text-sm text-gray-400">Barcode yang dipindai akan muncul di sini secara real-time</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Barcode yang dipindai akan muncul di sini secara real-time</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">

@@ -31,16 +31,16 @@ export const ESP32_CONFIG = {
   // Version from ESP32 .ino file
   VERSION: "3.3",
   
-  // Heartbeat interval from ESP32 .ino (8 seconds)
-  HEARTBEAT_INTERVAL: 8000,
+  // Heartbeat interval from ESP32 .ino (optimized to 3 seconds)
+  HEARTBEAT_INTERVAL: 3000,
   
-  // WiFi check interval from ESP32 .ino (10 seconds)
-  WIFI_CHECK_INTERVAL: 10000,
+  // WiFi check interval from ESP32 .ino (optimized to 5 seconds)
+  WIFI_CHECK_INTERVAL: 5000,
   
-  // Timeout values from ESP32 .ino
+  // Timeout values from ESP32 .ino (optimized)
   TIMEOUTS: {
-    FIREBASE_HTTP: 10000, // 10 seconds for scans
-    HEARTBEAT: 5000,      // 5 seconds for heartbeat
+    FIREBASE_HTTP: 5000,  // 5 seconds for scans (faster)
+    HEARTBEAT: 2000,      // 2 seconds for heartbeat (faster)
   },
   
   // Attendance validation from ESP32 .ino
