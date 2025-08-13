@@ -242,7 +242,7 @@ export default function ScanPage() {
                       <Package className="h-10 w-10 text-muted-foreground" />
                     </div>
                   </div>
-                  <h3 className="text-xl font-bold text-foreground mb-3">Belum ada riwayat transaksi</h3>
+                  <h2 className="text-xl font-bold text-foreground mb-3">Belum ada riwayat transaksi</h2>
                   <p className="text-muted-foreground mb-2 font-medium">
                     Riwayat scan barang masuk dan keluar akan muncul di sini
                   </p>

@@ -75,10 +75,10 @@ export function FirebaseRulesSetup({ className }: FirebaseRulesSetupProps) {
         </Alert>
 
         <div className="space-y-3">
-          <h4 className="font-medium flex items-center gap-2">
+          <h2 className="font-medium flex items-center gap-2">
             <Badge variant="outline" className="text-xs">1</Badge>
             Load Firebase Rules
-          </h4>
+          </h2>
           <Button onClick={fetchRules} disabled={loading} className="w-full">
             {loading ? "Loading..." : "Load Firebase Rules"}
           </Button>
@@ -87,10 +87,10 @@ export function FirebaseRulesSetup({ className }: FirebaseRulesSetupProps) {
         {rules && (
           <>
             <div className="space-y-3">
-              <h4 className="font-medium flex items-center gap-2">
+              <h3 className="font-medium flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">2</Badge>
                 Copy Rules ke Clipboard
-              </h4>
+              </h3>
               <Button onClick={copyRules} variant="outline" className="w-full">
                 <Copy className="h-4 w-4 mr-2" />
                 Copy Firebase Rules
@@ -98,10 +98,10 @@ export function FirebaseRulesSetup({ className }: FirebaseRulesSetupProps) {
             </div>
 
             <div className="space-y-3">
-              <h4 className="font-medium flex items-center gap-2">
+              <h3 className="font-medium flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">3</Badge>
                 Buka Firebase Console
-              </h4>
+              </h3>
               <Button onClick={openFirebaseConsole} variant="outline" className="w-full">
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Open Firebase Console
@@ -109,7 +109,7 @@ export function FirebaseRulesSetup({ className }: FirebaseRulesSetupProps) {
             </div>
 
             <div className="bg-gray-50 p-4 rounded-lg">
-              <h5 className="font-medium mb-2">Manual Steps:</h5>
+              <h4 className="font-medium mb-2">Manual Steps:</h4>
               <ol className="text-sm space-y-1 list-decimal list-inside">
                 <li>Click "Open Firebase Console" button above</li>
                 <li>Go to Database → Rules tab</li>
@@ -129,7 +129,7 @@ export function FirebaseRulesSetup({ className }: FirebaseRulesSetupProps) {
             </Alert>
 
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h5 className="font-medium text-blue-900 mb-2">Preview Rules:</h5>
+              <h4 className="font-medium text-blue-900 mb-2">Preview Rules:</h4>
               <pre className="text-xs bg-white p-2 rounded border overflow-x-auto">
                 {JSON.stringify(rules, null, 2)}
               </pre>
@@ -138,7 +138,7 @@ export function FirebaseRulesSetup({ className }: FirebaseRulesSetupProps) {
         )}
 
         <div className="bg-yellow-50 p-4 rounded-lg">
-          <h5 className="font-medium text-yellow-900 mb-2">Production Note:</h5>
+          <h4 className="font-medium text-yellow-900 mb-2">Production Note:</h4>
           <p className="text-sm text-yellow-800">
             Rules di atas memberikan full access untuk development. 
             Untuk production, sebaiknya implementasikan authentication-based rules 

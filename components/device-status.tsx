@@ -75,7 +75,7 @@ const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceI
             isOnline ? "bg-emerald-100" : "bg-gray-200"
           )}>
             {isOnline ? (
-              <Wifi className="h-6 w-6 text-emerald-600" />
+              <Wifi className="h-6 w-6 text-emerald-700 dark:text-emerald-400" />
             ) : (
               <WifiOff className="h-6 w-6 text-gray-500" />
             )}
@@ -109,7 +109,7 @@ const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceI
           <div className="space-y-1">
             <p className="text-xs font-medium text-gray-500">Total Scan</p>
             <p className="text-sm font-semibold text-gray-800 flex items-center justify-center space-x-1">
-              <Database className="h-3 w-3 text-gray-400" />
+              <Database className="h-3 w-3 text-gray-600 dark:text-gray-300" />
               <span>{device.scanCount || 0}</span>
             </p>
           </div>

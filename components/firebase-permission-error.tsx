@@ -52,13 +52,13 @@ export function FirebasePermissionError({ error, onRetry }: FirebasePermissionEr
             </Alert>
 
             <div className="space-y-4">
-              <h3 className="font-semibold">Penyebab dan Solusi:</h3>
+              <h2 className="font-semibold">Penyebab dan Solusi:</h2>
               
               <div className="space-y-3">
                 <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
                   <Badge variant="outline" className="text-xs mt-0.5">1</Badge>
                   <div>
-                    <h4 className="font-medium text-blue-900">Firebase Database Rules</h4>
+                    <h3 className="font-medium text-blue-900">Firebase Database Rules</h3>
                     <p className="text-sm text-blue-800">
                       Rules Firebase belum dikonfigurasi untuk mengizinkan akses ke path '/attendance'
                     </p>
@@ -68,7 +68,7 @@ export function FirebasePermissionError({ error, onRetry }: FirebasePermissionEr
                 <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
                   <Badge variant="outline" className="text-xs mt-0.5">2</Badge>
                   <div>
-                    <h4 className="font-medium text-green-900">Solusi Cepat</h4>
+                    <h3 className="font-medium text-green-900">Solusi Cepat</h3>
                     <p className="text-sm text-green-800">
                       Pergi ke halaman Pengaturan → tab "Sistem" dan ikuti panduan Firebase Rules Setup
                     </p>
@@ -78,7 +78,7 @@ export function FirebasePermissionError({ error, onRetry }: FirebasePermissionEr
                 <div className="flex items-start gap-3 p-3 bg-yellow-50 rounded-lg">
                   <Badge variant="outline" className="text-xs mt-0.5">3</Badge>
                   <div>
-                    <h4 className="font-medium text-yellow-900">Manual Steps</h4>
+                    <h3 className="font-medium text-yellow-900">Manual Steps</h3>
                     <p className="text-sm text-yellow-800">
                       Buka Firebase Console → Database → Rules, dan update rules untuk memberikan akses ke 'attendance'
                     </p>
@@ -114,7 +114,7 @@ export function FirebasePermissionError({ error, onRetry }: FirebasePermissionEr
             </div>
 
             <div className="bg-gray-50 p-4 rounded-lg">
-              <h4 className="font-medium mb-2">Temporary Workaround:</h4>
+              <h3 className="font-medium mb-2">Temporary Workaround:</h3>
               <p className="text-sm text-gray-600 mb-3">
                 Jika ingin menggunakan sistem tanpa Firebase, Anda dapat menggunakan mode offline 
                 dengan data tersimpan di browser local storage.
