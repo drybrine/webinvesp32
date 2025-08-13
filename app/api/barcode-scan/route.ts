@@ -75,11 +75,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update scan with item info
+    // Update scan with item info but DON'T mark as processed yet
+    // The popup will mark it as processed after user interaction
     if (itemFound && itemId) {
       await set(ref(database, `scans/${newScanRef.key}`), {
         ...scanData,
-        processed: true,
+        processed: false, // Keep as false so popup can appear
         itemFound: true,
         itemId,
       })

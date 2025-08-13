@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react" // Ditambahkan useMemo
+import { useState, useMemo } from "react" // Ditambahkan useMemo
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,7 +21,6 @@ import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, Dollar
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase" // Diganti
 import { firebaseHelpers } from "@/lib/firebase" // Ditambahkan
-import { saveAs } from "file-saver";
 
 interface Transaction {
   id: string
@@ -143,7 +142,7 @@ export default function TransaksiPage() {
       unitPrice: unitPriceNum,
       totalAmount: totalAmount,
       reason: formData.reason,
-      operator: "Admin", // TODO: Dapatkan dari sesi login pengguna
+      operator: "Admin", // Default operator
       notes: formData.notes,
       // timestamp akan diatur oleh serverTimestamp di firebaseHelpers
     }
@@ -198,11 +197,13 @@ export default function TransaksiPage() {
   }
 
   const formatCurrency = (amount: number) => {
+    // Handle NaN, undefined, null, or invalid numbers
+    const validAmount = Number(amount) || 0;
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
       currency: "IDR",
       minimumFractionDigits: 0,
-    }).format(amount)
+    }).format(validAmount)
   }
 
   const formatDateTime = (timestamp: string | number) => {
@@ -234,9 +235,26 @@ export default function TransaksiPage() {
     }
   }
 
-  const totalIn = useMemo(() => transactions.filter((t) => t.type === "in").reduce((sum, t) => sum + t.totalAmount, 0), [transactions]);
-  const totalOut = useMemo(() => transactions.filter((t) => t.type === "out").reduce((sum, t) => sum + Math.abs(t.totalAmount), 0), [transactions]);
-  const totalAdjustment = useMemo(() => transactions.filter((t) => t.type === "adjustment").reduce((sum, t) => sum + t.totalAmount, 0), [transactions]);
+  const totalIn = useMemo(() => 
+    transactions
+      .filter((t) => t.type === "in")
+      .reduce((sum, t) => sum + (Number(t.totalAmount) || 0), 0), 
+    [transactions]
+  );
+  
+  const totalOut = useMemo(() => 
+    transactions
+      .filter((t) => t.type === "out")
+      .reduce((sum, t) => sum + Math.abs(Number(t.totalAmount) || 0), 0), 
+    [transactions]
+  );
+  
+  const totalAdjustment = useMemo(() => 
+    transactions
+      .filter((t) => t.type === "adjustment")
+      .reduce((sum, t) => sum + (Number(t.totalAmount) || 0), 0), 
+    [transactions]
+  );
 
   const todayTransactionsCount = useMemo(() => {
     const today = new Date();
@@ -278,50 +296,76 @@ export default function TransaksiPage() {
       return
     }
 
-    const headers = [
-      "ID Transaksi",
-      "Waktu",
-      "Jenis",
-      "Nama Produk",
-      "Barcode",
-      "Jumlah",
-      "Harga Satuan",
-      "Total",
-      "Alasan",
-      "Operator",
-      "Catatan"
-    ]
+    try {
+      const headers = [
+        "ID Transaksi",
+        "Waktu",
+        "Jenis",
+        "Nama Produk",
+        "Barcode",
+        "Jumlah",
+        "Harga Satuan",
+        "Total",
+        "Alasan",
+        "Operator",
+        "Catatan"
+      ]
 
-    const csvData = filteredTransactions.map(transaction => [
-      transaction.id,
-      formatDateTime(transaction.timestamp),
-      getTypeLabel(transaction.type),
-      transaction.productName,
-      transaction.productBarcode,
-      transaction.quantity.toString(),
-      transaction.unitPrice.toString(),
-      transaction.totalAmount.toString(),
-      transaction.reason,
-      transaction.operator,
-      transaction.notes || ""
-    ])
+      const csvData = filteredTransactions.map(transaction => [
+        transaction.id || '',
+        formatDateTime(transaction.timestamp || ''),
+        getTypeLabel(transaction.type || ''),
+        transaction.productName || '',
+        transaction.productBarcode || '',
+        (transaction.quantity || 0).toString(),
+        (transaction.unitPrice || 0).toString(),
+        (transaction.totalAmount || 0).toString(),
+        transaction.reason || '',
+        transaction.operator || '',
+        transaction.notes || ''
+      ])
 
-    const csvContent = [
-      headers.join(","),
-      ...csvData.map(row => 
-        row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(",")
-      )
-    ].join("\n")
+      const csvContent = [
+        headers.join(","),
+        ...csvData.map(row =>
+          row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",")
+        )
+      ].join("\n")
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const fileName = `transaksi_${new Date().toISOString().split('T')[0]}.csv`
-    
-    saveAs(blob, fileName)
-    
-    toast({
-      title: "Export Berhasil",
-      description: `${filteredTransactions.length} transaksi berhasil diekspor ke ${fileName}`,
-    })
+      // Add BOM for UTF-8 to ensure proper encoding
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
+      const fileName = `transaksi_${new Date().toISOString().split('T')[0]}.csv`
+      
+      // Create download link manually (more reliable than file-saver)
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.style.display = 'none';
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      toast({
+        title: "Export Berhasil",
+        description: `${filteredTransactions.length} transaksi berhasil diekspor ke ${fileName}`,
+      })
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export Gagal",
+        description: "Terjadi kesalahan saat mengekspor data. Silakan coba lagi.",
+        variant: "destructive",
+      })
+    }
   }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
@@ -410,7 +454,7 @@ export default function TransaksiPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="flex flex-col sm:flex-row gap-4 flex-1">
                 <div className="relative flex-1 max-w-sm">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-600 dark:text-gray-300 h-4 w-4" />
                   <Input
                     placeholder="Cari transaksi..."
                     value={searchTerm}
@@ -595,7 +639,7 @@ export default function TransaksiPage() {
                         <TableCell colSpan={8} className="text-center py-12">
                           <div className="flex flex-col items-center gap-3">
                             <div className="p-4 rounded-full bg-gray-100">
-                              <FileText className="h-8 w-8 text-gray-400" />
+                              <FileText className="h-8 w-8 text-gray-600 dark:text-gray-300" />
                             </div>
                             <div>
                               <p className="text-gray-900 font-medium">Tidak ada transaksi</p>

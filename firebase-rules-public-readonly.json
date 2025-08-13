@@ -1,0 +1,51 @@
+{
+  "rules": {
+    // Default: Deny all access
+    ".read": false,
+    ".write": false,
+    
+    // Inventory - Public read access, no write access from web
+    "inventory": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["barcode", "category", "name", "lastUpdated"]
+    },
+    
+    // Scans - No public access, only ESP32 devices can write
+    "scans": {
+      ".read": false,
+      ".write": "newData.child('deviceId').val().matches(/^ESP32-.*/) && newData.hasChildren(['barcode', 'deviceId', 'timestamp', 'mode', 'type'])",
+      ".indexOn": ["timestamp", "deviceId", "barcode", "processed"],
+      "$scanId": {
+        ".validate": "newData.hasChildren(['barcode', 'deviceId', 'timestamp']) && newData.child('timestamp').isNumber() && newData.child('mode').val() == 'inventory' && newData.child('type').val() == 'inventory_scan'"
+      }
+    },
+    
+    // Devices - Public read for status, ESP32 can update their own status
+    "devices": {
+      ".read": true,
+      "$deviceId": {
+        ".write": "$deviceId.matches(/^ESP32-.*/) && newData.hasChildren(['status', 'lastSeen', 'ipAddress']) && newData.child('lastSeen').isNumber()",
+        ".validate": "newData.child('status').val().matches(/^(online|offline)$/)"
+      }
+    },
+    
+    // Transactions - No public access
+    "transactions": {
+      ".read": false,
+      ".write": false
+    },
+    
+    // Analytics - Public read only
+    "analytics": {
+      ".read": true,
+      ".write": false
+    },
+    
+    // Settings - No public access
+    "settings": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

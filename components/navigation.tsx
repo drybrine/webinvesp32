@@ -4,25 +4,18 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { BarChart3, Receipt, Settings, Menu, X, UserCheck, Sparkles } from "lucide-react"
+import { BarChart3, Receipt, Menu, X, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { SessionIndicator } from "@/components/session-indicator"
 
 const navigation = [
 	{ name: "Dashboard", href: "/", icon: BarChart3, color: "from-blue-500 to-purple-500" },
 	{ name: "Transaksi", href: "/transaksi", icon: Receipt, color: "from-emerald-500 to-teal-500" },
-	{ name: "Absensi", href: "/absensi", icon: UserCheck, color: "from-orange-500 to-red-500" },
-	{ name: "Pengaturan", href: "/pengaturan", icon: Settings, color: "from-purple-500 to-pink-500" },
 ]
 
 export default function Navigation() {
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 	const pathname = usePathname()
 
-	// Don't show navigation on login page
-	if (pathname === "/login") {
-		return null
-	}
 
 	return (
 		<nav className="glass-morphism border-b border-white/20 sticky top-0 z-50 shadow-large backdrop-blur-2xl">
@@ -91,12 +84,8 @@ export default function Navigation() {
 						</div>
 					</div>
 
-					{/* Session Indicator & Mobile menu button */}
+					{/* Mobile menu button */}
 					<div className="flex items-center gap-2">
-						{/* Session Indicator - hidden on mobile, shown on desktop */}
-						<div className="hidden sm:block">
-							<SessionIndicator />
-						</div>
 
 						{/* Enhanced Mobile menu button */}
 						<div className="md:hidden flex items-center">
@@ -105,6 +94,9 @@ export default function Navigation() {
 								size="sm"
 								onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
 								className="relative p-2 sm:p-3 rounded-xl hover:bg-accent/50 hover:shadow-medium interactive-scale transition-all duration-300 min-h-[44px] min-w-[44px]"
+								aria-label={mobileMenuOpen ? "Tutup menu navigasi" : "Buka menu navigasi"}
+								aria-expanded={mobileMenuOpen}
+								aria-controls="mobile-navigation-menu"
 							>
 								<div className="relative w-5 h-5 sm:w-6 sm:h-6">
 									{mobileMenuOpen ? (
@@ -121,13 +113,9 @@ export default function Navigation() {
 
 			{/* Enhanced Mobile Navigation Menu */}
 			{mobileMenuOpen && (
-				<div className="md:hidden">
+				<div className="md:hidden" id="mobile-navigation-menu">
 					<div className="glass-morphism border-t border-white/10 mobile-scroll">
 						<div className="mobile-padding py-3 space-y-2">
-							{/* Session Indicator for Mobile */}
-							<div className="pb-2 border-b border-white/10">
-								<SessionIndicator />
-							</div>
 
 							{navigation.map((item) => {
 								const Icon = item.icon

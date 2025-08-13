@@ -1,0 +1,802 @@
+{
+  "analytics": {
+    "lastReset": 1752436089740,
+    "lowStockAlerts": 1,
+    "totalItems": 2,
+    "totalScans": 0
+  },
+  "devices": {
+    "ESP32-5fbf713c": {
+      "freeHeap": 235656,
+      "ipAddress": "10.51.112.68",
+      "lastHeartbeat": 205910,
+      "lastSeen": 1753873241973,
+      "rssi": -20,
+      "scanCount": 8,
+      "status": "offline",
+      "uptime": 204,
+      "version": "3.1"
+    }
+  },
+  "inventory": {
+    "-OV4Mg-quQlfQLYxl0Q4": {
+      "barcode": "8991906106250",
+      "category": "Rokok",
+      "createdAt": 1752436752477,
+      "description": "Rokok",
+      "id": "-OV4Mg-quQlfQLYxl0Q4",
+      "lastUpdated": 1752487115624,
+      "location": "",
+      "minStock": 5,
+      "name": "76 Apel",
+      "price": 15000,
+      "quantity": 11,
+      "supplier": "",
+      "updatedAt": 1753856322394
+    }
+  },
+  "scans": {
+    "-OV653Pp32aFdAhLAF2J": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": true,
+      "timestamp": 1752465688246,
+      "type": "inventory_scan"
+    },
+    "-OV67CQ5kNpvzJHsmcid": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752466249415,
+      "type": "inventory_scan"
+    },
+    "-OV67zkdFTFmC_-kPd2F": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752466455593,
+      "type": "inventory_scan"
+    },
+    "-OV6AFH3IqI5WQiDrcCk": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467047556,
+      "type": "inventory_scan"
+    },
+    "-OV6AI1Fws5jw7K1OhHW": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467058832,
+      "type": "inventory_scan"
+    },
+    "-OV6AO6bOgZ7QW1tNi6j": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467083751,
+      "type": "inventory_scan"
+    },
+    "-OV6AlukwnGw6gOXx1e9": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467185329,
+      "type": "inventory_scan"
+    },
+    "-OV6Aqr9UugtxmTXljjJ": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467205578,
+      "type": "inventory_scan"
+    },
+    "-OV6Aud1KMvsaayKs77E": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467221058,
+      "type": "inventory_scan"
+    },
+    "-OV6BErJR8af9o3X34ld": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467307989,
+      "type": "inventory_scan"
+    },
+    "-OV6BM6XRXqkXiTWLMHZ": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467337698,
+      "type": "inventory_scan"
+    },
+    "-OV6BYucYehe762S_d0K": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467390120,
+      "type": "inventory_scan"
+    },
+    "-OV6BboKme-P3yiq5Mhs": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467406101,
+      "type": "inventory_scan"
+    },
+    "-OV6CDNSBAvfHcjG_vLa": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467564061,
+      "type": "inventory_scan"
+    },
+    "-OV6CObQ6XSr2_TmZ9Vq": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467610075,
+      "type": "inventory_scan"
+    },
+    "-OV6CReHpub_C1tQhOEp": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467622546,
+      "type": "inventory_scan"
+    },
+    "-OV6CZ6lS3BQl-ynIl5O": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467653106,
+      "type": "inventory_scan"
+    },
+    "-OV6CbezXzrvFgAPbtMf": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752467667648,
+      "type": "inventory_scan"
+    },
+    "-OV6FHFvu92ntJhdlAEF": {
+      "barcode": "12158829",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752468366395,
+      "type": "inventory_scan"
+    },
+    "-OV6W2yDRbMvSVWtf-Te": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752472764303,
+      "type": "inventory_scan"
+    },
+    "-OV6W4kcMB3cdLIjaUpE": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752472771624,
+      "type": "inventory_scan"
+    },
+    "-OV6WAa5xOut6p8GyP4G": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752472795526,
+      "type": "inventory_scan"
+    },
+    "-OV6WPgOj0TBEP775Hjz": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752472857369,
+      "type": "inventory_scan"
+    },
+    "-OV6Wa3BhtfWSFiWiL8V": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752472903948,
+      "type": "inventory_scan"
+    },
+    "-OV6WhMOb5FSVke8AQMG": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752472933849,
+      "type": "inventory_scan"
+    },
+    "-OV6WpS-r_ZznEZXJseg": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752472966976,
+      "type": "inventory_scan"
+    },
+    "-OV6Xx9aeHxpzUgVwdSy": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752473260710,
+      "type": "inventory_scan"
+    },
+    "-OV6Y0v8OcQrZUU-DgMg": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752473280201,
+      "type": "inventory_scan"
+    },
+    "-OV6Y79rZUPtsgBL7WHJ": {
+      "barcode": "Wikipedia",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752473305783,
+      "type": "inventory_scan"
+    },
+    "-OV6_5ogqK1qc1LjQqxZ": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752473824556,
+      "type": "inventory_scan"
+    },
+    "-OV6_AL_PdCBAt6jfA0S": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752473843109,
+      "type": "inventory_scan"
+    },
+    "-OV6_E11oZHT24CoqCkW": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752473858178,
+      "type": "inventory_scan"
+    },
+    "-OV6_IS6cI0kfVHp5JXK": {
+      "barcode": "Hello :)",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752473876295,
+      "type": "inventory_scan"
+    },
+    "-OV6e8bEUkExSgiIgwVn": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752475146704,
+      "type": "inventory_scan"
+    },
+    "-OV6eGonX6z8GAsvHOYC": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752475180339,
+      "type": "inventory_scan"
+    },
+    "-OV6eKHLH2In2XLS-Jb5": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752475194518,
+      "type": "inventory_scan"
+    },
+    "-OV6eNHfsULdLgwQw9pY": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752475206827,
+      "type": "inventory_scan"
+    },
+    "-OV6eOugMI5V5wxH-P81": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752475213484,
+      "type": "inventory_scan"
+    },
+    "-OV6eXQNiTG00SRG_HZL": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752475248344,
+      "type": "inventory_scan"
+    },
+    "-OV6ealuZn8SNHZ15hBD": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752475266170,
+      "type": "inventory_scan"
+    },
+    "-OV6jT96gOm91IMb8z5n": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752476541575,
+      "type": "inventory_scan"
+    },
+    "-OV6jlMwudFpMJ7O0VTL": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752476620284,
+      "type": "inventory_scan"
+    },
+    "-OV6jmtLVNJuoYcyy4Xk": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752476626519,
+      "type": "inventory_scan"
+    },
+    "-OV6jtFGQivgcRP5gsIl": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752476652561,
+      "type": "inventory_scan"
+    },
+    "-OV6jxGFjxSXlSyKee-G": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752476669008,
+      "type": "inventory_scan"
+    },
+    "-OV6k-RCohsMfbl9bf0w": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752476681997,
+      "type": "inventory_scan"
+    },
+    "-OV6k15YEY80iPHTkOH5": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752476688803,
+      "type": "inventory_scan"
+    },
+    "-OV6k3yo5PrfYlGpqCnV": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752476700596,
+      "type": "inventory_scan"
+    },
+    "-OV6k86Sz0mNA0LxUGQS": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1752476717533,
+      "type": "inventory_scan"
+    },
+    "-OWOyQvQ8eZVyjxUWs3_": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753856196316,
+      "type": "inventory_scan"
+    },
+    "-OWOyaAwm26MhKwkHNZb": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753856238332,
+      "type": "inventory_scan"
+    },
+    "-OWOycVA5yzbImxn3Qms": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753856247819,
+      "type": "inventory_scan"
+    },
+    "-OWOygeiUqt7C4dcra5Z": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753856264878,
+      "type": "inventory_scan"
+    },
+    "-OWOyj5gXv74H8Vs-H8o": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753856274860,
+      "type": "inventory_scan"
+    },
+    "-OWOylDGBcEAqOdhb-HS": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753856283537,
+      "type": "inventory_scan"
+    },
+    "-OWOync3T60MmXkRWLc8": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753856293380,
+      "type": "inventory_scan"
+    },
+    "-OWOyooLNUNYKJpxY_Tn": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753856298262,
+      "type": "inventory_scan"
+    },
+    "-OWOyrqSVbDrZv1j2gNz": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753856310686,
+      "type": "inventory_scan"
+    },
+    "-OWOytxeFx-PmCzU-YS9": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753856319338,
+      "type": "inventory_scan"
+    },
+    "-OWPNoyzk-08dmGEausX": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753863114688,
+      "type": "inventory_scan"
+    },
+    "-OWPNykXCsxuL-2btIGg": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753863154722,
+      "type": "inventory_scan"
+    },
+    "-OWPylYagWfufWtV_9h_": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753873062118,
+      "type": "inventory_scan"
+    },
+    "-OWPyp7IBtQmvCqIqe7h": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753873076755,
+      "type": "inventory_scan"
+    },
+    "-OWPyvPTKf1hs7YpJLej": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753873102494,
+      "type": "inventory_scan"
+    },
+    "-OWPzBqsBsyxX5WuD1FS": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753873173944,
+      "type": "inventory_scan"
+    },
+    "-OWPzEf4RJ6KGdMP6FmX": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753873185477,
+      "type": "inventory_scan"
+    },
+    "-OWPzGp96WmbYi4iKJZ-": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753873194315,
+      "type": "inventory_scan"
+    },
+    "-OWPzI9wRId8ImC121uY": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753873199804,
+      "type": "inventory_scan"
+    },
+    "-OWPzJJG9obkX7rlyJig": {
+      "barcode": "8991906106250",
+      "deviceId": "ESP32-5fbf713c",
+      "location": "Warehouse-Scanner",
+      "mode": "inventory",
+      "processed": false,
+      "timestamp": 1753873204497,
+      "type": "inventory_scan"
+    }
+  },
+  "settings": {
+    "system": {
+      "initialized": true,
+      "lastUpdate": 1752436089740,
+      "version": "3.0"
+    }
+  },
+  "transactions": {
+    "-OV4Rh-3cx0AYY0k75Fo": {
+      "id": "-OV4Rh-3cx0AYY0k75Fo",
+      "operator": "User",
+      "productBarcode": "8991906106250",
+      "productName": "76 Apel",
+      "quantity": 1,
+      "reason": "Stock In via Quick Action Popup",
+      "timestamp": 1752438067244,
+      "totalAmount": 15000,
+      "type": "in",
+      "unitPrice": 15000
+    },
+    "-OV4SpwiFtPOhlfVC3UJ": {
+      "id": "-OV4SpwiFtPOhlfVC3UJ",
+      "operator": "User",
+      "productBarcode": "8991906106250",
+      "productName": "76 Apel",
+      "quantity": -1,
+      "reason": "Stock Out via Quick Action Popup",
+      "timestamp": 1752438366279,
+      "totalAmount": -15000,
+      "type": "out",
+      "unitPrice": 15000
+    },
+    "-OV4TLQXJmQ4myGq4PP_": {
+      "id": "-OV4TLQXJmQ4myGq4PP_",
+      "operator": "User",
+      "productBarcode": "8991906106250",
+      "productName": "76 Apel",
+      "quantity": 1,
+      "reason": "Stock In via Quick Action Popup",
+      "timestamp": 1752438499099,
+      "totalAmount": 15000,
+      "type": "in",
+      "unitPrice": 15000
+    },
+    "-OV4Y-NgfpbwnsTDPLzi": {
+      "id": "-OV4Y-NgfpbwnsTDPLzi",
+      "operator": "Admin",
+      "productBarcode": "8991906106250",
+      "productName": "76 Apel",
+      "quantity": 8,
+      "reason": "Penyesuaian Stok dari Dashboard Inventaris",
+      "timestamp": 1752439719499,
+      "totalAmount": 120000,
+      "type": "in",
+      "unitPrice": 15000
+    },
+    "-OV5fgfMbqGwcveBxqSk": {
+      "id": "-OV5fgfMbqGwcveBxqSk",
+      "operator": "Admin",
+      "productBarcode": "8991906106250",
+      "productName": "76 Apel",
+      "quantity": 1,
+      "reason": "Penyesuaian Stok dari Dashboard Inventaris",
+      "timestamp": 1752458775391,
+      "totalAmount": 15000,
+      "type": "in",
+      "unitPrice": 15000
+    },
+    "-OV5flGOghLDb7UoayQj": {
+      "id": "-OV5flGOghLDb7UoayQj",
+      "operator": "Admin",
+      "productBarcode": "8991906106250",
+      "productName": "76 Apel",
+      "quantity": 1,
+      "reason": "Penyesuaian Stok dari Dashboard Inventaris",
+      "timestamp": 1752458794202,
+      "totalAmount": 15000,
+      "type": "in",
+      "unitPrice": 15000
+    },
+    "-OV5uUgE2mtX2wMETxit": {
+      "id": "-OV5uUgE2mtX2wMETxit",
+      "operator": "User",
+      "productBarcode": "8991906106250",
+      "productName": "76 Apel",
+      "quantity": 1,
+      "reason": "Stock In via Quick Action Popup",
+      "timestamp": 1752462654295,
+      "totalAmount": 15000,
+      "type": "in",
+      "unitPrice": 15000
+    },
+    "-OV6ePaonTWCm06eiLmi": {
+      "id": "-OV6ePaonTWCm06eiLmi",
+      "operator": "User",
+      "productBarcode": "8991906106250",
+      "productName": "76 Apel",
+      "quantity": 1,
+      "reason": "Stock In via Quick Action Popup",
+      "timestamp": 1752475216339,
+      "totalAmount": 15000,
+      "type": "in",
+      "unitPrice": 15000
+    },
+    "-OV6eXsNt1bE0U-hrtmw": {
+      "id": "-OV6eXsNt1bE0U-hrtmw",
+      "operator": "User",
+      "productBarcode": "8991906106250",
+      "productName": "76 Apel",
+      "quantity": -1,
+      "reason": "Stock Out via Quick Action Popup",
+      "timestamp": 1752475250231,
+      "totalAmount": -15000,
+      "type": "out",
+      "unitPrice": 15000
+    },
+    "-OV6ebL0A62TKAq6LEXq": {
+      "id": "-OV6ebL0A62TKAq6LEXq",
+      "operator": "User",
+      "productBarcode": "8991906106250",
+      "productName": "76 Apel",
+      "quantity": -1,
+      "reason": "Stock Out via Quick Action Popup",
+      "timestamp": 1752475268516,
+      "totalAmount": -15000,
+      "type": "out",
+      "unitPrice": 15000
+    },
+    "-OWOyuhRCENlfAEXL7W5": {
+      "id": "-OWOyuhRCENlfAEXL7W5",
+      "operator": "User",
+      "productBarcode": "8991906106250",
+      "productName": "76 Apel",
+      "quantity": -1,
+      "reason": "Stock Out via Quick Action Popup",
+      "timestamp": 1753856322421,
+      "totalAmount": -15000,
+      "type": "out",
+      "unitPrice": 15000
+    }
+  }
+}

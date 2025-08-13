@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json({
       page: currentPage,
-      mode: currentPage === 'attendance' ? 'attendance' : 'inventory',
+      mode: 'inventory',
       timestamp: Date.now(),
       success: true
     })

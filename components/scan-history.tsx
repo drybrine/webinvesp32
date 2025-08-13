@@ -146,7 +146,7 @@ export function ScanHistory({ scans, loading = false }: ScanHistoryProps) {
             </Select>
           </div>
 
-          <Button variant="outline" size="icon" onClick={exportToCSV} title="Export to CSV">
+          <Button variant="outline" size="icon" onClick={exportToCSV} title="Export to CSV" aria-label="Export data ke CSV">
             <Download className="h-4 w-4" />
           </Button>
         </div>

@@ -9,7 +9,7 @@ import {
   WifiOff, 
   RefreshCw, 
   Circle,
-  Zap,
+
   AlertTriangle,
   CheckCircle2,
   Clock,
@@ -83,7 +83,7 @@ export function ConnectionStatusIndicator({
       case 'disconnected':
         return <AlertTriangle className="h-4 w-4 text-red-500 animate-pulse" />
       default:
-        return <WifiOff className="h-4 w-4 text-gray-400" />
+        return <WifiOff className="h-4 w-4 text-gray-600 dark:text-gray-300" />
     }
   }
 
@@ -184,7 +184,7 @@ export function ConnectionStatusIndicator({
             <RefreshCw 
               key={refreshCount}
               className={cn(
-                "h-4 w-4 transition-transform duration-200 text-emerald-600",
+                "h-4 w-4 transition-transform duration-200 text-emerald-700 dark:text-emerald-400",
                 isRefreshing && "animate-spin-slow"
               )} 
             />
@@ -200,7 +200,7 @@ interface DeviceStatusBadgeProps {
   status: 'online' | 'offline'
   deviceId: string
   ipAddress?: string
-  lastSeen?: any
+  lastSeen?: number
   isTransitioning?: boolean
 }
 
@@ -208,7 +208,7 @@ export function DeviceStatusBadge({
   status, 
   deviceId, 
   ipAddress, 
-  lastSeen, 
+ 
   isTransitioning = false 
 }: DeviceStatusBadgeProps) {
   const isOnline = status === 'online'
@@ -247,7 +247,7 @@ export function DeviceStatusBadge({
           )} />
         </div>
         {isOnline && ipAddress && (
-          <div className="text-xs font-mono text-gray-600 truncate">
+          <div className="text-xs font-mono text-gray-700 dark:text-gray-300 truncate">
             {ipAddress}
           </div>
         )}

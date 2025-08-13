@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 
 // Simple CORS headers
 const corsHeaders = {
@@ -38,11 +38,6 @@ export async function GET() {
         "transactions": {
           ".read": true,
           ".write": true
-        },
-        "attendance": {
-          ".read": true,
-          ".write": true,
-          ".indexOn": ["nim", "timestamp", "deviceId"]
         }
       }
     }
@@ -57,7 +52,7 @@ export async function GET() {
           step2: "Go to Firebase Console > Database > Rules",
           step3: "Paste the rules and click 'Publish'",
           step4: "Wait a few minutes for rules to propagate",
-          note: "This will give full read/write access to all collections including attendance"
+          note: "This will give full read/write access to all collections"
         }
       },
       { status: 200, headers: corsHeaders }
@@ -72,7 +67,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     return NextResponse.json(
       { 

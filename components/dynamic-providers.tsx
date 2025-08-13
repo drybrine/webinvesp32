@@ -9,11 +9,6 @@ const RealtimeScanProvider = dynamic(() => import("./realtime-scan-provider").th
   loading: () => null
 });
 
-const RealtimeAttendanceProvider = dynamic(() => import("./realtime-attendance-provider").then(mod => ({ default: mod.RealtimeAttendanceProvider })), {
-  ssr: false,
-  loading: () => null
-});
-
 const DeviceStatusMonitorProvider = dynamic(() => import("./device-status-monitor-provider").then(mod => ({ default: mod.DeviceStatusMonitorProvider })), {
   ssr: false,
   loading: () => null
@@ -28,12 +23,10 @@ const PerformanceMonitor = dynamic(() => import("./performance-monitor"), {
 export function DynamicProviders({ children }: { children: React.ReactNode }) {
   return (
     <RealtimeScanProvider>
-      <RealtimeAttendanceProvider>
-        <DeviceStatusMonitorProvider>
-          {children}
-          <PerformanceMonitor />
-        </DeviceStatusMonitorProvider>
-      </RealtimeAttendanceProvider>
+      <DeviceStatusMonitorProvider>
+        {children}
+        <PerformanceMonitor />
+      </DeviceStatusMonitorProvider>
     </RealtimeScanProvider>
   );
 }
