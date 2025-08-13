@@ -4,20 +4,20 @@ import { initializeConnectionMonitor } from "./firebase-connection-monitor"
 import { initializeFirebaseErrorHandling } from "./firebase-error-suppressor" // Use new enhanced error suppressor
 
 // Lazy load Firebase Auth only when needed
-let Auth: any = null;
-let getAuth: any = null;
+const Auth: any = null;
+const getAuth: any = null;
 
-// Firebase configuration - hardcoded for security (safe for client-side)
-// These values are safe to be public as security is handled by Firebase Rules
+// Firebase configuration from environment variables
+// These values are loaded from .env file for security
 const firebaseConfig = {
-  apiKey: "AIzaSyBDMTHkz_BwbqKfkVQYvKEI3yfrOLa_jLY", // Replace with your actual API key
-  authDomain: "barcodescanesp32.firebaseapp.com",
-  databaseURL: "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "barcodescanesp32",
-  storageBucket: "barcodescanesp32.firebasestorage.app",
-  messagingSenderId: "330721800882",
-  appId: "1:330721800882:web:f270138ef40229ec2ccfab",
-  measurementId: "G-7J89KNJCCT",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "",
 }
 
 // Validasi konfigurasi Firebase untuk keamanan
@@ -31,18 +31,26 @@ const validateFirebaseConfig = () => {
   
   if (missingFields.length > 0) {
     console.error('❌ Firebase configuration incomplete. Missing fields:', missingFields);
-    console.error('💡 Please check your .env.local file and ensure all required environment variables are set.');
+    console.error('💡 Please check your .env file and ensure all required environment variables are set.');
+    console.error('💡 Required environment variables:');
+    console.error('   - NEXT_PUBLIC_FIREBASE_API_KEY');
+    console.error('   - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN');
+    console.error('   - NEXT_PUBLIC_FIREBASE_DATABASE_URL');
+    console.error('   - NEXT_PUBLIC_FIREBASE_PROJECT_ID');
+    console.error('   - NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
+    console.error('   - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID');
+    console.error('   - NEXT_PUBLIC_FIREBASE_APP_ID');
     return false;
   }
   
   // Validasi format API key
-  if (!firebaseConfig.apiKey.startsWith('AIza')) {
+  if (firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('AIza')) {
     console.error('❌ Invalid Firebase API key format');
     return false;
   }
   
   // Validasi domain
-  if (!firebaseConfig.authDomain.includes('firebaseapp.com')) {
+  if (firebaseConfig.authDomain && !firebaseConfig.authDomain.includes('firebaseapp.com')) {
     console.error('❌ Invalid Firebase auth domain');
     return false;
   }
@@ -65,7 +73,6 @@ interface DbRefs {
   settings: DatabaseReference;
   analytics: DatabaseReference;
   transactions: DatabaseReference; // Ditambahkan
-  attendance: DatabaseReference; // Ditambahkan untuk absensi
 }
 export let dbRefs: DbRefs | null = null; // Initialize as null
 
@@ -175,7 +182,6 @@ const initializeFirebase = () => {
         settings: ref(database, "settings"),
         analytics: ref(database, "analytics"),
         transactions: ref(database, "transactions"), // Ditambahkan
-        attendance: ref(database, "attendance"), // Ditambahkan untuk absensi
       };
     }
 
@@ -241,7 +247,6 @@ const initializeFirebaseServer = () => {
         settings: ref(database, "settings"),
         analytics: ref(database, "analytics"),
         transactions: ref(database, "transactions"),
-        attendance: ref(database, "attendance"),
       };
     }
 
@@ -494,6 +499,8 @@ export const getFirebaseStatus = () => {
     hasDatabase: database !== null,
     hasRefs: dbRefs !== null,
     isConfigured: isFirebaseConfigured(),
+    hasValidConfig: validateFirebaseConfig(),
+    databaseUrl: firebaseConfig.databaseURL,
   };
 };
 

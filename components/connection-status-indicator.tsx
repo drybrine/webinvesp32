@@ -9,7 +9,7 @@ import {
   WifiOff, 
   RefreshCw, 
   Circle,
-  Zap,
+
   AlertTriangle,
   CheckCircle2,
   Clock,
@@ -200,7 +200,7 @@ interface DeviceStatusBadgeProps {
   status: 'online' | 'offline'
   deviceId: string
   ipAddress?: string
-  lastSeen?: any
+  lastSeen?: number
   isTransitioning?: boolean
 }
 
@@ -208,7 +208,7 @@ export function DeviceStatusBadge({
   status, 
   deviceId, 
   ipAddress, 
-  lastSeen, 
+ 
   isTransitioning = false 
 }: DeviceStatusBadgeProps) {
   const isOnline = status === 'online'

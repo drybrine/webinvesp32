@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react" // Ditambahkan useMemo
+import { useState, useMemo } from "react" // Ditambahkan useMemo
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,7 +21,6 @@ import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, Dollar
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase" // Diganti
 import { firebaseHelpers } from "@/lib/firebase" // Ditambahkan
-import { saveAs } from "file-saver";
 
 interface Transaction {
   id: string
@@ -297,50 +296,76 @@ export default function TransaksiPage() {
       return
     }
 
-    const headers = [
-      "ID Transaksi",
-      "Waktu",
-      "Jenis",
-      "Nama Produk",
-      "Barcode",
-      "Jumlah",
-      "Harga Satuan",
-      "Total",
-      "Alasan",
-      "Operator",
-      "Catatan"
-    ]
+    try {
+      const headers = [
+        "ID Transaksi",
+        "Waktu",
+        "Jenis",
+        "Nama Produk",
+        "Barcode",
+        "Jumlah",
+        "Harga Satuan",
+        "Total",
+        "Alasan",
+        "Operator",
+        "Catatan"
+      ]
 
-    const csvData = filteredTransactions.map(transaction => [
-      transaction.id,
-      formatDateTime(transaction.timestamp),
-      getTypeLabel(transaction.type),
-      transaction.productName,
-      transaction.productBarcode,
-      transaction.quantity.toString(),
-      transaction.unitPrice.toString(),
-      transaction.totalAmount.toString(),
-      transaction.reason,
-      transaction.operator,
-      transaction.notes || ""
-    ])
+      const csvData = filteredTransactions.map(transaction => [
+        transaction.id || '',
+        formatDateTime(transaction.timestamp || ''),
+        getTypeLabel(transaction.type || ''),
+        transaction.productName || '',
+        transaction.productBarcode || '',
+        (transaction.quantity || 0).toString(),
+        (transaction.unitPrice || 0).toString(),
+        (transaction.totalAmount || 0).toString(),
+        transaction.reason || '',
+        transaction.operator || '',
+        transaction.notes || ''
+      ])
 
-    const csvContent = [
-      headers.join(","),
-      ...csvData.map(row => 
-        row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(",")
-      )
-    ].join("\n")
+      const csvContent = [
+        headers.join(","),
+        ...csvData.map(row =>
+          row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",")
+        )
+      ].join("\n")
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const fileName = `transaksi_${new Date().toISOString().split('T')[0]}.csv`
-    
-    saveAs(blob, fileName)
-    
-    toast({
-      title: "Export Berhasil",
-      description: `${filteredTransactions.length} transaksi berhasil diekspor ke ${fileName}`,
-    })
+      // Add BOM for UTF-8 to ensure proper encoding
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
+      const fileName = `transaksi_${new Date().toISOString().split('T')[0]}.csv`
+      
+      // Create download link manually (more reliable than file-saver)
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.style.display = 'none';
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      toast({
+        title: "Export Berhasil",
+        description: `${filteredTransactions.length} transaksi berhasil diekspor ke ${fileName}`,
+      })
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export Gagal",
+        description: "Terjadi kesalahan saat mengekspor data. Silakan coba lagi.",
+        variant: "destructive",
+      })
+    }
   }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">

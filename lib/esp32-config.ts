@@ -15,14 +15,12 @@ export const ESP32_CONFIG = {
   
   // Scanner modes from ESP32 .ino enum
   MODES: {
-    INVENTORY: "inventory",
-    ATTENDANCE: "attendance"
+    INVENTORY: "inventory"
   },
   
   // Scan types from ESP32 .ino file
   SCAN_TYPES: {
-    INVENTORY: "inventory_scan",
-    ATTENDANCE: "attendance_scan"
+    INVENTORY: "inventory_scan"
   },
   
   // Device ID pattern from ESP32 .ino: "ESP32-" + MAC address
@@ -41,15 +39,6 @@ export const ESP32_CONFIG = {
   TIMEOUTS: {
     FIREBASE_HTTP: 5000,  // 5 seconds for scans (faster)
     HEARTBEAT: 2000,      // 2 seconds for heartbeat (faster)
-  },
-  
-  // Attendance validation from ESP32 .ino
-  ATTENDANCE: {
-    MIN_NIM_LENGTH: 8,
-    MAX_NIM_LENGTH: 12,
-    SESSION_ID: "seminar-2025",
-    EVENT_NAME: "Seminar Teknologi 2025",
-    LOCATION: "Auditorium Utama"
   },
   
   // EEPROM addresses from ESP32 .ino
@@ -76,16 +65,6 @@ export const ESP32_HELPERS = {
            location.toLowerCase().includes('warehouse-scanner')
   },
   
-  // Validate NIM format like ESP32 .ino
-  isValidNIM: (nim: string): boolean => {
-    if (nim.length < ESP32_CONFIG.ATTENDANCE.MIN_NIM_LENGTH || 
-        nim.length > ESP32_CONFIG.ATTENDANCE.MAX_NIM_LENGTH) {
-      return false
-    }
-    
-    return /^\d+$/.test(nim) // Only digits
-  },
-  
   // Create scan data structure matching ESP32 .ino
   createScanData: (barcode: string, deviceId?: string, mode: string = ESP32_CONFIG.MODES.INVENTORY) => {
     return {
@@ -94,9 +73,7 @@ export const ESP32_HELPERS = {
       processed: false,
       location: ESP32_CONFIG.DEFAULT_LOCATION,
       mode,
-      type: mode === ESP32_CONFIG.MODES.ATTENDANCE ? 
-            ESP32_CONFIG.SCAN_TYPES.ATTENDANCE : 
-            ESP32_CONFIG.SCAN_TYPES.INVENTORY,
+      type: ESP32_CONFIG.SCAN_TYPES.INVENTORY,
       timestamp: Date.now(),
       source: deviceId || `test_esp32_${Date.now()}` // Add source field
     }

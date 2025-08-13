@@ -13,7 +13,14 @@ import { toast } from "@/hooks/use-toast"
 export default function FirebaseSetup() {
   const [testing, setTesting] = useState(false)
   const [initializing, setInitializing] = useState(false)
-  const [testResult, setTestResult] = useState<any>(null)
+  const [testResult, setTestResult] = useState<{ 
+    success: boolean; 
+    error?: string; 
+    message?: string;
+    firebaseUrl?: string;
+    dataExists?: boolean;
+    timestamp?: string;
+  } | null>(null)
 
   const testFirebaseConnection = async () => {
     setTesting(true)
@@ -50,7 +57,7 @@ export default function FirebaseSetup() {
           variant: "destructive",
         })
       }
-    } catch (error) {
+    } catch {
       const errorResult = {
         success: false,
         error: "Kesalahan jaringan atau server tidak tersedia",
@@ -90,7 +97,7 @@ export default function FirebaseSetup() {
           variant: "destructive",
         })
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Inisialisasi Gagal",
         description: "Tidak dapat menginisialisasi database Firebase",
@@ -121,7 +128,7 @@ void setup() {
   
   // Set Firebase URL
   strcpy(deviceConfig.firebaseUrl, "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app");
-  strcpy(deviceConfig.serverUrl, "https://your-netlify-app.netlify.app"); // Ganti dengan URL aplikasi Netlify Anda
+  strcpy(deviceConfig.serverUrl, &quot;https://your-netlify-app.netlify.app&quot;); // Ganti dengan URL aplikasi Netlify Anda
   
   saveDeviceConfig();
 }`
@@ -240,7 +247,7 @@ void setup() {
                         <strong>Data Ada:</strong> {testResult.dataExists ? "Ya" : "Tidak"}
                       </p>
                       <p>
-                        <strong>Timestamp:</strong> {new Date(testResult.timestamp).toLocaleString()}
+                        <strong>Timestamp:</strong> {testResult.timestamp ? new Date(testResult.timestamp).toLocaleString() : 'N/A'}
                       </p>
                     </div>
                   )}
