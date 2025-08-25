@@ -44,7 +44,7 @@ export function BarcodeScanner({ onDetected, className = "" }: BarcodeScannerPro
         },
         locate: true,
       },
-      (err: any) => {
+      (err: Error) => {
         if (err) {
           console.error("Error starting Quagga:", err)
           toast({
@@ -68,7 +68,7 @@ export function BarcodeScanner({ onDetected, className = "" }: BarcodeScannerPro
     )
 
     // Add detection event listener
-    Quagga.onDetected((result: any) => {
+    Quagga.onDetected((result: { codeResult?: { code?: string }, box?: { x: number, y: number, width: number, height: number } }) => {
       if (result && result.codeResult && result.codeResult.code) {
         const code = result.codeResult.code
         onDetected(code)
@@ -128,7 +128,7 @@ export function BarcodeScanner({ onDetected, className = "" }: BarcodeScannerPro
 
       {!isScanning && (
         <div className="bg-gray-900 rounded-lg overflow-hidden aspect-video flex items-center justify-center">
-          <div className="text-center text-gray-400">
+          <div className="text-center text-gray-600 dark:text-gray-300">
             <Camera className="w-12 h-12 mx-auto mb-2" />
             <p>Kamera tidak aktif</p>
           </div>

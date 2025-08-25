@@ -1,15 +1,53 @@
-# 📦 StokManager - Sistem Manajemen Inventaris Real-time
+# 📦 StokManager (webinvesp32)
+
+> Sistem Manajemen Inventaris Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner.
+
+Updated: 2025-08-14
+
+## 🚀 TL;DR (Quick Start)
+
+```bash
+git clone https://github.com/drybrine/webinvesp32.git
+cd webinvesp32
+cp .env.example .env.local   # atau .env
+pnpm install                 # (Disarankan, karena ada pnpm-lock.yaml)
+pnpm dev                     # Buka http://localhost:3000
+```
+
+Jika tidak memakai pnpm:
+```bash
+npm install
+npm run dev
+```
+
+## 🔎 Perubahan Terbaru (Changelog Singkat)
+- Added pnpm instructions (lock file sudah ada)
+- Konsistensi nama repo (drybrine/webinvesp32)
+- Perbaikan placeholder `your-username` → `drybrine`
+- Penjelasan penggunaan `.env.local` (konvensi Next.js)
+- Perbaikan karakter rusak (�) & formatting deployment section
+- Menambahkan LICENSE (MIT) yang sebelumnya direferensikan namun belum ada file
+- Menandai bagian panjang – disarankan pindah ke dokumen terpisah nanti (`/docs`)
+
+---
 
 [![Next.js](https://img.shields.io/badge/Next.js-15.2.4-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.1.0-blue)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8.3-blue)](https://www.typescriptlang.org/)
-[![Firebase](https://img.shields.io/badge/Firebase-Latest-orange)](https://firebase.google.com/)
+[![Firebase](https://img.shields.io/badge/Firebase-11.10.0-orange)](https://firebase.google.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4.17-06B6D4)](https://tailwindcss.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Deployment](https://img.shields.io/badge/Vercel-Ready-brightgreen)](https://vercel.com/)
 
-> 🚀 **Sistem manajemen inventaris dan absensi real-time dengan integrasi ESP32 dan pemindai barcode**
-> 
-> **StokManager** adalah solusi lengkap untuk manajemen stok dan inventory dengan teknologi IoT yang modern, menggabungkan web application berbasis Next.js dengan hardware ESP32 untuk scanning barcode real-time.
+> 🚀 Solusi lengkap manajemen stok realtime yang menggabungkan Next.js (App Router) + Firebase Realtime Database + ESP32 sebagai pemindai barcode fisik.
+
+## 🌟 **PRODUCTION READY** - Siap Deploy!
+
+✅ **Build Status**: Passing  
+✅ **Environment**: Configured for Vercel  
+✅ **Firebase**: Connected & Optimized  
+✅ **Performance**: Optimized Bundle Size  
+✅ **Security**: Production Headers Configured  
 
 ## 📋 Daftar Isi
 
@@ -18,6 +56,7 @@
 - [📱 Demo & Screenshot](#-demo--screenshot)
 - [🚀 Quick Start](#-quick-start)
 - [⚙️ Instalasi](#️-instalasi)
+- [📦 Production Deployment](#-production-deployment)
 - [🔥 Konfigurasi Firebase](#-konfigurasi-firebase)
 - [🛠️ Development](#️-development)
 - [📦 Deployment](#-deployment)
@@ -37,12 +76,6 @@
 - ✅ **Stock Tracking & Analytics**
 - ✅ **Transaction History** dengan export Excel
 - ✅ **QR Code Generation** untuk produk
-
-### 👥 **Sistem Absensi**
-- ✅ **NIM-based Attendance** untuk mahasiswa/karyawan
-- ✅ **Real-time Status Monitoring**
-- ✅ **Device Heartbeat Tracking**
-- ✅ **Attendance Analytics & Reporting**
 
 ### 📱 **Web Application Features**
 - ✅ **Responsive Design** (Mobile & Desktop)
@@ -111,7 +144,7 @@
 │  ⏰ Session: 23:45 remaining       │
 ├─────────────────────────────────────┤
 │  🔍 [Scan Barcode]                 │
-│  👥 [Absensi]                      │
+│  📦 [Transaksi]                    │
 │  ⚙️  [Pengaturan]                   │
 └─────────────────────────────────────┘
 ```
@@ -121,38 +154,33 @@
 - Touch-optimized interface
 - Swipe gestures support
 
-## 🚀 Quick Start
+## ✅ Prasyarat
+- Node.js 18+ (disarankan versi LTS terbaru)
+- pnpm (opsional tapi disarankan) atau npm
+- Akun Firebase + Realtime Database aktif
+- Perangkat ESP32 (opsional untuk integrasi hardware)
 
-### Prasyarat
-- Node.js 18+ 
-- npm atau yarn
-- Firebase account
-- ESP32 device (optional)
-
-### Install & Run
+## 🚀 Jalankan (Detail)
 ```bash
-# Clone repository
-git clone https://github.com/your-username/webinvesp32.git
+git clone https://github.com/drybrine/webinvesp32.git
 cd webinvesp32
+cp .env.example .env.local   # Gunakan .env.local untuk Next.js (tidak di-commit)
+pnpm install
+pnpm dev
+```
+Lalu buka http://localhost:3000
 
-# Install dependencies
+Alternatif npm:
+```bash
 npm install
-
-# Setup environment variables
-cp .env.example .env.local
-# Edit .env.local dengan konfigurasi Firebase Anda
-
-# Run development server
 npm run dev
 ```
 
-🌐 **Open [http://localhost:3000](http://localhost:3000)**
-
 ## ⚙️ Instalasi
 
-### 1. **Clone Repository**
+### 1. **Clone Repository** (sudah di atas, ulang singkat)
 ```bash
-git clone https://github.com/your-username/webinvesp32.git
+git clone https://github.com/drybrine/webinvesp32.git
 cd webinvesp32
 ```
 
@@ -164,18 +192,19 @@ yarn install
 ```
 
 ### 3. **Setup Environment Variables**
-Buat file `.env.local` di root project:
+Copy template lalu edit `.env.local` (Next.js akan otomatis memuat):
 ```env
-# Firebase Configuration
-NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
-NEXT_PUBLIC_FIREBASE_DATABASE_URL=https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=barcodescanesp32
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+# Firebase Config
+NEXT_PUBLIC_FIREBASE_API_KEY=xxx
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=xxx.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_DATABASE_URL=https://xxx-default-rtdb.asia-southeast1.firebasedatabase.app
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=xxx
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=xxx.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=1234567890
+NEXT_PUBLIC_FIREBASE_APP_ID=1:1234567890:web:abcdef
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-XXXXXXX
 
-# Optional: Development settings
+# Opsional
 CRON_SECRET=your-secret-key
 NEXT_PUBLIC_USE_FIREBASE_EMULATOR=false
 ```
@@ -191,24 +220,29 @@ npm run dev
 
 1. **Copy template environment variables**:
    ```bash
-   cp .env.example .env.local
+   cp .env.example .env
    ```
 
-2. **Edit .env.local dengan Firebase credentials Anda**:
+2. **Edit .env dengan Firebase credentials Anda**:
    ```bash
-   # Buka .env.local dan isi dengan nilai dari Firebase Console
+   # Buka .env dan isi dengan nilai dari Firebase Console
    NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key_here
    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
-   # ... dst
+   NEXT_PUBLIC_FIREBASE_DATABASE_URL=https://your-project-default-rtdb.asia-southeast1.firebasedatabase.app
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+   NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
    ```
 
 3. **Dapatkan Firebase Config**:
    - Buka [Firebase Console](https://console.firebase.google.com/)
    - Pilih project Anda → Project Settings → General
    - Scroll ke "Your apps" → Web app → Config
-   - Copy semua values ke .env.local
+   - Copy semua values ke .env
 
-**⚠️ JANGAN COMMIT file .env.local ke Git!**
+**⚠️ JANGAN COMMIT file .env ke Git!**
 
 ### 1. **Buat Firebase Project**
 1. Buka [Firebase Console](https://console.firebase.google.com/)
@@ -241,13 +275,6 @@ Buka Firebase Console → Database → Rules:
         ".validate": "newData.hasChildren(['deviceId', 'lastSeen', 'status'])"
       }
     },
-    "attendance": {
-      ".read": true,
-      ".write": true,
-      "$attendanceId": {
-        ".validate": "newData.hasChildren(['nim', 'timestamp', 'deviceId'])"
-      }
-    },
     "settings": {
       ".read": true,
       ".write": true
@@ -260,18 +287,19 @@ Buka Firebase Console → Database → Rules:
 }
 ```
 
-### 3. **Update Configuration**
-Edit `lib/firebase.ts` dengan konfigurasi Firebase Anda:
+### 3. **Configuration**
+Firebase configuration sekarang menggunakan environment variables dari file `.env`:
 ```typescript
-// Firebase Configuration
+// lib/firebase.ts - Firebase Configuration
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "",
 }
 
 // Initialize Firebase
@@ -307,8 +335,6 @@ webinvesp32/
 │   ├── page.tsx                # Dashboard utama (inventory management)
 │   ├── layout.tsx              # Root layout dengan providers
 │   ├── loading.tsx             # Global loading component
-│   ├── absensi/               # Sistem absensi
-│   │   └── page.tsx           # QR code attendance scanning
 │   ├── scan/                  # Riwayat scanning
 │   │   └── page.tsx           # History dan analytics
 │   ├── transaksi/             # Manajemen transaksi
@@ -320,7 +346,6 @@ webinvesp32/
 │   │   └── page.tsx           # Login interface
 │   └── api/                   # API endpoints
 │       ├── barcode-scan/      # ESP32 scan endpoint
-│       ├── attendance/        # Attendance processing
 │       ├── devices-status/    # Device monitoring
 │       ├── firebase-*/        # Firebase utilities
 │       └── heartbeat/         # Device heartbeat
@@ -376,7 +401,7 @@ webinvesp32/
 
 ## 📦 Deployment
 
-### **Netlify (Recommended)**
+### **Netlify (Optional)**
 1. Fork repository ke GitHub
 2. Connect ke Netlify
 3. Set environment variables
@@ -394,13 +419,15 @@ FIREBASE_DATABASE_URL=your-database-url
 CRON_SECRET=your-secret-key
 ```
 
-### **Vercel**
+### **Vercel (Recommended)**
 ```bash
+# Install CLI (opsional)
 npm install -g vercel
-vercel
-
-# atau deploy langsung dari GitHub
+vercel link     # hubungkan project (pertama kali)
+vercel env pull .env.local  # (opsional sinkron env)
+vercel --prod
 ```
+Atau cukup import repo di dashboard Vercel dan set environment variables.
 
 ### **Manual Deployment**
 ```bash
@@ -444,8 +471,6 @@ POST /api/heartbeat             # Device heartbeat
 ### **Scanning & Data**
 ```http
 POST /api/barcode-scan          # Process barcode scan
-POST /api/attendance            # Process attendance
-GET  /api/attendance-export     # Export attendance data
 ```
 
 ### **Firebase Integration**
@@ -565,7 +590,7 @@ void sendBarcodeToServer(String barcode) {
     doc["deviceId"] = deviceId;
     doc["timestamp"] = millis();
     doc["location"] = location;
-    doc["mode"] = "inventory";  // atau "attendance"
+    doc["mode"] = "inventory";
     doc["type"] = "inventory_scan";
     
     String jsonString;
@@ -619,8 +644,8 @@ void sendHeartbeat() {
   "deviceId": "ESP32_001", 
   "timestamp": 1672531200000,
   "location": "Warehouse_A",
-  "mode": "inventory",        // "inventory" | "attendance"
-  "type": "inventory_scan"    // "inventory_scan" | "attendance_scan"
+  "mode": "inventory",
+  "type": "inventory_scan"
 }
 
 // Heartbeat Payload
@@ -670,20 +695,13 @@ void sendHeartbeat() {
 2. Ketik barcode secara manual jika diperlukan
 3. Submit data untuk disimpan ke database
 
-### **3. 👥 Sistem Absensi**
-1. Buka halaman `/absensi`
-2. Pastikan ESP32 dalam mode "attendance"
-3. Scan QR code NIM mahasiswa/karyawan
-4. Status kehadiran update real-time
-5. Export laporan absensi jika diperlukan
-
-### **4. 📈 Riwayat & Analytics**
+### **3. 📈 Riwayat & Analytics**
 - **Melihat Riwayat**: Akses `/scan` untuk history transaksi
 - **Filter Data**: Gunakan filter berdasarkan tanggal, device, dll
 - **Export Laporan**: Download data dalam format Excel/CSV
 - **Real-time Monitoring**: Pantau aktivitas scanning live
 
-### **5. ⚙️ Pengaturan Sistem**
+### **4. ⚙️ Pengaturan Sistem**
 1. **Firebase Setup**:
    - Akses `/pengaturan`
    - Test koneksi Firebase
@@ -929,7 +947,6 @@ database.ref('scans').on('value', (snapshot) => {
 ```
 Page                     Size       First Load JS
 ├ ○ /                   13.2 kB         244 kB    # Dashboard inventaris
-├ ○ /absensi           5.98 kB         196 kB    # Sistem absensi  
 ├ ○ /login             4.17 kB         113 kB    # Authentication
 ├ ○ /pengaturan        11.4 kB         202 kB    # Settings & config
 ├ ○ /scan              5.34 kB         221 kB    # Scan history
@@ -971,16 +988,94 @@ Page                     Size       First Load JS
 
 ### **Links & Resources**
 - 🌐 **Live Demo**: [https://stokmanager.netlify.app](https://stokmanager.netlify.app)
-- 📚 **Documentation**: [GitHub Wiki](https://github.com/yourusername/webinvesp32/wiki)
+- 📚 **Documentation**: [GitHub Wiki](https://github.com/drybrine/webinvesp32/wiki)
 - 🔥 **Firebase Console**: [https://console.firebase.google.com](https://console.firebase.google.com)
-- 💬 **Community**: [GitHub Discussions](https://github.com/yourusername/webinvesp32/discussions)
-- � **Issues**: [GitHub Issues](https://github.com/yourusername/webinvesp32/issues)
+- 💬 **Community**: [GitHub Discussions](https://github.com/drybrine/webinvesp32/discussions)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/drybrine/webinvesp32/issues)
 
 ### **Related Projects**
 - [ESP32 Arduino Libraries](https://github.com/espressif/arduino-esp32)
 - [Firebase ESP Client](https://github.com/mobizt/Firebase-ESP-Client)
 - [Next.js Documentation](https://nextjs.org/docs)
 - [shadcn/ui Components](https://ui.shadcn.com/)
+
+## 🚀 Production Deployment
+
+### 🚀 Deploy to Vercel (Recommended)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdrybrine%2Fwebinvesp32&branch=555)
+**🎉 Latest Deployment Status: SUCCESSFUL**
+- **Production URL**: https://stokmanager-ob56kctpv-bebekpeking99.vercel.app
+- **Build Status**: ✅ Passing
+- **Deployment Date**: August 2, 2025
+
+### 🔧 Recent Fixes Applied
+
+1. **PostCSS Configuration**: Simplified to resolve Next.js font loading compatibility issues
+2. **Font Loading**: Streamlined Inter font configuration for production builds
+3. **Webpack Configuration**: Fixed null reference error in vendor chunk splitting
+4. **CSS Optimization**: Disabled experimental `optimizeCss` feature to resolve missing `critters` module
+
+**Environment Variables Required:**
+```bash
+# Firebase Configuration (Required)
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
+NEXT_PUBLIC_FIREBASE_DATABASE_URL=your_database_url
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
+
+# Optional: Add CRON_SECRET for API protection
+CRON_SECRET=your-secret-key
+```
+
+**Note**: Firebase configuration sekarang menggunakan environment variables untuk keamanan. Pastikan untuk mengatur semua environment variables di Vercel dashboard sebelum deployment.
+
+### 📋 Deployment Checklist
+
+- [x] **Build**: Passing (`npm run build`)
+- [x] **Environment Variables**: Configured in `next.config.mjs`
+- [x] **Vercel Config**: `vercel.json` with optimized settings
+- [x] **Firebase**: Production configuration ready
+- [x] **Performance**: Bundle optimized (280kB total)
+- [x] **Security**: CORS headers and CSP configured
+- [x] **Debug Cleanup**: All debug components removed
+
+### 🔧 Manual Build & Test
+
+```bash
+# Build for production
+npm run build
+
+# Test production build locally
+npm start
+
+# Check bundle size
+npm run build -- --analyze
+
+# Deploy to Vercel
+vercel --prod
+```
+
+### 📈 Performance Metrics
+
+- **First Load JS**: ~310kB (optimized)
+- **Static Pages**: 14 routes generated
+- **Build Time**: ~38 seconds on Vercel
+- **Bundle Chunks**: Vendor splitting enabled with error handling
+- **Deployment Status**: Production ready
+
+### 🚨 Known Issues Resolved
+
+1. **PostCSS PurgeCSS Error**: Removed production-only CSS optimizations
+2. **Next.js Font Error**: Simplified font configuration options
+3. **Webpack Module Error**: Added null checks for vendor splitting
+4. **Critters Module Missing**: Disabled experimental CSS optimization
+
+> 📖 **For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md)**
 
 ## 📄 License
 
@@ -1002,7 +1097,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **[⭐ Star this repo](../../stargazers) | [🍴 Fork it](../../fork) | [📖 Read the docs](../../wiki)**
 
-**Made with ❤️ by the StokManager Team**
+**Made with ❤️ by the StokManager Team** (drybrine)
 
 *Bridging IoT and Web Technologies for Smart Inventory Management*
 

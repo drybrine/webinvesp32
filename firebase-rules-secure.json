@@ -1,0 +1,58 @@
+{
+  "rules": {
+    // Default: Deny all access unless explicitly allowed
+    ".read": false,
+    ".write": false,
+    
+    // Inventory - Read only for public, write only for authenticated users
+    "inventory": {
+      ".read": true,
+      ".write": "auth != null",
+      ".indexOn": ["barcode", "category", "name", "lastUpdated"],
+      "$itemId": {
+        ".validate": "newData.hasChildren(['name', 'category', 'quantity', 'price']) && newData.child('quantity').isNumber() && newData.child('price').isNumber()"
+      }
+    },
+    
+    // Scans - Read only for authenticated, write for ESP32 devices and authenticated users
+    "scans": {
+      ".read": "auth != null",
+      ".write": "auth != null || (data.child('deviceId').val().matches(/^ESP32-.*/) && newData.hasChildren(['barcode', 'deviceId', 'timestamp']))",
+      ".indexOn": ["timestamp", "deviceId", "barcode", "processed"],
+      "$scanId": {
+        ".validate": "newData.hasChildren(['barcode', 'deviceId', 'timestamp']) && newData.child('timestamp').isNumber()"
+      }
+    },
+    
+    // Devices - Read for authenticated, write for device heartbeat
+    "devices": {
+      ".read": "auth != null",
+      "$deviceId": {
+        ".write": "auth != null || ($deviceId.matches(/^ESP32-.*/) && newData.hasChildren(['status', 'lastSeen']))",
+        ".validate": "newData.hasChildren(['status', 'lastSeen']) && newData.child('lastSeen').isNumber()"
+      }
+    },
+    
+    // Transactions - Authenticated users only
+    "transactions": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["timestamp", "type", "productBarcode"],
+      "$transactionId": {
+        ".validate": "newData.hasChildren(['type', 'productName', 'quantity', 'timestamp']) && newData.child('timestamp').isNumber()"
+      }
+    },
+    
+    // Analytics - Read for authenticated, write for system only
+    "analytics": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.admin == true"
+    },
+    
+    // Settings - Admin only
+    "settings": {
+      ".read": "auth != null && auth.token.admin == true",
+      ".write": "auth != null && auth.token.admin == true"
+    }
+  }
+}

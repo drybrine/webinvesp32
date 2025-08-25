@@ -1,0 +1,25 @@
+# Target modern browsers only - no legacy polyfills needed
+# This targets browsers that support ES6+ features natively
+
+# Production browsers
+last 2 Chrome versions
+last 2 Firefox versions
+last 2 Safari versions
+last 2 Edge versions
+
+# Mobile browsers
+last 2 ChromeAndroid versions
+last 2 iOS versions
+
+# Exclude old browsers
+not dead
+not ie 11
+not op_mini all
+not samsung < 15
+not and_uc < 15
+
+# Minimum browser versions that support modern JavaScript
+Chrome >= 80
+Firefox >= 75
+Safari >= 13.1
+Edge >= 80

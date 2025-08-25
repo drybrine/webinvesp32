@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react" // Added lazy, Suspense
-import { useRouter } from "next/navigation"
+import { useState, useEffect, useMemo, useRef } from "react"
 import {
   Card,
   CardContent,
@@ -41,7 +40,7 @@ import {
   Package,
   DollarSign,
   AlertCircle,
-  Scan,
+
   Plus,
   Search,
   Eye,
@@ -50,9 +49,7 @@ import {
   Minus,
   Filter,
   Download,
-  ChevronDown,
-  ChevronUp,
-  Barcode as BarcodeIcon,
+
   Wifi,
   WifiOff,
   Smartphone,
@@ -94,7 +91,6 @@ interface StockAdjustment {
 }
 
 export default function TransaksiPage() {
-  const router = useRouter()
   const {
     items: inventory,
     loading: inventoryLoading,
@@ -103,18 +99,18 @@ export default function TransaksiPage() {
     updateItem,
     deleteItem,
   } = useFirebaseInventory()
-  const { scans, loading: scansLoading, error: scansError } = useFirebaseScans()
+  const { loading: scansLoading, error: scansError } = useFirebaseScans()
   
   // Real-time device status monitoring
   const {
     devices,
     loading: devicesLoading,
     error: devicesError,
-    lastUpdate,
-    connectionStatus,
-    refresh: refreshDeviceStatus,
+
+
+
     onlineDevices: realtimeOnlineDevices,
-    offlineDevices,
+
     totalDevices
   } = useRealtimeDeviceStatus()
 
@@ -218,11 +214,8 @@ export default function TransaksiPage() {
           if (!response.ok) {
             console.warn('🔄 Dashboard auto-refresh failed:', response.status, response.statusText);
           }
-        } catch (error) {
-          // Only log significant errors, not every network glitch
-          if (error instanceof Error && !error.message.includes('timeout')) {
-            // Auto-refresh error occurred
-          }
+        } catch {
+          // Auto-refresh error occurred - silently handle network issues
         }
       }
     }, 10000); // 10 seconds to match fast detection
@@ -232,7 +225,7 @@ export default function TransaksiPage() {
 
   // Listen for device status updates from background monitor
   useEffect(() => {
-    const handleDeviceStatusUpdate = (event: CustomEvent) => {
+    const handleDeviceStatusUpdate = () => {
       // Dashboard received device status update
       // The Firebase hook will automatically refresh when the database changes
     };
@@ -338,7 +331,7 @@ export default function TransaksiPage() {
         title: "Berhasil",
         description: "Item berhasil ditambahkan",
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Gagal menambahkan item",
@@ -385,7 +378,7 @@ export default function TransaksiPage() {
         title: "Berhasil",
         description: "Item berhasil diperbarui",
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Gagal memperbarui item",
@@ -405,7 +398,7 @@ export default function TransaksiPage() {
         title: "Berhasil",
         description: "Item berhasil dihapus",
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Gagal menghapus item",
@@ -451,8 +444,7 @@ export default function TransaksiPage() {
         title: "Berhasil",
         description: `Stok ${itemName} ${type === "add" ? "ditambah" : "dikurangi"} sebanyak ${amount}. Transaksi dicatat.`,
       })
-    } catch (error) {
-      console.error("Error adjusting stock or recording transaction:", error);
+    } catch {
       toast({
         title: "Error",
         description: "Gagal mengubah stok atau mencatat transaksi.",
@@ -532,25 +524,11 @@ export default function TransaksiPage() {
     toast({ title: "Export Berhasil", description: `${filteredInventory.length} item diexport ke ${fileName}` });
   };
 
-  // Add this function near your other utility functions (at the top of your component)
-  interface DeviceStatus {
-    deviceId?: string;
-    lastHeartbeat?: number | string | Date;
-    lastSeen?: number | string | Date;
-    ipAddress?: string;
-  }
-  
-  const checkDeviceStatus = (device: DeviceStatus) => {
-    const lastSeen = device.lastHeartbeat || device.lastSeen;
-    const now = Date.now();
-    return lastSeen && (now - new Date(lastSeen).getTime() < 60000) ? "online" : "offline";
-  };
-
   return (
     <div className="min-h-screen gradient-surface mobile-container-full">
       <div className="mobile-space-y">
         {/* Enhanced Header with better mobile layout */}
-        <div className="mobile-margin text-center md:text-left animate-fade-in-up">
+        <div className="mobile-margin text-center md:text-left animate-fade-in-up" style={{ minHeight: '120px' }}>
           <div className="mobile-flex-col md:items-center md:justify-between mobile-gap">
             <div className="mobile-margin md:mb-0">
               <div className="flex items-center justify-center md:justify-start mb-4">
@@ -567,13 +545,6 @@ export default function TransaksiPage() {
                   <p className="mobile-text lg:text-lg text-muted-foreground font-medium mt-1 sm:mt-2">
                     Kelola stok barang dengan teknologi terdepan
                   </p>
-                  {/* Firebase Status Indicator */}
-                  <div className="flex items-center mt-2 text-xs sm:text-sm">
-                    <div className={`w-2 h-2 rounded-full mr-2 ${firebaseStatus.isConfigured ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                    <span className={`${firebaseStatus.isConfigured ? 'text-green-600' : 'text-red-600'}`}>
-                      {firebaseStatus.isConfigured ? 'Database Terhubung' : 'Mode Offline'}
-                    </span>
-                  </div>
                 </div>
               </div>
               <div className="flex items-center justify-center md:justify-start mobile-space-x">
@@ -616,7 +587,7 @@ export default function TransaksiPage() {
             <div className="flex items-center">
               {firebaseStatus.isConfigured ? (
                 <div className="relative">
-                  <Wifi className="h-5 w-5 text-emerald-600" />
+                  <Wifi className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                   <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full animate-ping"></div>
                 </div>
               ) : (
@@ -648,7 +619,7 @@ export default function TransaksiPage() {
         {/* Enhanced Stats Cards - Better mobile layout */}
         <div className="mobile-grid-stats mobile-gap mobile-margin animate-fade-in-up animation-delay-400">
           {/* Total Items Card - Cleaned up layout */}
-          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
+          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group" style={{ minHeight: '140px' }}>
             <div className="absolute inset-0 gradient-primary opacity-5 rounded-xl"></div>
             <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-primary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
             <CardHeader className="relative z-10 pb-2 sm:pb-3 p-4 sm:p-6">
@@ -671,7 +642,7 @@ export default function TransaksiPage() {
           </Card>
           
           {/* Total Value Card - Cleaned up layout */}
-          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
+          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group" style={{ minHeight: '140px' }}>
             <div className="absolute inset-0 gradient-secondary opacity-5 rounded-xl"></div>
             <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-secondary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
             <CardHeader className="relative z-10 pb-2 sm:pb-3 p-4 sm:p-6">
@@ -696,7 +667,7 @@ export default function TransaksiPage() {
           </Card>
           
           {/* Low Stock Card - Enhanced with priority levels */}
-          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
+          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group" style={{ minHeight: '140px' }}>
             <div className={`absolute inset-0 ${lowStockItems.length > 0 ? 'gradient-accent' : 'bg-emerald-500/10'} opacity-5 rounded-xl`}></div>
             <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-accent rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
             <CardHeader className="relative z-10 pb-2 sm:pb-3 p-4 sm:p-6">
@@ -709,7 +680,7 @@ export default function TransaksiPage() {
             </CardHeader>
             <CardContent className="relative z-10 pt-0 px-4 pb-4 sm:px-6 sm:pb-6">
               <div className="space-y-1 sm:space-y-2">
-                <div className={`text-lg sm:text-2xl md:text-3xl font-bold ${lowStockItems.length > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                <div className={`text-lg sm:text-2xl md:text-3xl font-bold ${lowStockItems.length > 0 ? 'text-red-600' : 'text-emerald-700 dark:text-emerald-400'}`}>
                   {lowStockItems.length}
                 </div>
                 <p className="text-xs sm:text-sm text-muted-foreground font-medium">
@@ -752,7 +723,7 @@ export default function TransaksiPage() {
           </Card>
           
           {/* Device Status Card - Cleaned up layout */}
-          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
+          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group" style={{ minHeight: '140px' }}>
             <div className="absolute inset-0 gradient-primary opacity-5 rounded-xl"></div>
             <div className="absolute top-2 right-2 w-8 h-8 sm:w-12 sm:h-12 gradient-primary rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-300"></div>
             <CardHeader className="relative z-10 pb-2 sm:pb-3 p-4 sm:p-6">
@@ -781,7 +752,7 @@ export default function TransaksiPage() {
                           <span className="text-muted-foreground font-medium">
                             {device.deviceId || 'Unknown'}:
                           </span>
-                          <span className="text-emerald-600 font-semibold">
+                          <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
                             {device.ipAddress || 'N/A'}
                           </span>
                         </div>
@@ -923,7 +894,10 @@ export default function TransaksiPage() {
               
               <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
                 <Select value={filterCategory} onValueChange={setFilterCategory}>
-                  <SelectTrigger className="w-full sm:w-[150px] bg-white/80 backdrop-blur-sm border-gray-200 hover:border-blue-300 transition-all duration-200 text-sm">
+                  <SelectTrigger 
+                    className="w-full sm:w-[150px] bg-white/80 backdrop-blur-sm border-gray-200 hover:border-blue-300 transition-all duration-200 text-sm"
+                    aria-label="Filter berdasarkan kategori produk"
+                  >
                     <Filter className="h-4 w-4 mr-2 text-gray-500" />
                     <SelectValue placeholder="Kategori" />
                   </SelectTrigger>
@@ -937,7 +911,10 @@ export default function TransaksiPage() {
                 </Select>
 
                 <Select value={sortOrder} onValueChange={setSortOrder}>
-                  <SelectTrigger className="w-full sm:w-[150px] bg-white/80 backdrop-blur-sm border-gray-200 hover:border-blue-300 transition-all duration-200 text-sm">
+                  <SelectTrigger 
+                    className="w-full sm:w-[150px] bg-white/80 backdrop-blur-sm border-gray-200 hover:border-blue-300 transition-all duration-200 text-sm"
+                    aria-label="Urutkan produk berdasarkan kriteria"
+                  >
                     <SelectValue placeholder="Urutan" />
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 backdrop-blur-sm">
@@ -960,17 +937,17 @@ export default function TransaksiPage() {
                 <div className="text-center py-12">
                   <Package className="h-16 w-16 mx-auto text-gray-300 mb-4" />
                   <p className="text-gray-500 font-medium">Tidak ada item yang ditemukan</p>
-                  <p className="text-sm text-gray-400 mt-1">Coba ubah filter atau tambah item baru</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Coba ubah filter atau tambah item baru</p>
                 </div>
               ) : (
                 filteredInventory.map((item) => (
                   <div key={item.id} className="border rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-gray-900 truncate text-sm">{item.name}</h3>
+                        <h2 className="font-semibold text-gray-900 truncate text-sm">{item.name}</h2>
                         <p className="text-xs text-gray-500 truncate">{item.category}</p>
                         {item.barcode && (
-                          <p className="text-xs font-mono text-gray-400 mt-1">{item.barcode}</p>
+                          <p className="text-xs font-mono text-gray-600 dark:text-gray-300 mt-1">{item.barcode}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-1 ml-2">
@@ -986,7 +963,7 @@ export default function TransaksiPage() {
                     <div className="grid grid-cols-2 gap-3 text-xs mb-3">
                       <div>
                         <span className="text-gray-500 block">Harga:</span>
-                        <p className="font-semibold text-emerald-600">Rp {item.price.toLocaleString()}</p>
+                        <p className="font-semibold text-emerald-700 dark:text-emerald-400">Rp {item.price.toLocaleString()}</p>
                       </div>
                       <div>
                         <span className="text-gray-500 block">Lokasi:</span>
@@ -1005,6 +982,8 @@ export default function TransaksiPage() {
                             barcode: item.barcode ?? "",
                             supplier: item.supplier ?? "",
                           })}
+                          aria-label={`Lihat detail ${item.name}`}
+                          title={`Lihat detail ${item.name}`}
                         >
                           <Eye className="h-3 w-3" />
                         </Button>
@@ -1017,6 +996,8 @@ export default function TransaksiPage() {
                             barcode: item.barcode ?? "",
                             supplier: item.supplier ?? "",
                           })}
+                          aria-label={`Edit ${item.name}`}
+                          title={`Edit ${item.name}`}
                         >
                           <Edit className="h-3 w-3" />
                         </Button>
@@ -1025,6 +1006,8 @@ export default function TransaksiPage() {
                           size="sm"
                           className="px-2 py-1 h-8 text-xs"
                           onClick={() => deleteInventoryItem(item.id, item.name)}
+                          aria-label={`Hapus ${item.name}`}
+                          title={`Hapus ${item.name}`}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -1042,8 +1025,10 @@ export default function TransaksiPage() {
                             type: "add",
                             amount: 1,
                           })}
+                          aria-label={`Tambah stok ${item.name}`}
+                          title={`Tambah stok ${item.name}`}
                         >
-                          <Plus className="h-3 w-3 text-emerald-600" />
+                          <Plus className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                         </Button>
                         <Button
                           variant="outline"
@@ -1057,6 +1042,8 @@ export default function TransaksiPage() {
                             amount: 1,
                           })}
                           disabled={item.quantity <= 0}
+                          aria-label={`Kurangi stok ${item.name}`}
+                          title={`Kurangi stok ${item.name}`}
                         >
                           <Minus className="h-3 w-3 text-red-600" />
                         </Button>
@@ -1085,7 +1072,7 @@ export default function TransaksiPage() {
                     {filteredInventory.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center py-8">
-                          <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                          <Package className="h-12 w-12 mx-auto text-gray-600 dark:text-gray-300 mb-4" />
                           <p className="text-gray-500">Tidak ada item yang ditemukan</p>
                         </TableCell>
                       </TableRow>
@@ -1160,6 +1147,7 @@ export default function TransaksiPage() {
                                     supplier: item.supplier ?? "",
                                   })}
                                   title="Lihat Detail"
+                                  aria-label={`Lihat detail ${item.name}`}
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
@@ -1172,6 +1160,7 @@ export default function TransaksiPage() {
                                     supplier: item.supplier ?? "",
                                   })}
                                   title="Edit Item"
+                                  aria-label={`Edit ${item.name}`}
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>
@@ -1187,6 +1176,7 @@ export default function TransaksiPage() {
                                     amount: isLowStock ? Math.max(item.minStock * 2 - item.quantity, 5) : 1,
                                   })}
                                   title={isLowStock ? "Quick Restock" : "Tambah Stok"}
+                                  aria-label={isLowStock ? `Quick restock ${item.name}` : `Tambah stok ${item.name}`}
                                   className={isLowStock ? "border-green-400 text-green-700 hover:bg-green-50" : ""}
                                 >
                                   {isLowStock ? "⚡" : <Plus className="h-4 w-4" />}
@@ -1202,6 +1192,7 @@ export default function TransaksiPage() {
                                     amount: 1,
                                   })}
                                   title="Kurangi Stok"
+                                  aria-label={`Kurangi stok ${item.name}`}
                                   disabled={item.quantity <= 0}
                                 >
                                   <Minus className="h-4 w-4" />
@@ -1211,6 +1202,7 @@ export default function TransaksiPage() {
                                   size="sm"
                                   onClick={() => deleteInventoryItem(item.id, item.name)}
                                   title="Hapus Item"
+                                  aria-label={`Hapus item ${item.name}`}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>

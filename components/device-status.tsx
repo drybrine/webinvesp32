@@ -7,7 +7,7 @@ import {
   CardContent, 
   CardHeader, 
   CardTitle, 
-  CardDescription 
+
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -30,13 +30,13 @@ interface Device {
   deviceId: string
   status: "online" | "offline"
   ipAddress: string
-  lastSeen: any
+  lastSeen: number
   scanCount: number
   freeHeap?: number
   version?: string
   name?: string
   batteryLevel?: number
-  lastHeartbeat?: any
+  lastHeartbeat?: number
 }
 
 const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceId: string) => void }) => {
@@ -51,7 +51,7 @@ const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceI
         title: "Perangkat Dimulai Ulang",
         description: `Perangkat ${device.name || device.deviceId} sedang dimulai ulang.`,
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "Gagal Memulai Ulang",
         description: `Gagal memulai ulang perangkat. Coba lagi nanti.`,
@@ -75,7 +75,7 @@ const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceI
             isOnline ? "bg-emerald-100" : "bg-gray-200"
           )}>
             {isOnline ? (
-              <Wifi className="h-6 w-6 text-emerald-600" />
+              <Wifi className="h-6 w-6 text-emerald-700 dark:text-emerald-400" />
             ) : (
               <WifiOff className="h-6 w-6 text-gray-500" />
             )}
@@ -109,7 +109,7 @@ const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceI
           <div className="space-y-1">
             <p className="text-xs font-medium text-gray-500">Total Scan</p>
             <p className="text-sm font-semibold text-gray-800 flex items-center justify-center space-x-1">
-              <Database className="h-3 w-3 text-gray-400" />
+              <Database className="h-3 w-3 text-gray-600 dark:text-gray-300" />
               <span>{device.scanCount || 0}</span>
             </p>
           </div>
@@ -140,21 +140,7 @@ const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceI
 }
 
 export function DeviceStatus() {
-  const { devices, loading, error, lastUpdate, refresh: refreshDeviceStatus, onlineDevices, totalDevices } = useRealtimeDeviceStatus()
-  const { toast } = useToast()
-  const [timeAgo, setTimeAgo] = useState("baru saja")
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const seconds = Math.floor((new Date().getTime() - lastUpdate.getTime()) / 1000)
-      if (seconds < 10) {
-        setTimeAgo("baru saja")
-      } else {
-        setTimeAgo(`${seconds}d yang lalu`)
-      }
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [lastUpdate])
+  const { devices, loading, error, refresh: refreshDeviceStatus, totalDevices } = useRealtimeDeviceStatus()
 
   const handleRestartDevice = useCallback(async (deviceId: string) => {
     const response = await fetch(`/api/restart-device`, {

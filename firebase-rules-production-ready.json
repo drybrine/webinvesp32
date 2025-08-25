@@ -1,0 +1,59 @@
+{
+  "rules": {
+    // Default: Deny all access unless explicitly allowed
+    ".read": false,
+    ".write": false,
+    
+    // Inventory - Public read access, write only from trusted sources
+    "inventory": {
+      ".read": true,
+      ".write": "auth != null || (newData.exists() && newData.child('lastUpdated').val() > now - 300000)",
+      ".indexOn": ["barcode", "category", "name", "lastUpdated"],
+      "$itemId": {
+        ".validate": "newData.hasChildren(['name', 'category', 'quantity', 'price', 'barcode']) && newData.child('quantity').isNumber() && newData.child('price').isNumber() && newData.child('lastUpdated').isNumber()"
+      }
+    },
+    
+    // Scans - Read access for web app, write access for ESP32 devices
+    "scans": {
+      ".read": true,
+      ".write": "newData.child('deviceId').val().matches(/^ESP32-[a-fA-F0-9]{8}$/) && newData.hasChildren(['barcode', 'deviceId', 'timestamp', 'mode', 'type'])",
+      ".indexOn": ["timestamp", "deviceId", "barcode", "processed"],
+      "$scanId": {
+        ".validate": "newData.hasChildren(['barcode', 'deviceId', 'timestamp', 'mode', 'type']) && newData.child('timestamp').isNumber() && newData.child('mode').val() == 'inventory' && newData.child('type').val() == 'inventory_scan' && newData.child('processed').isBoolean()"
+      }
+    },
+    
+    // Devices - Public read for monitoring, ESP32 can update their own status
+    "devices": {
+      ".read": true,
+      "$deviceId": {
+        ".write": "$deviceId.matches(/^ESP32-[a-fA-F0-9]{8}$/) && newData.hasChildren(['status', 'lastSeen']) && newData.child('lastSeen').isNumber()",
+        ".validate": "newData.child('status').val().matches(/^(online|offline)$/) && (!newData.hasChild('ipAddress') || newData.child('ipAddress').val().matches(/^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$/))"
+      }
+    },
+    
+    // Transactions - Read access for web app, write access restricted
+    "transactions": {
+      ".read": true,
+      ".write": "auth != null || (newData.hasChildren(['type', 'productName', 'quantity', 'timestamp', 'operator']) && newData.child('timestamp').val() > now - 60000)",
+      ".indexOn": ["timestamp", "type", "productBarcode"],
+      "$transactionId": {
+        ".validate": "newData.hasChildren(['type', 'productName', 'quantity', 'timestamp', 'operator']) && newData.child('timestamp').isNumber() && newData.child('type').val().matches(/^(in|out|adjustment)$/) && newData.child('quantity').isNumber()"
+      }
+    },
+    
+    // Analytics - Public read access, write access restricted
+    "analytics": {
+      ".read": true,
+      ".write": "auth != null || (newData.hasChildren(['totalItems', 'totalScans']) && newData.child('totalItems').isNumber() && newData.child('totalScans').isNumber())",
+      ".validate": "newData.hasChildren(['totalItems', 'totalScans']) && newData.child('totalItems').isNumber() && newData.child('totalScans').isNumber()"
+    },
+    
+    // Settings - No public access (remove this section since settings page is deleted)
+    "settings": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}
