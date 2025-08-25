@@ -988,10 +988,10 @@ Page                     Size       First Load JS
 
 ### **Links & Resources**
 - 🌐 **Live Demo**: [https://stokmanager.netlify.app](https://stokmanager.netlify.app)
-- 📚 **Documentation**: [GitHub Wiki](https://github.com/yourusername/webinvesp32/wiki)
+- 📚 **Documentation**: [GitHub Wiki](https://github.com/drybrine/webinvesp32/wiki)
 - 🔥 **Firebase Console**: [https://console.firebase.google.com](https://console.firebase.google.com)
-- 💬 **Community**: [GitHub Discussions](https://github.com/yourusername/webinvesp32/discussions)
-- � **Issues**: [GitHub Issues](https://github.com/yourusername/webinvesp32/issues)
+- 💬 **Community**: [GitHub Discussions](https://github.com/drybrine/webinvesp32/discussions)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/drybrine/webinvesp32/issues)
 
 ### **Related Projects**
 - [ESP32 Arduino Libraries](https://github.com/espressif/arduino-esp32)
@@ -1003,7 +1003,7 @@ Page                     Size       First Load JS
 
 ### 🚀 Deploy to Vercel (Recommended)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2F100percentsrgb%2Fwebinvesp32&branch=555)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdrybrine%2Fwebinvesp32&branch=555)
 **🎉 Latest Deployment Status: SUCCESSFUL**
 - **Production URL**: https://stokmanager-ob56kctpv-bebekpeking99.vercel.app
 - **Build Status**: ✅ Passing
