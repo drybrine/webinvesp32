@@ -2,9 +2,6 @@ import RemoveDocumentWritePlugin from './lib/webpack-document-write-plugin.js'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -27,10 +24,6 @@ const nextConfig = {
   trailingSlash: false,
   // Production optimizations
   poweredByHeader: false,
-  // API timeout configuration
-  serverRuntimeConfig: {
-    requestTimeout: 30000, // 30 seconds
-  },
   // Performance and optimization
   reactStrictMode: true,
   // Optimize CSS loading

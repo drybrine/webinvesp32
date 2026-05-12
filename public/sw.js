@@ -1,5 +1,5 @@
-const CACHE_NAME = 'stokmanager-v1'
-const FIREBASE_CACHE_NAME = 'firebase-cache-v1'
+const CACHE_NAME = 'stokmanager-v2'
+const FIREBASE_CACHE_NAME = 'firebase-cache-v2'
 const FIREBASE_CACHE_DURATION = 24 * 60 * 60 * 1000 // 24 hours
 
 const urlsToCache = [
@@ -11,13 +11,23 @@ const urlsToCache = [
   '/placeholder-logo.svg',
 ]
 
-// Firebase domains to cache
+// Firebase domains to cache (static assets only — RTDB realtime traffic is excluded below)
 const FIREBASE_DOMAINS = [
   'firebaseapp.com',
-  'firebasedatabase.app',
   'googleapis.com',
   'gstatic.com'
 ]
+
+// Realtime database hosts that must NEVER be cached (long-polling, WS upgrade, snapshots)
+const FIREBASE_REALTIME_HOSTS = [
+  'firebasedatabase.app',
+  'firebaseio.com'
+]
+
+// Check if URL is a realtime database request (must always hit network)
+const isFirebaseRealtime = (url) => {
+  return FIREBASE_REALTIME_HOSTS.some(host => url.includes(host))
+}
 
 // Check if URL is from Firebase
 const isFirebaseResource = (url) => {
@@ -39,6 +49,11 @@ self.addEventListener('install', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
+
+  // Realtime Database: always hit network, never cache, never intercept
+  if (isFirebaseRealtime(url.href)) {
+    return
+  }
 
   // Handle Firebase resources with custom caching
   if (isFirebaseResource(url.href)) {

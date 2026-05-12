@@ -2,7 +2,7 @@
 
 > Sistem Manajemen Inventaris Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner.
 
-Updated: 2025-08-14
+Updated: 2026-05-12
 
 ## 🚀 TL;DR (Quick Start)
 
@@ -21,13 +21,17 @@ npm run dev
 ```
 
 ## 🔎 Perubahan Terbaru (Changelog Singkat)
+- **2026-05**: Fitur prediksi stok (linear regression) + halaman `/prediksi` dengan chart SVG native
+- **2026-05**: Notifikasi stockout otomatis di dashboard (≤7 hari)
+- **2026-05**: Dashboard stock adjustment kini tercatat otomatis sebagai transaksi; filter sumber Manual / Scanner di halaman transaksi
+- **2026-05**: Deteksi device status realtime via Firebase `onValue` — threshold 15s (sebelumnya polling 30s)
+- **2026-05**: Firmware ESP32 v6.0 — inventory-only, OLED SSD1306 support, lookup inventory saat scan
+- **2026-05**: Fitur attendance dihapus total dari web dan firmware
 - Added pnpm instructions (lock file sudah ada)
 - Konsistensi nama repo (drybrine/webinvesp32)
 - Perbaikan placeholder `your-username` → `drybrine`
 - Penjelasan penggunaan `.env.local` (konvensi Next.js)
-- Perbaikan karakter rusak (�) & formatting deployment section
 - Menambahkan LICENSE (MIT) yang sebelumnya direferensikan namun belum ada file
-- Menandai bagian panjang – disarankan pindah ke dokumen terpisah nanti (`/docs`)
 
 ---
 
@@ -56,6 +60,7 @@ npm run dev
 - [📱 Demo & Screenshot](#-demo--screenshot)
 - [🚀 Quick Start](#-quick-start)
 - [⚙️ Instalasi](#️-instalasi)
+- [📈 Prediksi Stok](#-prediksi-stok-linear-regression)
 - [📦 Production Deployment](#-production-deployment)
 - [🔥 Konfigurasi Firebase](#-konfigurasi-firebase)
 - [🛠️ Development](#️-development)
@@ -71,34 +76,42 @@ npm run dev
 ## ✨ Fitur Utama
 
 ### 🏭 **Manajemen Inventaris**
-- ✅ **Real-time Barcode Scanning** dengan ESP32
-- ✅ **Product Information Management** 
+- ✅ **Real-time Barcode Scanning** dengan ESP32 + OLED SSD1306
+- ✅ **Product Information Management**
 - ✅ **Stock Tracking & Analytics**
-- ✅ **Transaction History** dengan export Excel
+- ✅ **Transaction History** dengan export CSV
+- ✅ **Manual Stock Adjustment** via dashboard (otomatis tercatat di halaman transaksi)
+- ✅ **Filter Transaksi** berdasarkan sumber: Manual (Dashboard) atau Scanner ESP32
 - ✅ **QR Code Generation** untuk produk
+
+### 📈 **Prediksi Stok (Linear Regression)**
+- ✅ **Halaman `/prediksi`** — pilih item, horizon 1–90 hari, rasio train/test dapat diatur
+- ✅ **Model OLS** di `lib/stock-prediction.ts` (MAE, RMSE, R²) siap diimport dari komponen mana pun
+- ✅ **Rekonstruksi series harian** dari riwayat transaksi (tanpa perlu snapshot)
+- ✅ **Kartu ringkas di dashboard** menampilkan 3 barang paling berisiko + estimasi stockout
+- ✅ **Notifikasi stockout otomatis** saat prediksi habis ≤ 7 hari (session-scoped, tidak spam)
+- ✅ **Script test standalone**: `npx tsx scripts/test-stock-prediction.ts`
 
 ### 📱 **Web Application Features**
 - ✅ **Responsive Design** (Mobile & Desktop)
-- ✅ **Real-time Updates** dengan Firebase
+- ✅ **Real-time Updates** dengan Firebase listeners (`onValue`)
 - ✅ **Modern UI/UX** dengan shadcn/ui + Radix UI
-- ✅ **Dark/Light Theme** toggle
-- ✅ **Toast Notifications** dengan auto-dismiss
-- ✅ **Fast Refresh** untuk development optimal
+- ✅ **Toast Notifications** untuk status device & peringatan stok
 - ✅ **TypeScript Strict Mode** untuk type safety
 - ✅ **Progressive Web App (PWA)** ready
 
 ### 🔧 **Device Management**
-- ✅ **ESP32 Device Monitoring** dengan heartbeat real-time
-- ✅ **Connection Status Tracking** dan auto-reconnection
+- ✅ **ESP32 Device Monitoring** via Firebase realtime listener (tidak polling)
+- ✅ **Deteksi Online/Offline Cepat** — threshold 15 detik, re-evaluasi tiap 3 detik client-side
+- ✅ **Connection Status Tracking** — flip status ±16 detik tanpa perlu reload halaman
 - ✅ **Multiple Device Support** dalam satu network
-- ✅ **Remote Device Configuration** via web interface
+- ✅ **Remote Device Configuration** via web interface perangkat
 - ✅ **Offline Mode Detection** dan local storage fallback
 
 ### 🔥 **Backend & Data Processing**
 - ✅ **Firebase Realtime Database** untuk sync instant
 - ✅ **RESTful API** endpoints untuk ESP32 integration
-- ✅ **WebSocket Communication** untuk real-time updates
-- ✅ **Data Export** ke Excel/CSV format
+- ✅ **Data Export** ke CSV format
 - ✅ **Database Rules** untuk security dan validation
 
 ## 🔧 Teknologi Stack
@@ -120,10 +133,11 @@ npm run dev
 - **File Processing**: Export ke Excel dengan react-excel-export
 
 ### **Hardware Integration**
-- **Microcontroller**: ESP32 (Arduino framework)
-- **Scanner Module**: Barcode scanner via UART/Serial
+- **Microcontroller**: ESP32 (Arduino framework) — firmware v6.0, mode inventory-only
+- **Scanner Module**: GM67 Barcode scanner via UART/Serial (RX=16, TX=17)
+- **Display**: OLED SSD1306 128x64 (I2C: SDA=21, SCL=22, address 0x3C)
 - **Connectivity**: WiFi 802.11 b/g/n
-- **Communication**: HTTP REST API + WebSocket
+- **Communication**: HTTP REST ke Firebase RTDB (heartbeat tiap 8 detik)
 - **Protocol**: JSON untuk data exchange
 
 ### **UI Components**
@@ -213,6 +227,46 @@ NEXT_PUBLIC_USE_FIREBASE_EMULATOR=false
 ```bash
 npm run dev
 ```
+
+## 📈 Prediksi Stok (Linear Regression)
+
+Aplikasi menyertakan model prediksi stok berbasis **Ordinary Least Squares (OLS) linear regression** untuk memperkirakan level stok masa depan dan tanggal habisnya barang.
+
+### **Struktur**
+- `lib/stock-prediction.ts` — modul model (fit, predict, evaluate, forecast, builder series dari transaksi)
+- `app/prediksi/page.tsx` — halaman interaktif untuk memilih item, mengatur horizon, dan melihat chart historis vs prediksi
+- `components/prediction-chart.tsx` — chart SVG native (tanpa dependency recharts)
+- `scripts/test-stock-prediction.ts` — script test CLI
+
+### **Metrik Evaluasi**
+- **MAE** — Mean Absolute Error
+- **RMSE** — Root Mean Squared Error
+- **R²** — Coefficient of determination (1 = sempurna)
+- Train/test split kronologis (default 80/20)
+
+### **Menjalankan Test Script**
+```bash
+# Dataset dummy
+npx tsx scripts/test-stock-prediction.ts
+
+# Dengan data real dari Firebase export
+npx tsx scripts/test-stock-prediction.ts --export barcodescanesp32-default-rtdb-export.json
+```
+
+### **Integrasi ke Komponen React**
+```ts
+import { predictStock, buildDailySeriesFromTransactions } from "@/lib/stock-prediction"
+
+const series = buildDailySeriesFromTransactions(transactions, item.quantity)
+const { forecast, stockoutDate, metrics } = predictStock(series, { horizonDays: 14 })
+```
+
+### **Fitur di Website**
+- **Halaman `/prediksi`**: chart historis (biru) + forecast (hijau putus), tabel per hari, metrik lengkap
+- **Kartu dashboard**: top-3 barang paling berisiko dengan estimasi hari habis
+- **Notifikasi stockout**: toast otomatis muncul bila prediksi ≤ 7 hari (sekali per item per hari per sesi)
+
+> 💡 Minimal butuh 2 transaksi per barang agar model dapat fit. Semakin banyak transaksi (in/out/adjustment), semakin akurat prediksi.
 
 ## 🔥 Konfigurasi Firebase
 
@@ -490,19 +544,31 @@ GET  /api/test                  # Health check
 
 ### **Hardware Requirements**
 - **ESP32 DevKit V1** atau compatible board
-- **Barcode Scanner Module** dengan output UART/Serial
+- **GM67 Barcode Scanner** dengan output UART/Serial
+- **OLED SSD1306 128x64** (I2C) untuk tampilan status & hasil scan
 - **Power Supply 5V 2A** untuk ESP32 dan scanner
 - **Breadboard dan jumper wires** untuk koneksi
 - **WiFi Router** dengan akses internet
 
+**Library Arduino yang dibutuhkan:**
+- `WiFi`, `WebServer`, `EEPROM`, `HTTPClient`, `ArduinoJson`
+- `Wire`, `Adafruit_GFX`, `Adafruit_SSD1306`
+
 ### **Wiring Diagram**
 ```
-ESP32 Pin          Barcode Scanner
----------          ---------------
+ESP32 Pin          Barcode Scanner (GM67)
+---------          ----------------------
 GPIO16 (RX2)   ←   TX (Data Output)
-GPIO17 (TX2)   →   RX (Data Input)  
+GPIO17 (TX2)   →   RX (Data Input)
 GND            ←   GND
 5V             ←   VCC (Power)
+
+ESP32 Pin          OLED SSD1306 (I2C)
+---------          ------------------
+GPIO21 (SDA)   ↔   SDA
+GPIO22 (SCL)   ↔   SCL
+3.3V           →   VCC
+GND            ←   GND
 ```
 
 ### **ESP32 Arduino Code Example**

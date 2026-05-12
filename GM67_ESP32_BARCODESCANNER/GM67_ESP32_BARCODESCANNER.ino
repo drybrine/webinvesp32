@@ -597,8 +597,6 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
   return item;
 }
 
-// 3. Update stok di /inventory/{itemId}
-
 // 4. Update /analytics
 
 // 5. Set device offline
