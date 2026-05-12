@@ -70,25 +70,19 @@ latestScan.location === "Warehouse-Scanner" // Exact match
 ### 6. Mode & Type Constants - DISESUAIKAN ✅
 #### ESP32 Values:
 ```cpp
-// Inventory mode
+// Inventory mode (single mode)
 doc["mode"] = "inventory";
 doc["type"] = "inventory_scan";
-
-// Attendance mode  
-doc["mode"] = "attendance";
-doc["type"] = "attendance_scan";
 ```
 
-#### Website Constants (NEW):
+#### Website Constants:
 ```typescript
 ESP32_CONFIG.MODES = {
-  INVENTORY: "inventory",
-  ATTENDANCE: "attendance"
+  INVENTORY: "inventory"
 }
 
 ESP32_CONFIG.SCAN_TYPES = {
-  INVENTORY: "inventory_scan", 
-  ATTENDANCE: "attendance_scan"
+  INVENTORY: "inventory_scan"
 }
 ```
 ✅ **KONSTANTA MODE/TYPE KINI SINKRON**

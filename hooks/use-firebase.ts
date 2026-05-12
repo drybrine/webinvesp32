@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"; // Add useMemo
-import { ref, onValue, DataSnapshot, query, orderByChild, off, Unsubscribe, push, set } from "firebase/database"; // Added push, set
+import { ref, onValue, DataSnapshot, query, orderByChild, limitToLast, Unsubscribe, push, set } from "firebase/database";
 import { firebaseHelpers, isFirebaseConfigured, database, dbRefs, firebaseCleanup, waitForFirebaseReady } from "@/lib/firebase"; // Ensure all are imported
 
 export interface InventoryItem {
@@ -285,7 +285,7 @@ export function useFirebaseScans() {
 
       try {
         const scansRef = ref(database, "scans");
-        const scansQuery = query(scansRef, orderByChild("timestamp"));
+        const scansQuery = query(scansRef, orderByChild("timestamp"), limitToLast(50));
         
         unsubscribe = onValue(
           scansQuery,

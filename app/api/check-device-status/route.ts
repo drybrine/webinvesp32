@@ -20,11 +20,16 @@ export async function POST(request: NextRequest) {
     const db = ensureFirebaseInitialized()
     
     if (!db) {
-      console.error("❌ Firebase database not available")
-      return NextResponse.json(
-        { error: "Firebase database initialization failed" },
-        { status: 500 }
-      )
+      return NextResponse.json({
+        success: false,
+        message: "Firebase is not configured; device status check skipped.",
+        totalDevices: 0,
+        updatedDevices: 0,
+        onlineDevices: 0,
+        offlineDevices: 0,
+        deviceDetails: [],
+        timestamp: new Date().toISOString(),
+      })
     }
 
     const devicesRef = ref(db, "devices")

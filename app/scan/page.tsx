@@ -12,38 +12,19 @@ import { Button } from "@/components/ui/button"
 import {
   Package,
   Search,
-  Filter,
   Download,
   CheckCircle,
   Clock,
   Wifi,
   Activity,
 } from "lucide-react"
-import {
-  useFirebaseScans,
-  ScanRecord,
-} from "@/hooks/use-firebase"
+import { useFirebaseScans } from "@/hooks/use-firebase"
 import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
 import { getFirebaseStatus } from "@/lib/firebase"
 import { ScanHistory } from "@/components/scan-history"
 
-interface ScanStats {
-  totalScans: number
-  newScans: number
-  processedScans: number
-  errorScans: number
-  lastScanTime?: string
-  averageProcessingTime?: string
-}
-
 export default function ScanPage() {
   const [searchTerm, setSearchTerm] = useState("")
-  const [scanStats, setScanStats] = useState<ScanStats>({
-    totalScans: 0,
-    newScans: 0,
-    processedScans: 0,
-    errorScans: 0,
-  })
 
   const {
     scans,
@@ -58,41 +39,19 @@ export default function ScanPage() {
 
   const firebaseStatus = getFirebaseStatus()
 
-  useEffect(() => {
-    const updateStats = () => {
-      const total = scans.length;
-      const newScans = scans.filter(s => !s.processed).length;
-      const processedScans = scans.filter(s => s.processed).length;
-      const errorScans = 0; // No error status in current ScanRecord type
+  // Calculate stats
+  const todayScans = scans.filter(scan =>
+    new Date(scan.timestamp).toDateString() === new Date().toDateString()
+  ).length
 
-      setScanStats({
-        totalScans: total,
-        newScans: newScans,
-        processedScans: processedScans,
-        errorScans: errorScans,
-      });
-    };
-
-    updateStats();
-    const interval = setInterval(updateStats, 1000); // Update every second
-    return () => clearInterval(interval);
-  }, [scans]);
-
-  const processedScans = scans.map(s => ({
-    ...s, 
-    itemName: s.itemFound ? 'Item Found' : 'Not Found',
-    itemCategory: 'Unknown',
-    itemLocation: s.location || 'Unknown',
-    timeAgo: new Date(s.timestamp).toLocaleString(),
-    status: s.processed ? 'processed' : 'new' as 'new' | 'processed' | 'error'
-  }));
+  const processedScans = scans.filter(scan => scan.processed).length
 
   if (scansLoading || devicesLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Memuat riwayat pemindaian...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Memuat riwayat pemindaian...</p>
         </div>
       </div>
     )
@@ -100,196 +59,127 @@ export default function ScanPage() {
 
   if (scansError || devicesError) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
-        <div className="text-center text-red-600">
-          <p>Gagal memuat data: {scansError || devicesError}</p>
-        </div>
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
+        <Card className="max-w-md">
+          <CardContent className="pt-6">
+            <p className="text-destructive text-center">{scansError || devicesError}</p>
+            <Button onClick={() => window.location.reload()} className="w-full mt-4">Muat Ulang</Button>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
+  const processedScansList = scans.map(s => ({
+    ...s,
+    itemName: s.itemFound ? 'Item Ditemukan' : 'Tidak Ditemukan',
+    itemCategory: 'Unknown',
+    itemLocation: s.location || 'Unknown',
+    timeAgo: new Date(s.timestamp).toLocaleString(),
+    status: s.processed ? 'processed' : 'new' as 'new' | 'processed' | 'error'
+  }));
+
   return (
-    <div className="min-h-screen gradient-surface p-3 sm:p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Enhanced Header with modern design - Mobile responsive */}
-        <div className="mb-6 sm:mb-8 md:mb-10 text-center md:text-left animate-fade-in-up">
-          <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start mb-4 sm:mb-6 gap-3 sm:gap-4">
-            <div className="relative">
-              <div className="absolute -inset-1 gradient-primary rounded-full blur opacity-30 animate-pulse"></div>
-              <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 gradient-secondary rounded-full flex items-center justify-center shadow-colored">
-                <Activity className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-white animate-float" />
-              </div>
+    <div className="min-h-screen bg-muted/30">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-6">
+        {/* Header */}
+        <div className="animate-fade-in-up">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Activity className="h-5 w-5 text-primary" />
             </div>
-            <div className="text-center md:text-left">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold gradient-text tracking-tight">
-                Riwayat Transaksi
-              </h1>
-              <p className="text-xs sm:text-sm md:text-base lg:text-lg text-muted-foreground font-medium mt-1 sm:mt-2">
-                Pantau aktivitas scan dan transaksi inventaris
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Riwayat Scan</h1>
+              <p className="text-sm text-muted-foreground">Pantau aktivitas scan barcode</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Scan</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl sm:text-3xl font-bold">{scans.length}</div>
+              <p className="text-xs text-muted-foreground">Semua waktu</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Hari Ini</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl sm:text-3xl font-bold">{todayScans}</div>
+              <p className="text-xs text-muted-foreground">Scan hari ini</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Berhasil</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl sm:text-3xl font-bold text-emerald-600">{processedScans}</div>
+              <p className="text-xs text-muted-foreground">Item ditemukan</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${firebaseStatus.isConfigured ? 'bg-emerald-500' : 'bg-gray-400'}`}></div>
+                <span className={`font-medium ${firebaseStatus.isConfigured ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                  {firebaseStatus.isConfigured ? 'Aktif' : 'Offline'}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {firebaseStatus.isConfigured ? 'Real-time aktif' : 'Menunggu koneksi'}
               </p>
-            </div>
-          </div>
-          <div className="flex items-center justify-center md:justify-start space-x-4">
-            <div className="h-1 w-16 gradient-secondary rounded-full animate-pulse"></div>
-            <div className="h-1 w-8 gradient-primary rounded-full animate-pulse animation-delay-200"></div>
-            <div className="h-1 w-4 gradient-accent rounded-full animate-pulse animation-delay-400"></div>
-          </div>
-        </div>
-
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 mb-8 sm:mb-10 animate-fade-in-up animation-delay-200">
-          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
-            <div className="absolute inset-0 gradient-primary opacity-5 rounded-xl"></div>
-            <CardHeader className="relative z-10 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">Total Scan</CardTitle>
-                <div className="p-2 gradient-primary rounded-lg shadow-sm">
-                  <Package className="h-4 w-4 text-white" />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="relative z-10 pt-0">
-              <div className="space-y-2">
-                <div className="text-2xl sm:text-3xl font-bold gradient-text">{scanStats.totalScans}</div>
-                <p className="text-xs text-muted-foreground font-medium">Semua waktu</p>
-                <div className="w-full bg-muted/50 rounded-full h-1">
-                  <div className="gradient-primary h-1 rounded-full w-full animate-pulse"></div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
-            <div className="absolute inset-0 gradient-secondary opacity-5 rounded-xl"></div>
-            <CardHeader className="relative z-10 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">Hari Ini</CardTitle>
-                <div className="p-2 gradient-secondary rounded-lg shadow-sm">
-                  <Clock className="h-4 w-4 text-white" />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="relative z-10 pt-0">
-              <div className="space-y-2">
-                <div className="text-2xl sm:text-3xl font-bold gradient-text">
-                  {processedScans.filter(scan => 
-                    new Date(scan.timestamp).toDateString() === new Date().toDateString()
-                  ).length}
-                </div>
-                <p className="text-xs text-muted-foreground font-medium">Scan hari ini</p>
-                <div className="w-full bg-muted/50 rounded-full h-1">
-                  <div className="gradient-secondary h-1 rounded-full w-3/4 animate-pulse"></div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
-            <div className="absolute inset-0 gradient-accent opacity-5 rounded-xl"></div>
-            <CardHeader className="relative z-10 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">Scan Berhasil</CardTitle>
-                <div className="p-2 gradient-accent rounded-lg shadow-sm">
-                  <CheckCircle className="h-4 w-4 text-white" />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="relative z-10 pt-0">
-              <div className="space-y-2">
-                <div className="text-2xl sm:text-3xl font-bold gradient-text">
-                  {processedScans.filter(scan => scan.status === 'processed').length}
-                </div>
-                <p className="text-xs text-muted-foreground font-medium">Item ditemukan</p>
-                <div className="w-full bg-muted/50 rounded-full h-1">
-                  <div className="bg-emerald-500 h-1 rounded-full w-4/5 animate-pulse"></div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-card card-hover shadow-medium hover:shadow-colored transition-all duration-500 group">
-            <div className="absolute inset-0 bg-orange-500 opacity-5 rounded-xl"></div>
-            <CardHeader className="relative z-10 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">Status Real-time</CardTitle>
-                <div className="p-2 bg-orange-500 rounded-lg shadow-sm">
-                  <Wifi className="h-4 w-4 text-white" />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="relative z-10 pt-0">
-              <div className="space-y-2">
-                                  <div className="text-lg sm:text-xl font-bold text-orange-600">
-                   {firebaseStatus.isConfigured ? 'Aktif' : 'Offline'}
-                  </div>
-                  <p className="text-xs text-muted-foreground font-medium">
-                   {firebaseStatus.isConfigured ? 'Ada aktivitas' : 'Menunggu scan'}
-                  </p>
-                  <div className="w-full bg-muted/50 rounded-full h-1">
-                   <div className={`h-1 rounded-full ${firebaseStatus.isConfigured ? 'bg-orange-500 animate-pulse' : 'bg-gray-400'} transition-all duration-300`} 
-                        style={{ width: firebaseStatus.isConfigured ? '90%' : '30%' }}></div>
-                  </div>
-              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Enhanced History Table */}
-        <Card className="glass-card shadow-large hover:shadow-extra-large transition-all duration-500 animate-fade-in-up animation-delay-600">
-          <CardHeader className="p-6 sm:p-8">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* History Table */}
+        <Card className="animate-fade-in-up">
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <CardTitle className="text-2xl font-bold gradient-text">Riwayat Transaksi</CardTitle>
-                <CardDescription className="text-sm text-muted-foreground mt-2 font-medium">
-                  Pantau semua aktivitas scan barang real-time
-                </CardDescription>
+                <CardTitle>Riwayat Transaksi</CardTitle>
+                <CardDescription>Semua aktivitas scan akan muncul di sini</CardDescription>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Button variant="outline" className="glass-card hover:shadow-medium btn-modern font-semibold">
-                  <Download className="mr-2 h-4 w-4" />
-                  Export Data
-                </Button>
-                <Button variant="outline" className="glass-card hover:shadow-medium btn-modern font-semibold">
-                  <Filter className="mr-2 h-4 w-4" />
-                  Filter
-                </Button>
-              </div>
+              <Button variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
             </div>
-            
-            {/* Enhanced Search */}
-            <div className="mt-6 relative">
-              <Search className="absolute left-4 top-4 h-5 w-5 text-muted-foreground" />
+            <div className="mt-4 relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Cari berdasarkan barcode, nama produk, atau ID..."
-                className="pl-12 h-12 glass-card border-0 shadow-medium focus:shadow-large transition-all duration-300 font-medium"
+                placeholder="Cari barcode, produk..."
+                className="pl-10 h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </CardHeader>
-          
-          <CardContent className="p-6 sm:p-8 pt-0">
-            {processedScans.length === 0 ? (
-              <div className="space-y-8">
-                <div className="text-center py-16 sm:py-20">
-                  <div className="relative mx-auto mb-6">
-                    <div className="absolute -inset-1 gradient-primary rounded-full blur opacity-20"></div>
-                    <div className="relative w-20 h-20 mx-auto glass-card rounded-full flex items-center justify-center shadow-large">
-                      <Package className="h-10 w-10 text-muted-foreground" />
-                    </div>
-                  </div>
-                  <h2 className="text-xl font-bold text-foreground mb-3">Belum ada riwayat transaksi</h2>
-                  <p className="text-muted-foreground mb-2 font-medium">
-                    Riwayat scan barang masuk dan keluar akan muncul di sini
-                  </p>
-                  <p className="text-sm text-muted-foreground/70">
-                    Mulai scan barcode untuk melihat aktivitas real-time
-                  </p>
-                </div>
+          <CardContent className="p-0">
+            {processedScansList.length === 0 ? (
+              <div className="text-center py-12 px-4">
+                <Package className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                <h3 className="font-medium text-foreground mb-1">Belum ada riwayat scan</h3>
+                <p className="text-sm text-muted-foreground">
+                  Scan barcode dengan ESP32 untuk melihat aktivitas di sini
+                </p>
               </div>
             ) : (
-              <ScanHistory scans={processedScans} />
+              <ScanHistory scans={processedScansList} />
             )}
           </CardContent>
         </Card>

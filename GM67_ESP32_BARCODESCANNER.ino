@@ -1,3 +1,13 @@
+// =============================================================================
+//  ESP32 GM67 Barcode Scanner - Inventory Only
+//  Firebase Structure:
+//    /scans/{id}        -> scan records
+//    /devices/{id}      -> heartbeat & device info
+//    /inventory/{id}    -> product lookup & stock update
+//    /analytics         -> totalScans, totalItems, lowStockAlerts, lastReset
+//  OLED SSD1306 I2C    -> display status & scan result
+// =============================================================================
+
 #include <WiFi.h>
 #include <WebServer.h>
 #include <EEPROM.h>
@@ -5,1501 +15,966 @@
 #include <ArduinoJson.h>
 #include <time.h>
 
-#define RXD2 16
-#define TXD2 17
-#define EEPROM_SIZE 1024
-#define WIFI_CONFIG_ADDR 0
+// --- OLED SSD1306 I2C --------------------------------------------------------
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define SCREEN_WIDTH         128
+#define SCREEN_HEIGHT         64
+#define OLED_RESET            -1
+#define OLED_ADDRESS        0x3C
+#define OLED_SDA              21
+#define OLED_SCL              22
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+bool          oledAvailable       = false;
+unsigned long lastOledRefresh     = 0;
+unsigned long lastBarcodeOnOled   = 0;
+#define OLED_BARCODE_HOLD_MS  8000
+// -----------------------------------------------------------------------------
+
+#define RXD2                16
+#define TXD2                17
+#define EEPROM_SIZE       1024
+#define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
+#define FIRMWARE_VERSION   "6.0"
 
-// WiFi Configuration structure
+// --- Structs -----------------------------------------------------------------
 struct WiFiConfig {
-  char ssid[64];
-  char password[64];
-  bool isValid;
+  char     ssid[64];
+  char     password[64];
+  bool     isValid;
   uint32_t checksum;
 };
 
-// Device Configuration structure
 struct DeviceConfig {
-  char deviceId[32];
-  char serverUrl[128];
-  char firebaseUrl[128];
-  char apiKey[64];
-  bool isConfigured;
+  char     deviceId[32];
+  char     serverUrl[128];
+  char     firebaseUrl[128];
+  char     apiKey[64];
+  bool     isConfigured;
   uint32_t checksum;
-  int currentMode; // 0=inventory, 1=attendance - untuk disimpan di EEPROM
-  uint8_t version; // Add version field to track struct changes
-  uint8_t padding[3]; // Add explicit padding to control memory layout
+  uint8_t  version;
+  uint8_t  padding[3];
 };
 
-WebServer* server = nullptr;
-
-WiFiConfig wifiConfig;
-DeviceConfig deviceConfig;
-String lastBarcode = "";
-bool isWiFiConnected = false;
-bool isServerStarted = false;
-unsigned long lastScanTime = 0;
-unsigned long lastHeartbeat = 0;
-unsigned long scanCount = 0;
-unsigned long bootTime = 0; // Tambahkan boot time
-unsigned long lastWiFiCheck = 0; // Tambahkan WiFi monitoring
-bool isOnline = false; // Status online/offline
-
-// Mode switching variables
-enum ScannerMode {
-  MODE_INVENTORY,
-  MODE_ATTENDANCE
+struct InventoryItem {
+  String id;
+  String name;
+  String barcode;
+  String category;
+  String location;
+  String supplier;
+  int    quantity;
+  int    minStock;
+  float  price;
+  bool   found;
 };
-
-ScannerMode currentMode = MODE_INVENTORY; // Default mode
-String currentPageUrl = "";
 
 struct ScanData {
   String barcode;
   String timestamp;
   String deviceId;
-  bool processed;
-  bool sentToFirebase;
+  bool   processed;
+  bool   sentToFirebase;
 };
+// -----------------------------------------------------------------------------
 
-// Improved checksum calculation with better algorithm
-uint32_t calculateChecksum(const void* data, size_t length) {
-  uint32_t checksum = 0xFFFFFFFF;
-  const uint8_t* bytes = (const uint8_t*)data;
-  
-  for (size_t i = 0; i < length; i++) {
-    checksum ^= bytes[i];
-    for (int j = 0; j < 8; j++) {
-      checksum = (checksum >> 1) ^ (0xEDB88320 & (-(checksum & 1)));
-    }
-  }
-  
-  return ~checksum;
-}
+WebServer* server = nullptr;
+
+WiFiConfig   wifiConfig;
+DeviceConfig deviceConfig;
+
+String        lastBarcode     = "";
+bool          isWiFiConnected = false;
+bool          isServerStarted = false;
+unsigned long lastScanTime    = 0;
+unsigned long lastHeartbeat   = 0;
+unsigned long scanCount       = 0;
+unsigned long bootTime        = 0;
+unsigned long lastWiFiCheck   = 0;
+bool          isOnline        = false;
 
 std::vector<ScanData> scanHistory;
 
-// Function declarations
-void handleRoot();
-void handleApiStatus();
-void handleApiScan();
-void handleApiHistory();
-void handleApiConfig();
-void handleReset();
-void handleOptions();
-void handleApiMode(); // New: Handle mode switching
-void handleApiAttendance(); // New: Handle attendance API
-void startWebServer();
-void processBarcodeInput(String input);
-void processInventoryBarcode(String barcode); // New: Process inventory barcode
-void processAttendanceBarcode(String barcode); // New: Process attendance barcode
-bool connectToWiFi();
-bool sendBarcodeToFirebase(String barcode);
-bool sendAttendanceToFirebase(String nim); // New: Send attendance data
-bool sendHeartbeatToFirebase();
-void broadcastBarcodeScan(String barcode);
-void broadcastAttendanceResult(String nim, bool success); // New: Broadcast attendance
-bool parseWiFiQR(String qrData, String &ssid, String &password, String &security);
-uint32_t calculateChecksum(const void* data, size_t length);
-void saveWiFiConfig();
-void loadWiFiConfig();
-void saveDeviceConfig();
-void loadDeviceConfig();
-void checkWiFiConnection(); // Tambahkan fungsi monitoring WiFi
-void setDeviceOffline(); // Tambahkan fungsi offline
-String getModeString(ScannerMode mode); // New: Get mode as string
-bool isValidNIM(String input); // New: Validate NIM format
+// --- Function Declarations ---------------------------------------------------
+void          handleRoot();
+void          handleApiStatus();
+void          handleApiScan();
+void          handleApiHistory();
+void          handleApiConfig();
+void          handleReset();
+void          handleOptions();
+void          startWebServer();
+void          processBarcodeInput(String input);
+void          processInventoryBarcode(String barcode);
+bool          connectToWiFi();
+bool          sendScanToFirebase(String barcode);
+bool          sendHeartbeatToFirebase();
+InventoryItem lookupInventoryByBarcode(String barcode);
+bool          parseWiFiQR(String qrData, String &ssid, String &password, String &security);
+void          saveWiFiConfig();
+void          loadWiFiConfig();
+void          saveDeviceConfig();
+void          loadDeviceConfig();
+void          checkWiFiConnection();
+void          setDeviceOffline();
+uint32_t      calculateChecksum(const void* data, size_t length);
+void          initOLED();
+void          oledShowBoot();
+void          oledShowStatus();
+void          oledShowBarcode(String barcode, String itemName, bool sent);
+void          oledShowInventoryFound(String name, int qty, int minStock);
+void          oledShowWiFiConnecting(String ssid);
+void          oledShowWiFiConnected(String ip);
+void          oledShowNoWiFi();
+void          oledUpdateIdle();
+// -----------------------------------------------------------------------------
 
 
+// =============================================================================
+//  CHECKSUM
+// =============================================================================
+uint32_t calculateChecksum(const void* data, size_t length) {
+  uint32_t cs = 0xFFFFFFFF;
+  const uint8_t* bytes = (const uint8_t*)data;
+  for (size_t i = 0; i < length; i++) {
+    cs ^= bytes[i];
+    for (int j = 0; j < 8; j++) cs = (cs >> 1) ^ (0xEDB88320 & (-(cs & 1)));
+  }
+  return ~cs;
+}
+
+
+// =============================================================================
+//  OLED FUNCTIONS
+//  Layout OLED Yellow-Blue SSD1306 128x64:
+//    KUNING -> baris piksel y=0..15  (2 baris teks size 1: y=0 dan y=8)
+//    BIRU   -> baris piksel y=16..63 (6 baris teks size 1: y=16,24,32,40,48,56)
+// =============================================================================
+void initOLED() {
+  Wire.begin(OLED_SDA, OLED_SCL);
+  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+    Serial.println("OLED tidak ditemukan (SDA=21, SCL=22)");
+    oledAvailable = false;
+    return;
+  }
+  oledAvailable = true;
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  Serial.println("OLED SSD1306 Yellow-Blue OK");
+}
+
+// Boot screen
+void oledShowBoot() {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+
+  // -- ZONA KUNING (y=0..15) --
+  display.setCursor(16, 0); display.println("ESP32 SCANNER v6.0");
+  display.setCursor(22, 8); display.println("GM67 Barcode Scanner");
+
+  // -- ZONA BIRU (y=16..63) --
+  display.setCursor(0, 18); display.println("Firebase Realtime DB");
+  display.setCursor(0, 28); display.println("Inventory Mode Only");
+  display.setCursor(0, 38); display.println("OLED: Yellow-Blue");
+  display.drawLine(0, 50, 127, 50, SSD1306_WHITE);
+  display.setCursor(26, 54); display.println("Initializing...");
+
+  display.display();
+}
+
+// Status idle
+void oledShowStatus() {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+
+  // -- ZONA KUNING (y=0..15) --
+  display.setCursor(4, 0);
+  display.println("INVENTORY SCANNER");
+  display.setCursor(0, 8);
+  display.println(isOnline ? "Status: [ONLINE] " : "Status: [OFFLINE]");
+
+  // -- ZONA BIRU (y=16..63) --
+  display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
+
+  display.setCursor(0, 20);
+  if (isWiFiConnected) {
+    String ssid = String(wifiConfig.ssid);
+    if (ssid.length() > 13) ssid = ssid.substring(0, 13) + "..";
+    display.print("WiFi: "); display.println(ssid);
+  } else {
+    display.println("WiFi: Disconnected");
+  }
+
+  display.setCursor(0, 30);
+  display.print("IP: ");
+  display.println(isWiFiConnected ? WiFi.localIP().toString() : "--.--.--.--");
+
+  display.setCursor(0, 40);
+  display.print("Total Scan: "); display.println(scanCount);
+
+  display.drawLine(0, 51, 127, 51, SSD1306_WHITE);
+  display.setCursor(4, 55); display.println("Ready to scan...");
+
+  display.display();
+}
+
+// Tampil barcode hasil scan
+void oledShowBarcode(String barcode, String itemName, bool sent) {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+
+  // -- ZONA KUNING (y=0..15) --
+  display.setCursor(22, 0); display.println("** BARCODE SCAN **");
+  // Tampilkan barcode di baris kuning ke-2 jika muat
+  if (barcode.length() <= 21) {
+    int cx = (128 - (int)barcode.length() * 6) / 2;
+    if (cx < 0) cx = 0;
+    display.setCursor(cx, 8); display.println(barcode);
+  } else {
+    display.setCursor(0, 8); display.println(barcode.substring(0, 21));
+  }
+
+  // -- ZONA BIRU (y=16..63) --
+  // Jika barcode panjang, lanjutkan di biru atas
+  if (barcode.length() > 21) {
+    display.setCursor(0, 18); display.println(barcode.substring(21, 42));
+  }
+
+  // Nama item
+  display.setCursor(0, 30);
+  if (itemName.length() > 0) {
+    String label = itemName;
+    if (label.length() > 20) label = label.substring(0, 20);
+    display.print("Item: "); display.println(label);
+  } else {
+    display.println("Item: Tidak ditemukan");
+  }
+
+  display.drawLine(0, 41, 127, 41, SSD1306_WHITE);
+
+  display.setCursor(0, 45);
+  display.println(isOnline ? "Firebase: TERKIRIM" : "Firebase: OFFLINE");
+
+  display.setCursor(0, 55);
+  display.println(sent ? "Sync: OK" : "Sync: GAGAL");
+
+  display.display();
+  lastBarcodeOnOled = millis();
+}
+
+// Tampil detail item ditemukan di inventory
+void oledShowInventoryFound(String name, int qty, int minStock) {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+
+  // -- ZONA KUNING (y=0..15) --
+  display.setCursor(14, 0); display.println("** ITEM DITEMUKAN **");
+  if (name.length() > 21) name = name.substring(0, 21);
+  display.setCursor(0, 8); display.println(name);
+
+  // -- ZONA BIRU (y=16..63) --
+  display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
+
+  display.setCursor(0, 20);
+  display.print("Stok saat ini : "); display.println(qty);
+
+  display.setCursor(0, 30);
+  display.print("Stok minimum  : "); display.println(minStock);
+
+  if (qty <= minStock) {
+    display.drawLine(0, 42, 127, 42, SSD1306_WHITE);
+    display.setCursor(14, 46); display.println("!! STOK MENIPIS !!");
+    display.setCursor(0,  56); display.println("Segera lakukan restock");
+  } else {
+    display.setCursor(0, 44);
+    display.println("Stok: Aman");
+  }
+
+  display.display();
+  delay(2000);
+}
+
+// Proses koneksi WiFi
+void oledShowWiFiConnecting(String ssid) {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+
+  // -- ZONA KUNING (y=0..15) --
+  display.setCursor(16, 0); display.println("Connecting WiFi...");
+  display.setCursor(40, 8); display.println(". . . . .");
+
+  // -- ZONA BIRU (y=16..63) --
+  display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
+
+  display.setCursor(0, 20); display.println("SSID:");
+  String s = ssid;
+  if (s.length() > 21) s = s.substring(0, 21);
+  display.setCursor(0, 30); display.println(s);
+
+  display.setCursor(20, 48); display.println("Mohon tunggu...");
+
+  display.display();
+}
+
+// WiFi berhasil terhubung
+void oledShowWiFiConnected(String ip) {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+
+  // -- ZONA KUNING (y=0..15) --
+  display.setCursor(20, 0); display.println("WiFi CONNECTED!");
+  display.setCursor(0,  8); display.print("IP: "); display.println(ip);
+
+  // -- ZONA BIRU (y=16..63) --
+  display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
+
+  String ssid = String(wifiConfig.ssid);
+  if (ssid.length() > 17) ssid = ssid.substring(0, 17) + "..";
+  display.setCursor(0, 20); display.print("SSID: "); display.println(ssid);
+  display.setCursor(0, 30); display.println("Mode: INVENTORY");
+  display.setCursor(0, 40); display.println("Firebase: SIAP");
+
+  display.drawLine(0, 52, 127, 52, SSD1306_WHITE);
+  display.setCursor(16, 56); display.println("Scanner aktif!");
+
+  display.display();
+  delay(2000);
+}
+
+// Tidak ada konfigurasi WiFi
+void oledShowNoWiFi() {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+
+  // -- ZONA KUNING (y=0..15) --
+  display.setCursor(22, 0); display.println("ESP32 SCANNER");
+  display.setCursor(14, 8); display.println("No WiFi Config!");
+
+  // -- ZONA BIRU (y=16..63) --
+  display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
+
+  display.setCursor(0, 20); display.println("Scan QR WiFi untuk");
+  display.setCursor(0, 30); display.println("konfigurasi jaringan.");
+  display.setCursor(0, 42); display.println("Format QR:");
+  display.setCursor(0, 52); display.println("WIFI:S:X;T:WPA;P:X;;");
+
+  display.display();
+}
+
+void oledUpdateIdle() {
+  if (!oledAvailable) return;
+  if (millis() - lastBarcodeOnOled < OLED_BARCODE_HOLD_MS) return;
+  if (millis() - lastOledRefresh   < 3000) return;
+  lastOledRefresh = millis();
+  oledShowStatus();
+}
+
+
+// =============================================================================
+//  EEPROM FUNCTIONS
+// =============================================================================
 void saveWiFiConfig() {
-  // Update to zero out the checksum field first
   wifiConfig.checksum = 0;
   wifiConfig.checksum = calculateChecksum(&wifiConfig, sizeof(wifiConfig));
   EEPROM.put(WIFI_CONFIG_ADDR, wifiConfig);
   EEPROM.commit();
-  Serial.println("✅ WiFi configuration saved to EEPROM");
+  Serial.println("WiFi config saved");
 }
 
 void loadWiFiConfig() {
   EEPROM.get(WIFI_CONFIG_ADDR, wifiConfig);
-  
-  // Store the original checksum
-  uint32_t storedChecksum = wifiConfig.checksum;
-  
-  // Zero out the checksum field for calculation
+  uint32_t stored = wifiConfig.checksum;
   wifiConfig.checksum = 0;
-  uint32_t calculatedChecksum = calculateChecksum(&wifiConfig, sizeof(wifiConfig));
-  
-  // Restore the original checksum
-  wifiConfig.checksum = storedChecksum;
-  
-  Serial.println("🔍 Validating WiFi config from EEPROM:");
-  Serial.println("   - Stored checksum: 0x" + String(storedChecksum, HEX));
-  Serial.println("   - Calculated checksum: 0x" + String(calculatedChecksum, HEX));
-  
-  if (wifiConfig.checksum == calculatedChecksum && wifiConfig.isValid && strlen(wifiConfig.ssid) > 0) {
-    Serial.println("✅ Valid WiFi configuration loaded from EEPROM");
-    Serial.printf("SSID: %s\n", wifiConfig.ssid);
+  uint32_t calc = calculateChecksum(&wifiConfig, sizeof(wifiConfig));
+  wifiConfig.checksum = stored;
+  if (stored == calc && wifiConfig.isValid && strlen(wifiConfig.ssid) > 0) {
+    Serial.printf("WiFi config loaded: %s\n", wifiConfig.ssid);
   } else {
-    Serial.println("❌ No valid WiFi configuration found in EEPROM");
+    Serial.println("WiFi config tidak valid, reset");
     memset(&wifiConfig, 0, sizeof(wifiConfig));
     wifiConfig.isValid = false;
   }
 }
 
 void saveDeviceConfig() {
-  // Set version
-  deviceConfig.version = 1;
-  
-  // Zero out padding bytes to ensure consistent checksum
+  deviceConfig.version      = 1;
   memset(deviceConfig.padding, 0, sizeof(deviceConfig.padding));
-  
-  // Simpan mode saat ini ke EEPROM
-  deviceConfig.currentMode = (currentMode == MODE_ATTENDANCE) ? 1 : 0;
-  
-  // Calculate checksum last, after all fields are set
-  deviceConfig.isConfigured = true; // Ensure this flag is set to true
-  deviceConfig.checksum = 0; // First zero out the checksum field
-  deviceConfig.checksum = calculateChecksum(&deviceConfig, sizeof(deviceConfig));
-  
-  Serial.println("📝 Saving configuration to EEPROM:");
-  Serial.println("   - Device ID: " + String(deviceConfig.deviceId));
-  Serial.println("   - Current Mode: " + String(deviceConfig.currentMode) + " (" + getModeString((ScannerMode)deviceConfig.currentMode) + ")");
-  Serial.println("   - Struct size: " + String(sizeof(deviceConfig)) + " bytes");
-  Serial.println("   - Version: " + String(deviceConfig.version));
-  Serial.println("   - Calculated checksum: 0x" + String(deviceConfig.checksum, HEX));
-  
-  // Debug - Print raw bytes of DeviceConfig for verification
-  Serial.println("Raw data (first 16 bytes):");
-  const uint8_t* bytes = (const uint8_t*)&deviceConfig;
-  for (int i = 0; i < 16; i++) {
-    Serial.print(bytes[i], HEX);
-    Serial.print(" ");
-    if ((i + 1) % 8 == 0) Serial.println();
-  }
-  Serial.println();
-  
+  deviceConfig.isConfigured = true;
+  deviceConfig.checksum     = 0;
+  deviceConfig.checksum     = calculateChecksum(&deviceConfig, sizeof(deviceConfig));
   EEPROM.put(DEVICE_CONFIG_ADDR, deviceConfig);
-  bool committed = EEPROM.commit();
-  Serial.println(committed ? "✅ EEPROM commit successful" : "❌ EEPROM commit failed");
+  bool ok = EEPROM.commit();
+  Serial.println(ok ? "Device config saved" : "EEPROM commit failed");
 }
 
 void loadDeviceConfig() {
-  // First make a clean copy of the structure to avoid garbage data
   memset(&deviceConfig, 0, sizeof(deviceConfig));
-  
   EEPROM.get(DEVICE_CONFIG_ADDR, deviceConfig);
-  
-  // Store the checksum value for comparison
-  uint32_t storedChecksum = deviceConfig.checksum;
-  
-  // Calculate checksum with the checksum field zeroed out
+  uint32_t stored = deviceConfig.checksum;
   deviceConfig.checksum = 0;
-  uint32_t calculatedChecksum = calculateChecksum(&deviceConfig, sizeof(deviceConfig));
-  
-  // Restore the original checksum
-  deviceConfig.checksum = storedChecksum;
-  
-  Serial.println("🔍 Validating device config from EEPROM:");
-  Serial.println("   - Stored checksum: 0x" + String(storedChecksum, HEX));
-  Serial.println("   - Calculated checksum: 0x" + String(calculatedChecksum, HEX));
-  Serial.println("   - isConfigured flag: " + String(deviceConfig.isConfigured));
-  Serial.println("   - Stored Mode: " + String(deviceConfig.currentMode));
-  Serial.println("   - Version: " + String(deviceConfig.version));
-  
-  // Debug - Print raw bytes from EEPROM for verification
-  Serial.println("Raw data from EEPROM (first 16 bytes):");
-  const uint8_t* bytes = (const uint8_t*)&deviceConfig;
-  for (int i = 0; i < 16; i++) {
-    Serial.print(bytes[i], HEX);
-    Serial.print(" ");
-    if ((i + 1) % 8 == 0) Serial.println();
-  }
-  Serial.println();
-  
-  if (storedChecksum == calculatedChecksum && deviceConfig.isConfigured) {
-    Serial.println("✅ Valid device configuration loaded from EEPROM");
-    Serial.printf("Device ID: %s\n", deviceConfig.deviceId);
-    
-    // Muat mode dari EEPROM
-    if (deviceConfig.currentMode == 1) {
-      currentMode = MODE_ATTENDANCE;
-    } else {
-      currentMode = MODE_INVENTORY;
-    }
-    Serial.println("📱 Current Mode loaded from EEPROM: " + getModeString(currentMode));
+  uint32_t calc = calculateChecksum(&deviceConfig, sizeof(deviceConfig));
+  deviceConfig.checksum = stored;
+
+  if (stored == calc && deviceConfig.isConfigured) {
+    Serial.printf("Device config loaded: %s\n", deviceConfig.deviceId);
   } else {
-    Serial.println("❌ No valid device configuration found, creating new defaults");
-    Serial.println("   Checksum mismatch: 0x" + String(storedChecksum, HEX) + 
-                  " != 0x" + String(calculatedChecksum, HEX));
-    
+    Serial.println("Device config tidak valid, pakai default");
     memset(&deviceConfig, 0, sizeof(deviceConfig));
-    
-    String defaultDeviceId = "ESP32-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-    strncpy(deviceConfig.deviceId, defaultDeviceId.c_str(), sizeof(deviceConfig.deviceId) - 1);
-    strncpy(deviceConfig.serverUrl, "https://stokmanager.vercel.app/", sizeof(deviceConfig.serverUrl) - 1);
-    strncpy(deviceConfig.firebaseUrl, "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app", sizeof(deviceConfig.firebaseUrl) - 1);
-    strncpy(deviceConfig.apiKey, "", sizeof(deviceConfig.apiKey) - 1);
-    
-    // Keep the current mode instead of resetting it
-    deviceConfig.currentMode = (currentMode == MODE_ATTENDANCE) ? 1 : 0;
-    
-    // Set version
-    deviceConfig.version = 1;
-    
-    // Zero out padding bytes
-    memset(deviceConfig.padding, 0, sizeof(deviceConfig.padding));
-    
+    String defId = "ESP32-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+    strncpy(deviceConfig.deviceId,    defId.c_str(), sizeof(deviceConfig.deviceId)    - 1);
+    strncpy(deviceConfig.serverUrl,   "https://stokmanager.vercel.app/",
+                                                      sizeof(deviceConfig.serverUrl)   - 1);
+    strncpy(deviceConfig.firebaseUrl,
+      "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app",
+                                                      sizeof(deviceConfig.firebaseUrl) - 1);
+    strncpy(deviceConfig.apiKey,      "",             sizeof(deviceConfig.apiKey)      - 1);
+    deviceConfig.version      = 1;
     deviceConfig.isConfigured = true;
-    
+    memset(deviceConfig.padding, 0, sizeof(deviceConfig.padding));
     saveDeviceConfig();
-    Serial.println("✅ Default configuration created and saved");
   }
 }
 
-// Parse WiFi QR Code format: WIFI:S:SSID;T:TYPE;P:PASSWORD;H:HIDDEN;;
+
+// =============================================================================
+//  WIFI FUNCTIONS
+// =============================================================================
 bool parseWiFiQR(String qrData, String &ssid, String &password, String &security) {
-  Serial.println("📱 Parsing WiFi QR code...");
-  
-  if (!qrData.startsWith("WIFI:")) {
-    Serial.println("❌ Not a WiFi QR code");
-    return false;
-  }
-  
+  if (!qrData.startsWith("WIFI:")) return false;
   qrData = qrData.substring(5);
-  
-  int sIndex = qrData.indexOf("S:");
-  int tIndex = qrData.indexOf("T:");
-  int pIndex = qrData.indexOf("P:");
-  
-  if (sIndex == -1) {
-    Serial.println("❌ SSID not found in WiFi QR");
-    return false;
-  }
-  
-  int sEnd = qrData.indexOf(";", sIndex);
-  if (sEnd == -1) sEnd = qrData.length();
-  ssid = qrData.substring(sIndex + 2, sEnd);
-  
-  if (tIndex != -1) {
-    int tEnd = qrData.indexOf(";", tIndex);
-    if (tEnd == -1) tEnd = qrData.length();
-    security = qrData.substring(tIndex + 2, tEnd);
-  } else {
-    security = "WPA";
-  }
-  
-  if (pIndex != -1) {
-    int pEnd = qrData.indexOf(";", pIndex);
-    if (pEnd == -1) pEnd = qrData.length();
-    password = qrData.substring(pIndex + 2, pEnd);
-  } else {
-    password = "";
-  }
-  
-  Serial.println("✅ WiFi QR parsed successfully!");
+  int sI = qrData.indexOf("S:"), tI = qrData.indexOf("T:"), pI = qrData.indexOf("P:");
+  if (sI == -1) return false;
+  int sE = qrData.indexOf(";", sI); if (sE == -1) sE = qrData.length();
+  ssid = qrData.substring(sI + 2, sE);
+  if (tI != -1) { int tE = qrData.indexOf(";", tI); if (tE == -1) tE = qrData.length(); security = qrData.substring(tI+2, tE); } else security = "WPA";
+  if (pI != -1) { int pE = qrData.indexOf(";", pI); if (pE == -1) pE = qrData.length(); password = qrData.substring(pI+2, pE); } else password = "";
   return true;
 }
 
 bool connectToWiFi() {
-  if (!wifiConfig.isValid || strlen(wifiConfig.ssid) == 0) {
-    Serial.println("❌ No WiFi credentials available");
-    return false;
-  }
-  
-  Serial.printf("📶 Connecting to WiFi: %s\n", wifiConfig.ssid);
-  
-  WiFi.disconnect(true);
-  delay(1000);
-  
-  WiFi.mode(WIFI_STA);
-  delay(500);
-  
+  if (!wifiConfig.isValid || strlen(wifiConfig.ssid) == 0) return false;
+  Serial.printf("Connecting WiFi: %s\n", wifiConfig.ssid);
+  oledShowWiFiConnecting(String(wifiConfig.ssid));
+  WiFi.disconnect(true); delay(1000);
+  WiFi.mode(WIFI_STA);   delay(500);
   WiFi.begin(wifiConfig.ssid, wifiConfig.password);
-  
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-    delay(1000);
-    Serial.print(".");
-    attempts++;
-  }
-  
+  int att = 0;
+  while (WiFi.status() != WL_CONNECTED && att < 30) { delay(1000); Serial.print("."); att++; }
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n✅ WiFi connected!");
-    Serial.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
-    Serial.printf("RSSI: %d dBm\n", WiFi.RSSI());
-    isWiFiConnected = true;
-    isOnline = true;
-    
-    // Configure time
-    configTime(0, 0, "pool.ntp.org");
-    
+    Serial.printf("\nWiFi OK: %s\n", WiFi.localIP().toString().c_str());
+    isWiFiConnected = true; isOnline = true;
+    configTime(7 * 3600, 0, "pool.ntp.org");
+    oledShowWiFiConnected(WiFi.localIP().toString());
     return true;
-  } else {
-    Serial.println("\n❌ WiFi connection failed");
-    isWiFiConnected = false;
-    isOnline = false;
-    return false;
   }
+  Serial.println("\nWiFi gagal");
+  isWiFiConnected = false; isOnline = false;
+  oledShowNoWiFi();
+  return false;
 }
 
-// Fungsi untuk memonitor koneksi WiFi
 void checkWiFiConnection() {
-  if (millis() - lastWiFiCheck < 10000) return; // Check setiap 10 detik
+  if (millis() - lastWiFiCheck < 10000) return;
   lastWiFiCheck = millis();
-  
   if (WiFi.status() != WL_CONNECTED) {
     if (isWiFiConnected) {
-      Serial.println("❌ WiFi connection lost! Attempting to reconnect...");
-      isWiFiConnected = false;
-      isOnline = false;
-      
-      // Set device offline di Firebase sebelum reconnect
+      Serial.println("WiFi putus, reconnecting...");
+      isWiFiConnected = false; isOnline = false;
       setDeviceOffline();
-    }
-    
-    // Coba reconnect
-    if (wifiConfig.isValid) {
-      WiFi.reconnect();
-      delay(5000);
-      
-      if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("✅ WiFi reconnected!");
-        isWiFiConnected = true;
-        isOnline = true;
-        
-        // Restart web server jika perlu
-        if (!isServerStarted) {
-          startWebServer();
+      if (wifiConfig.isValid) {
+        oledShowWiFiConnecting(String(wifiConfig.ssid));
+        WiFi.reconnect(); delay(5000);
+        if (WiFi.status() == WL_CONNECTED) {
+          Serial.println("WiFi reconnected");
+          isWiFiConnected = true; isOnline = true;
+          oledShowWiFiConnected(WiFi.localIP().toString());
+          if (!isServerStarted) startWebServer();
+          lastHeartbeat = 0;
         }
-        
-        // Send immediate heartbeat setelah reconnect
-        lastHeartbeat = 0;
       }
     }
   } else {
-    if (!isWiFiConnected) {
-      Serial.println("✅ WiFi connection restored!");
-      isWiFiConnected = true;
-      isOnline = true;
-      
-      // Send immediate heartbeat
-      lastHeartbeat = 0;
-    }
+    if (!isWiFiConnected) { isWiFiConnected = true; isOnline = true; lastHeartbeat = 0; }
   }
 }
 
-// Get mode as string
-String getModeString(ScannerMode mode) {
-  switch (mode) {
-    case MODE_INVENTORY:
-      return "inventory";
-    case MODE_ATTENDANCE:
-      return "attendance";
-    default:
-      return "unknown";
-  }
-}
 
-// Validate NIM format (basic validation)
-bool isValidNIM(String input) {
-  // Check if input is numeric and has reasonable length (8-12 digits)
-  if (input.length() < 8 || input.length() > 12) {
-    return false;
-  }
-  
-  for (int i = 0; i < input.length(); i++) {
-    if (!isDigit(input.charAt(i))) {
-      return false;
-    }
-  }
-  
-  return true;
-}
+// =============================================================================
+//  FIREBASE FUNCTIONS
+// =============================================================================
 
-
-
-// Send attendance to Firebase
-bool sendAttendanceToFirebase(String nim) {
+// 1. Kirim scan ke /scans
+bool sendScanToFirebase(String barcode) {
   if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) {
-    Serial.println("❌ Cannot send attendance to Firebase: No WiFi or Firebase URL");
+    Serial.println("Tidak bisa kirim scan: no WiFi/URL");
     return false;
   }
-  
-  // Only send to attendance endpoint if we're actually in attendance mode
-  if (currentMode != MODE_ATTENDANCE) {
-    Serial.println("❌ Cannot send attendance to Firebase: Not in attendance mode");
-    return false;
-  }
-  
   HTTPClient http;
-  String firebaseEndpoint = String(deviceConfig.firebaseUrl) + "/attendance.json";
-  
-  http.begin(firebaseEndpoint);
+  String url = String(deviceConfig.firebaseUrl) + "/scans.json";
+  http.begin(url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(10000);
-  
-  // Create JSON payload for attendance
-  DynamicJsonDocument doc(1024);
-  doc["nim"] = nim;
-  doc["nama"] = "";
-  doc["deviceId"] = deviceConfig.deviceId;
-  doc["sessionId"] = "seminar-2025";
-  doc["eventName"] = "Seminar Teknologi 2025";
-  doc["location"] = "Auditorium Utama";
-  doc["scanned"] = true;
-  doc["mode"] = "attendance"; // Explicitly mark this as attendance mode data
-  doc["type"] = "attendance_scan"; // Add type field to clarify the data purpose
-  
-  // Add server timestamp
-  JsonObject timestamp = doc.createNestedObject("timestamp");
-  timestamp[".sv"] = "timestamp";
-  
-  String jsonString;
-  serializeJson(doc, jsonString);
-  
-  Serial.println("📤 Sending attendance to Firebase: " + jsonString);
-  
-  int httpResponseCode = http.POST(jsonString);
-  
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-    Serial.println("✅ Attendance Firebase response: " + response);
-    
-    http.end();
-    return true;
+
+  DynamicJsonDocument doc(512);
+  doc["barcode"]   = barcode;
+  doc["deviceId"]  = deviceConfig.deviceId;
+  doc["location"]  = "Warehouse-Scanner";
+  doc["mode"]      = "inventory";
+  doc["processed"] = false;
+  doc["type"]      = "inventory_scan";
+  JsonObject ts    = doc.createNestedObject("timestamp");
+  ts[".sv"]        = "timestamp";
+
+  String json; serializeJson(doc, json);
+  Serial.println("POST /scans: " + json);
+
+  int code = http.POST(json);
+  bool ok  = (code > 0);
+  if (ok) {
+    DynamicJsonDocument res(256); deserializeJson(res, http.getString());
+    Serial.println("Scan ID: " + res["name"].as<String>());
   } else {
-    Serial.printf("❌ Attendance Firebase HTTP Error: %d\n", httpResponseCode);
-    http.end();
-    return false;
+    Serial.printf("/scans HTTP error: %d\n", code);
   }
+  http.end();
+  return ok;
 }
 
-// Fungsi untuk set device offline
-void setDeviceOffline() {
-  if (strlen(deviceConfig.firebaseUrl) == 0) return;
-  
+// 2. Lookup item di /inventory berdasarkan barcode
+InventoryItem lookupInventoryByBarcode(String barcode) {
+  InventoryItem item;
+  item.found = false;
+  if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) return item;
+
   HTTPClient http;
-  String firebaseEndpoint = String(deviceConfig.firebaseUrl) + "/devices/" + String(deviceConfig.deviceId) + "/status.json";
-  
-  http.begin(firebaseEndpoint);
-  http.addHeader("Content-Type", "application/json");
-  
-  int httpResponseCode = http.PUT("\"offline\"");
-  
-  if (httpResponseCode > 0) {
-    Serial.println("📤 Device status set to offline");
+  String url = String(deviceConfig.firebaseUrl) +
+               "/inventory.json?orderBy=\"barcode\"&equalTo=\"" + barcode + "\"";
+  http.begin(url);
+  http.setTimeout(8000);
+  int code = http.GET();
+
+  if (code == 200) {
+    String body = http.getString();
+    Serial.println("Inventory lookup: " + body);
+    DynamicJsonDocument doc(2048);
+    DeserializationError err = deserializeJson(doc, body);
+    if (!err && !doc.isNull() && doc.as<JsonObject>().size() > 0) {
+      for (JsonPair kv : doc.as<JsonObject>()) {
+        JsonObject obj = kv.value().as<JsonObject>();
+        if (obj.containsKey("deleted") && obj["deleted"].as<bool>()) continue;
+        item.id       = kv.key().c_str();
+        item.name     = obj["name"].as<String>();
+        item.barcode  = obj["barcode"].as<String>();
+        item.category = obj["category"].as<String>();
+        item.location = obj["location"].as<String>();
+        item.supplier = obj["supplier"].as<String>();
+        item.quantity = obj["quantity"].as<int>();
+        item.minStock = obj["minStock"].as<int>();
+        item.price    = obj["price"].as<float>();
+        item.found    = true;
+        Serial.printf("Item: %s | Qty: %d | MinStock: %d\n",
+                      item.name.c_str(), item.quantity, item.minStock);
+        break;
+      }
+    } else {
+      Serial.println("Barcode tidak ada di inventory");
+    }
   } else {
-    Serial.printf("❌ Failed to set offline status: %d\n", httpResponseCode);
+    Serial.printf("Inventory lookup error: %d\n", code);
   }
-  
+  http.end();
+  return item;
+}
+
+// 3. Update stok di /inventory/{itemId}
+
+// 4. Update /analytics
+
+// 5. Set device offline
+void setDeviceOffline() {
+  if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) return;
+  HTTPClient http;
+  String url = String(deviceConfig.firebaseUrl) + "/devices/" +
+               String(deviceConfig.deviceId) + "/status.json";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  http.PUT("\"offline\"");
   http.end();
 }
 
-// Send barcode data to Firebase Realtime Database
-bool sendBarcodeToFirebase(String barcode) {
-  if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) {
-    Serial.println("❌ Cannot send to Firebase: No WiFi or Firebase URL");
-    return false;
-  }
-  
-  HTTPClient http;
-  String firebaseEndpoint = String(deviceConfig.firebaseUrl) + "/scans.json";
-  
-  http.begin(firebaseEndpoint);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(10000); // 10 second timeout
-  
-  // Create JSON payload for Firebase
-  DynamicJsonDocument doc(1024);
-  doc["barcode"] = barcode;
-  doc["deviceId"] = deviceConfig.deviceId;
-  doc["processed"] = false;
-  doc["location"] = "Warehouse-Scanner";
-  doc["mode"] = "inventory"; // Explicitly mark this as inventory mode data
-  doc["type"] = "inventory_scan"; // Add type field to clarify the data purpose
-  
-  // Add server timestamp
-  JsonObject timestamp = doc.createNestedObject("timestamp");
-  timestamp[".sv"] = "timestamp";
-  
-  String jsonString;
-  serializeJson(doc, jsonString);
-  
-  Serial.println("📤 Sending inventory barcode to Firebase: " + jsonString);
-  
-  int httpResponseCode = http.POST(jsonString);
-  
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-    Serial.println("✅ Firebase response: " + response);
-    
-    // Parse response to get the generated key
-    DynamicJsonDocument responseDoc(512);
-    deserializeJson(responseDoc, response);
-    String scanId = responseDoc["name"];
-    
-    Serial.println("📝 Scan ID: " + scanId);
-    
-    http.end();
-    return true;
-  } else {
-    Serial.printf("❌ Firebase HTTP Error: %d\n", httpResponseCode);
-    
-    // Jika error, cek koneksi WiFi
-    if (httpResponseCode == -1 || httpResponseCode == -11) {
-      Serial.println("🔍 Checking WiFi connection due to HTTP error...");
-      checkWiFiConnection();
-    }
-    
-    http.end();
-    return false;
-  }
-}
-
-// Send device heartbeat to Firebase - IMPROVED VERSION
+// 6. Heartbeat ke /devices/{deviceId}
 bool sendHeartbeatToFirebase() {
   if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) {
-    Serial.println("❌ Cannot send heartbeat: No WiFi or Firebase URL");
+    Serial.println("Heartbeat: no WiFi/URL");
     return false;
   }
-  
   HTTPClient http;
-  String firebaseEndpoint = String(deviceConfig.firebaseUrl) + "/devices/" + String(deviceConfig.deviceId) + ".json";
-  
-  http.begin(firebaseEndpoint);
+  String url = String(deviceConfig.firebaseUrl) + "/devices/" +
+               String(deviceConfig.deviceId) + ".json";
+  http.begin(url);
   http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000); // 5 second timeout untuk heartbeat
-  
-  // Create JSON payload for device status
-  DynamicJsonDocument doc(1024);
-  doc["status"] = "online";
-  doc["ipAddress"] = WiFi.localIP().toString();
-  doc["uptime"] = (millis() - bootTime) / 1000; // Uptime sejak boot
-  doc["freeHeap"] = ESP.getFreeHeap();
-  doc["scanCount"] = scanCount;
-  doc["rssi"] = WiFi.RSSI();
-  doc["version"] = "3.1";
-  doc["lastHeartbeat"] = millis(); // Client-side timestamp
-  
-  // Add server timestamp untuk lastSeen
-  JsonObject lastSeen = doc.createNestedObject("lastSeen");
-  lastSeen[".sv"] = "timestamp";
-  
-  String jsonString;
-  serializeJson(doc, jsonString);
-  
-  Serial.println("💓 Sending heartbeat to Firebase...");
-  
-  int httpResponseCode = http.PUT(jsonString);
-  
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-    Serial.printf("✅ Heartbeat sent successfully (HTTP %d)\n", httpResponseCode);
-    isOnline = true;
-    http.end();
-    return true;
-  } else {
-    Serial.printf("❌ Heartbeat failed (HTTP %d)\n", httpResponseCode);
-    
-    // Jika gagal kirim heartbeat, cek koneksi
-    if (httpResponseCode == -1 || httpResponseCode == -11) {
-      Serial.println("🔍 Network issue detected, checking WiFi...");
-      isOnline = false;
-      checkWiFiConnection();
-    }
-    
-    http.end();
-    return false;
-  }
+  http.setTimeout(5000);
+
+  DynamicJsonDocument doc(512);
+  doc["status"]        = "online";
+  doc["ipAddress"]     = WiFi.localIP().toString();
+  doc["uptime"]        = (millis() - bootTime) / 1000;
+  doc["freeHeap"]      = ESP.getFreeHeap();
+  doc["scanCount"]     = scanCount;
+  doc["rssi"]          = WiFi.RSSI();
+  doc["version"]       = FIRMWARE_VERSION;
+  doc["lastHeartbeat"] = millis();
+  doc["currentMode"]   = "inventory";
+  JsonObject ls        = doc.createNestedObject("lastSeen");
+  ls[".sv"]            = "timestamp";
+
+  String json; serializeJson(doc, json);
+  Serial.println("PUT /devices/" + String(deviceConfig.deviceId));
+
+  int code = http.PUT(json);
+  bool ok  = (code > 0);
+  if (ok) { isOnline = true; Serial.printf("Heartbeat OK (HTTP %d)\n", code); }
+  else    { isOnline = false; Serial.printf("Heartbeat gagal (%d)\n", code); checkWiFiConnection(); }
+  http.end();
+  return ok;
 }
 
+
+// =============================================================================
+//  BARCODE PROCESSING
+// =============================================================================
+void processInventoryBarcode(String barcode) {
+  Serial.println("Inventory barcode: " + barcode);
+
+  InventoryItem item = lookupInventoryByBarcode(barcode);
+  if (item.found) {
+    Serial.printf("Item: %s | Qty: %d | MinStock: %d\n",
+                  item.name.c_str(), item.quantity, item.minStock);
+    oledShowInventoryFound(item.name, item.quantity, item.minStock);
+  }
+
+  bool sent = sendScanToFirebase(barcode);
+
+  ScanData sd;
+  sd.barcode        = barcode;
+  sd.timestamp      = String(millis());
+  sd.deviceId       = deviceConfig.deviceId;
+  sd.processed      = false;
+  sd.sentToFirebase = sent;
+  scanHistory.push_back(sd);
+  if (scanHistory.size() > 20) scanHistory.erase(scanHistory.begin());
+
+  oledShowBarcode(barcode, item.found ? item.name : "", sent);
+}
+
+void processBarcodeInput(String input) {
+  input.trim();
+  if (input.length() == 0) return;
+  Serial.println("Input: " + input);
+
+  if (input.startsWith("WIFI:")) {
+    String ssid, pass, sec;
+    if (parseWiFiQR(input, ssid, pass, sec)) {
+      strncpy(wifiConfig.ssid,     ssid.c_str(), sizeof(wifiConfig.ssid)    - 1);
+      strncpy(wifiConfig.password, pass.c_str(), sizeof(wifiConfig.password)- 1);
+      wifiConfig.isValid = true;
+      saveWiFiConfig();
+      if (connectToWiFi()) startWebServer();
+    }
+    return;
+  }
+
+  lastBarcode  = input;
+  lastScanTime = millis();
+  scanCount++;
+  processInventoryBarcode(input);
+}
+
+
+// =============================================================================
+//  WEB SERVER
+// =============================================================================
 void startWebServer() {
   if (isServerStarted || !isWiFiConnected) return;
-  
-  Serial.println("🌐 Starting web server...");
-  
   server = new WebServer(80);
-  
-  // Setup HTTP routes
-  server->on("/", HTTP_GET, handleRoot);
-  server->on("/api/status", HTTP_GET, handleApiStatus);
-  server->on("/api/scan", HTTP_GET, handleApiScan);
-  server->on("/api/history", HTTP_GET, handleApiHistory);
-  server->on("/api/config", HTTP_POST, handleApiConfig);
-  server->on("/api/mode", HTTP_GET, handleApiMode);
-  server->on("/api/mode", HTTP_POST, handleApiMode);
-  server->on("/api/attendance", HTTP_POST, handleApiAttendance);
-  server->on("/reset", HTTP_POST, handleReset);
-  
-  // Handle CORS preflight requests
-  server->on("/api/status", HTTP_OPTIONS, handleOptions);
-  server->on("/api/scan", HTTP_OPTIONS, handleOptions);
+  server->on("/",            HTTP_GET,     handleRoot);
+  server->on("/api/status",  HTTP_GET,     handleApiStatus);
+  server->on("/api/scan",    HTTP_GET,     handleApiScan);
+  server->on("/api/history", HTTP_GET,     handleApiHistory);
+  server->on("/api/config",  HTTP_POST,    handleApiConfig);
+  server->on("/reset",       HTTP_POST,    handleReset);
+  server->on("/api/status",  HTTP_OPTIONS, handleOptions);
+  server->on("/api/scan",    HTTP_OPTIONS, handleOptions);
   server->on("/api/history", HTTP_OPTIONS, handleOptions);
-  server->on("/api/config", HTTP_OPTIONS, handleOptions);
-  server->on("/api/mode", HTTP_OPTIONS, handleOptions);
-  server->on("/api/attendance", HTTP_OPTIONS, handleOptions);
-  
+  server->on("/api/config",  HTTP_OPTIONS, handleOptions);
   server->begin();
   isServerStarted = true;
-  Serial.println("✅ Web server started successfully");
+  Serial.println("Web server started: http://" + WiFi.localIP().toString());
 }
 
 void handleRoot() {
   if (!server) return;
-  
-  String statusColor = isOnline ? "rgba(40,167,69,0.3)" : "rgba(220,53,69,0.3)";
-  String statusText = isOnline ? "✓ Scanner Online" : "✗ Scanner Offline";
-  String connectionStatus = isWiFiConnected ? "Connected" : "Disconnected";
-  
   String html = R"rawliteral(
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>ESP32 barcodescanesp32 Scanner</title>
-      <style>
-        body { 
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-          text-align: center; 
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 20px;
-          margin: 0;
-          min-height: 100vh;
-        }
-        .container {
-          background: rgba(255,255,255,0.1);
-          backdrop-filter: blur(10px);
-          padding: 30px;
-          border-radius: 20px;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-          max-width: 800px;
-          margin: 0 auto;
-        }
-        .status { 
-          padding: 15px; 
-          border-radius: 12px; 
-          margin: 15px 0; 
-          background: rgba(255,255,255,0.2);
-          text-align: left;
-          border: 1px solid rgba(255,255,255,0.3);
-        }
-        .online { background: )rawliteral" + statusColor + R"rawliteral(; border-color: rgba(40,167,69,0.5); }
-        .firebase { background: rgba(255,193,7,0.3); border-color: rgba(255,193,7,0.5); }
-        .wifi-info { background: rgba(34,197,94,0.3); border-color: rgba(34,197,94,0.5); }
-        .barcode-display {
-          background: rgba(0,0,0,0.4);
-          padding: 25px;
-          border-radius: 15px;
-          margin: 20px 0;
-          font-family: 'Courier New', monospace;
-          font-size: 1.4em;
-          font-weight: bold;
-          word-break: break-all;
-          border: 2px solid rgba(255,255,255,0.3);
-          min-height: 60px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .btn {
-          background: rgba(255,255,255,0.2);
-          border: 1px solid rgba(255,255,255,0.4);
-          color: white;
-          padding: 12px 20px;
-          border-radius: 10px;
-          cursor: pointer;
-          margin: 8px;
-          font-size: 14px;
-          text-decoration: none;
-          display: inline-block;
-          transition: all 0.3s ease;
-        }
-        .btn:hover {
-          background: rgba(255,255,255,0.3);
-          transform: translateY(-2px);
-        }
-        .config-section {
-          background: rgba(255,255,255,0.1);
-          padding: 20px;
-          border-radius: 12px;
-          margin: 20px 0;
-          text-align: left;
-        }
-        .input-group {
-          margin: 10px 0;
-        }
-        .input-group label {
-          display: block;
-          margin-bottom: 5px;
-          font-weight: bold;
-        }
-        .input-group input {
-          width: 100%;
-          padding: 8px;
-          border: 1px solid rgba(255,255,255,0.3);
-          border-radius: 6px;
-          background: rgba(255,255,255,0.1);
-          color: white;
-          font-size: 14px;
-        }
-        .input-group input::placeholder {
-          color: rgba(255,255,255,0.7);
-        }
-        .status-indicator {
-          display: inline-block;
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          margin-right: 8px;
-        }
-        .status-online { background-color: #28a745; }
-        .status-offline { background-color: #dc3545; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h1>ESP32 barcodescanesp32 Scanner</h1>
-        <p><em>v3.1 - Enhanced Connectivity & Heartbeat</em></p>
-        
-        <div class="status online">
-          <strong>)rawliteral" + statusText + R"rawliteral(</strong><br>
-          <span class="status-indicator )rawliteral" + (isOnline ? "status-online" : "status-offline") + R"rawliteral("></span>
-          Connection: )rawliteral" + connectionStatus + R"rawliteral(<br>
-          Device ID: )rawliteral" + String(deviceConfig.deviceId) + R"rawliteral(<br>
-          <strong>Current Mode: )rawliteral" + getModeString(currentMode) + R"rawliteral(</strong><br>
-          Free Heap: )rawliteral" + String(ESP.getFreeHeap()) + R"rawliteral( bytes<br>
-          Uptime: )rawliteral" + String((millis() - bootTime) / 1000) + R"rawliteral( seconds<br>
-          Total Scans: )rawliteral" + String(scanCount) + R"rawliteral(
-        </div>
-        
-        <div class="status firebase">
-          <strong>Firebase Status</strong><br>
-          Project: barcodescanesp32<br>
-          Database URL: )rawliteral" + String(deviceConfig.firebaseUrl) + R"rawliteral(<br>
-          Real-time Sync: )rawliteral" + (isOnline ? "Active" : "Disconnected") + R"rawliteral(<br>
-          Last Heartbeat: )rawliteral" + String((millis() - lastHeartbeat) / 1000) + R"rawliteral(s ago<br>
-          Heartbeat Interval: 8 seconds
-        </div>
-        
-        <div class="status wifi-info">
-          <strong>WiFi Status</strong><br>
-          SSID: )rawliteral" + String(wifiConfig.ssid) + R"rawliteral(<br>
-          IP: )rawliteral" + WiFi.localIP().toString() + R"rawliteral(<br>
-          Signal: )rawliteral" + String(WiFi.RSSI()) + R"rawliteral( dBm<br>
-          WebSocket: ws://)rawliteral" + WiFi.localIP().toString() + R"rawliteral(:81<br>
-          Auto-Reconnect: Enabled
-        </div>
+<!DOCTYPE html><html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP32 Scanner v6.0</title>
+<style>
+  body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);color:#eee;margin:0;padding:20px;min-height:100vh}
+  .card{background:rgba(255,255,255,.08);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:20px;margin:12px 0}
+  h1{text-align:center;margin-bottom:4px;font-size:1.4em}
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.75em;font-weight:bold;margin-left:8px}
+  .online{background:#22c55e33;color:#4ade80;border:1px solid #4ade8055}
+  .offline{background:#ef444433;color:#f87171;border:1px solid #f8717155}
+  label{display:block;margin-bottom:4px;font-size:.85em;color:#94a3b8}
+  input{width:100%;padding:8px;border:1px solid rgba(255,255,255,.2);border-radius:8px;background:rgba(255,255,255,.05);color:#eee;font-size:.9em;margin-bottom:10px;box-sizing:border-box}
+  button,a.btn{background:rgba(99,102,241,.4);border:1px solid rgba(99,102,241,.6);color:#eee;padding:9px 16px;border-radius:8px;cursor:pointer;margin:4px;font-size:.85em;text-decoration:none;display:inline-block}
+  button:hover,a.btn:hover{background:rgba(99,102,241,.6)}
+  .barcode{font-family:monospace;font-size:1.3em;font-weight:bold;background:rgba(0,0,0,.4);padding:14px;border-radius:10px;text-align:center;word-break:break-all;min-height:48px}
+  table{width:100%;border-collapse:collapse;font-size:.8em}
+  th,td{padding:6px 8px;text-align:left;border-bottom:1px solid rgba(255,255,255,.1)}
+  th{color:#94a3b8}
+  .stat{display:inline-block;background:rgba(255,255,255,.06);border-radius:10px;padding:10px 16px;margin:4px;text-align:center}
+  .stat-n{font-size:1.6em;font-weight:bold;color:#60a5fa}
+  .stat-l{font-size:.75em;color:#94a3b8}
+</style></head><body>
+<h1>ESP32 Scanner <span class="badge )rawliteral";
+  html += isOnline ? "online\">ONLINE" : "offline\">OFFLINE";
+  html += R"rawliteral(</span></h1>
+<p style="text-align:center;color:#94a3b8;font-size:.8em">v6.0 - Inventory Mode - )rawliteral";
+  html += String(deviceConfig.deviceId);
+  html += R"rawliteral(</p>
 
-        <h3>Last Scanned Barcode:</h3>
-        <div class="barcode-display" id="barcode">)rawliteral" + (lastBarcode.length() > 0 ? lastBarcode : "No barcode scanned yet") + R"rawliteral(</div>
-        
-        <div class="config-section">
-          <h4>Mode Control</h4>
-          <div class="input-group">
-            <label>Scanner Mode:</label>
-            <select id="scannerMode" style="width: 100%; padding: 8px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; background: rgba(255,255,255,0.1); color: white;">
-              <option value="inventory" )rawliteral" + (currentMode == MODE_INVENTORY ? "selected" : "") + R"rawliteral(>Inventory Management</option>
-              <option value="attendance" )rawliteral" + (currentMode == MODE_ATTENDANCE ? "selected" : "") + R"rawliteral(>Attendance System</option>
-            </select>
-          </div>
-          <button class="btn" onclick="updateMode()">Update Mode</button>
-          <button class="btn" onclick="testMode()">Test Current Mode</button>
-        </div>
-        
-        <div class="config-section">
-          <h4>Firebase Configuration</h4>
-          <div class="input-group">
-            <label>Firebase Database URL:</label>
-            <input type="text" id="firebaseUrl" value=")rawliteral" + String(deviceConfig.firebaseUrl) + R"rawliteral(" placeholder="https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app">
-          </div>
-          <div class="input-group">
-            <label>Server URL (Backup):</label>
-            <input type="text" id="serverUrl" value=")rawliteral" + String(deviceConfig.serverUrl) + R"rawliteral(" placeholder="https://stokmanager.vercel.app/">
-          </div>
-          <div class="input-group">
-            <label>API Key:</label>
-            <input type="password" id="apiKey" value=")rawliteral" + String(deviceConfig.apiKey) + R"rawliteral(" placeholder="Your API Key (optional)">
-          </div>
-          <button class="btn" onclick="updateConfig()">Update Configuration</button>
-        </div>
-        
-        <div style="margin-top: 30px;">
-          <a href="/api/status" class="btn">API Status</a>
-          <a href="/api/history" class="btn">Scan History</a>
-          <button class="btn" onclick="testFirebase()">Test Firebase</button>
-          <button class="btn" onclick="sendTestHeartbeat()">Test Heartbeat</button>
-        </div>
-        
-        <p><em>Enhanced real-time monitoring with auto-reconnect!</em></p>
-      </div>
+<div class="card">
+  <div>
+    <div class="stat"><div class="stat-n" id="sc">)rawliteral" + String(scanCount) + R"rawliteral(</div><div class="stat-l">Total Scans</div></div>
+    <div class="stat"><div class="stat-n">)rawliteral" + String(WiFi.RSSI()) + R"rawliteral( dBm</div><div class="stat-l">WiFi RSSI</div></div>
+    <div class="stat"><div class="stat-n">)rawliteral" + String(ESP.getFreeHeap()/1024) + R"rawliteral( KB</div><div class="stat-l">Free Heap</div></div>
+    <div class="stat"><div class="stat-n">)rawliteral" + String((millis()-bootTime)/1000) + R"rawliteral(s</div><div class="stat-l">Uptime</div></div>
+  </div>
+</div>
 
-      <script>
-        var ws = null;
+<div class="card">
+  <label>Barcode Terakhir</label>
+  <div class="barcode" id="bc">)rawliteral";
+  html += lastBarcode.length() > 0 ? lastBarcode : "Belum ada scan";
+  html += R"rawliteral(</div>
+  <div style="margin-top:8px;font-size:.8em;color:#94a3b8">
+    WiFi: )rawliteral" + String(wifiConfig.ssid) + " | IP: " + WiFi.localIP().toString() + R"rawliteral(
+  </div>
+</div>
 
-        var updateMode = function() {
-          var mode = document.getElementById('scannerMode').value;
-          
-          fetch('/api/mode', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              mode: mode
-            })
-          })
-          .then(function(response) { return response.json(); })
-          .then(function(data) {
-            alert('Mode updated: ' + data.mode);
-            location.reload();
-          })
-          .catch(function(error) {
-            alert('Error updating mode: ' + error);
-          });
-        };
-        
-        var testMode = function() {
-          var mode = document.getElementById('scannerMode').value;
-          var testCode = mode === 'attendance' ? '10222005' : '1234567890123';
-          
-          if (confirm('Test ' + mode + ' mode with code: ' + testCode + '?')) {
-            fetch('/api/' + mode, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                code: testCode,
-                test: true
-              })
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-              alert('Test result: ' + data.message);
-            })
-            .catch(function(error) {
-              alert('Test failed: ' + error);
-            });
-          }
-        };
-        
-        var updateConfig = function() {
-          var firebaseUrl = document.getElementById('firebaseUrl').value;
-          var serverUrl = document.getElementById('serverUrl').value;
-          var apiKey = document.getElementById('apiKey').value;
-          
-          fetch('/api/config', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              firebaseUrl: firebaseUrl,
-              serverUrl: serverUrl,
-              apiKey: apiKey
-            })
-          })
-          .then(function(response) { return response.json(); })
-          .then(function(data) {
-            alert('Configuration updated successfully!');
-          })
-          .catch(function(error) {
-            alert('Error updating configuration: ' + error);
-          });
-        };
-        
-        var testFirebase = function() {
-          var firebaseUrl = document.getElementById('firebaseUrl').value;
-          if (!firebaseUrl) {
-            alert('Please enter Firebase URL first');
-            return;
-          }
-          
-          fetch(firebaseUrl + '/.json', {
-            method: 'GET'
-          })
-          .then(function(response) {
-            if (response.ok) {
-              alert('Firebase barcodescanesp32 connection successful!');
-            } else {
-              alert('Firebase responded with error: ' + response.status);
-            }
-          })
-          .catch(function(error) {
-            alert('Cannot connect to Firebase: ' + error.message);
-          });
-        };
-        
-        var sendTestHeartbeat = function() {
-          fetch('/api/heartbeat', {
-            method: 'POST'
-          })
-          .then(function(response) { return response.json(); })
-          .then(function(data) {
-            alert('Test heartbeat sent: ' + data.message);
-          })
-          .catch(function(error) {
-            alert('Test heartbeat failed: ' + error);
-          });
-        };
-        
-        setInterval(function() {
-          fetch('/api/scan')
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-              if (data.status === 'success' && data.barcode) {
-                document.getElementById('barcode').textContent = data.barcode;
-              }
-            });
-        }, 5000);
-      </script>
-    </body>
-    </html>
-  )rawliteral";
+<div class="card">
+  <label>Konfigurasi Firebase</label>
+  <label>Database URL</label>
+  <input id="fbUrl" value=")rawliteral" + String(deviceConfig.firebaseUrl) + R"rawliteral(">
+  <label>Server URL (Backup)</label>
+  <input id="srvUrl" value=")rawliteral" + String(deviceConfig.serverUrl) + R"rawliteral(">
+  <label>API Key (opsional)</label>
+  <input type="password" id="apiKey" value=")rawliteral" + String(deviceConfig.apiKey) + R"rawliteral(">
+  <button onclick="saveConfig()">Simpan Konfigurasi</button>
+</div>
 
-  server->send(200, "text/html", html);
+<div class="card">
+  <a class="btn" href="/api/status">Status JSON</a>
+  <a class="btn" href="/api/history">History</a>
+  <button onclick="testScan()">Test Scan</button>
+</div>
+
+<script>
+function saveConfig(){
+  fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      firebaseUrl:document.getElementById('fbUrl').value,
+      serverUrl:document.getElementById('srvUrl').value,
+      apiKey:document.getElementById('apiKey').value
+    })}).then(r=>r.json()).then(d=>alert(d.message));
+}
+function testScan(){
+  var bc=prompt('Masukkan barcode test:','8991906106250');
+  if(!bc)return;
+  fetch('/api/scan?test='+encodeURIComponent(bc))
+    .then(r=>r.json()).then(d=>alert(JSON.stringify(d,null,2)));
+}
+setInterval(function(){
+  fetch('/api/scan').then(r=>r.json()).then(d=>{
+    if(d.barcode) document.getElementById('bc').textContent=d.barcode;
+    document.getElementById('sc').textContent=d.scanCount||'--';
+  });
+},5000);
+</script></body></html>)rawliteral";
+  server->sendHeader("Access-Control-Allow-Origin","*");
+  server->send(200,"text/html",html);
 }
 
 void handleApiStatus() {
   if (!server) return;
-  
   DynamicJsonDocument doc(1024);
-  
-  doc["deviceId"] = deviceConfig.deviceId;
+  doc["deviceId"]      = deviceConfig.deviceId;
+  doc["version"]       = FIRMWARE_VERSION;
   doc["wifiConnected"] = isWiFiConnected;
-  doc["isOnline"] = isOnline;
-  doc["ssid"] = wifiConfig.ssid;
-  doc["ipAddress"] = WiFi.localIP().toString();
-  doc["rssi"] = WiFi.RSSI();
-  doc["lastBarcode"] = lastBarcode;
-  doc["serverUrl"] = deviceConfig.serverUrl;
-  doc["firebaseUrl"] = deviceConfig.firebaseUrl;
-  doc["firebaseProject"] = "barcodescanesp32";
-  doc["uptime"] = (millis() - bootTime) / 1000;
-  doc["freeHeap"] = ESP.getFreeHeap();
-  doc["scanCount"] = scanCount;
-  doc["firebaseEnabled"] = strlen(deviceConfig.firebaseUrl) > 0;
+  doc["isOnline"]      = isOnline;
+  doc["ssid"]          = wifiConfig.ssid;
+  doc["ipAddress"]     = WiFi.localIP().toString();
+  doc["rssi"]          = WiFi.RSSI();
+  doc["lastBarcode"]   = lastBarcode;
+  doc["firebaseUrl"]   = deviceConfig.firebaseUrl;
+  doc["uptime"]        = (millis() - bootTime) / 1000;
+  doc["freeHeap"]      = ESP.getFreeHeap();
+  doc["scanCount"]     = scanCount;
+  doc["currentMode"]   = "inventory";
   doc["lastHeartbeat"] = (millis() - lastHeartbeat) / 1000;
-  doc["version"] = "3.2";
-  doc["currentMode"] = getModeString(currentMode);
-  
-  String response;
-  serializeJson(doc, response);
-  
-  server->sendHeader("Access-Control-Allow-Origin", "*");
-  server->send(200, "application/json", response);
-}
-
-// Handle mode API requests
-void handleApiMode() {
-  if (!server) return;
-  
-  server->sendHeader("Access-Control-Allow-Origin", "*");
-  
-  if (server->method() == HTTP_GET) {
-    // Return current mode
-    DynamicJsonDocument doc(512);
-    doc["currentMode"] = getModeString(currentMode);
-    doc["deviceId"] = deviceConfig.deviceId;
-    doc["timestamp"] = millis();
-    
-    String response;
-    serializeJson(doc, response);
-    server->send(200, "application/json", response);
-    
-  } else if (server->method() == HTTP_POST) {
-    // Update mode
-    if (server->hasArg("plain")) {
-      DynamicJsonDocument doc(512);
-      deserializeJson(doc, server->arg("plain"));
-      
-      if (doc.containsKey("mode")) {
-        String newMode = doc["mode"];
-        
-        Serial.println("📱 Mode change requested: " + newMode);
-        Serial.println("   - Current mode before change: " + getModeString(currentMode));
-        
-        if (newMode == "inventory") {
-          currentMode = MODE_INVENTORY;
-        } else if (newMode == "attendance") {
-          currentMode = MODE_ATTENDANCE;
-        }
-        
-        Serial.println("🔄 Mode changed to: " + getModeString(currentMode));
-        saveDeviceConfig(); // Simpan mode ke EEPROM
-        Serial.println("📊 Mode in device config after save: " + String(deviceConfig.currentMode));
-      }
-      
-      DynamicJsonDocument response(512);
-      response["status"] = "success";
-      response["mode"] = getModeString(currentMode);
-      response["deviceMode"] = deviceConfig.currentMode;
-      
-      String responseStr;
-      serializeJson(response, responseStr);
-      server->send(200, "application/json", responseStr);
-    } else {
-      server->send(400, "application/json", "{\"error\":\"No data provided\"}");
-    }
-  }
-}
-
-// Handle attendance API requests
-void handleApiAttendance() {
-  if (!server) return;
-  
-  server->sendHeader("Access-Control-Allow-Origin", "*");
-  
-  if (server->method() == HTTP_POST) {
-    if (server->hasArg("plain")) {
-      DynamicJsonDocument doc(512);
-      deserializeJson(doc, server->arg("plain"));
-      
-      // First check if we're in attendance mode
-      if (currentMode != MODE_ATTENDANCE) {
-        Serial.println("❌ Cannot process attendance: Device is in " + getModeString(currentMode) + " mode");
-        server->send(400, "application/json", "{\"error\":\"Device is not in attendance mode\",\"currentMode\":\"" + getModeString(currentMode) + "\"}");
-        return;
-      }
-      
-      if (doc.containsKey("code")) {
-        String code = doc["code"];
-        bool isTest = doc.containsKey("test") ? doc["test"] : false;
-        
-        if (isTest) {
-          Serial.println("🧪 Test attendance mode with code: " + code);
-        }
-        
-        // Process as attendance
-        processAttendanceBarcode(code);
-        
-        DynamicJsonDocument response(512);
-        response["status"] = "success";
-        response["message"] = isTest ? "Test attendance processed" : "Attendance processed";
-        response["code"] = code;
-        response["mode"] = "attendance";
-        
-        String responseStr;
-        serializeJson(response, responseStr);
-        server->send(200, "application/json", responseStr);
-      } else {
-        server->send(400, "application/json", "{\"error\":\"No code provided\"}");
-      }
-    } else {
-      server->send(400, "application/json", "{\"error\":\"No data provided\"}");
-    }
-  }
-}
-
-// Process attendance barcode (typically student IDs/NIMs)
-void processAttendanceBarcode(String nim) {
-  Serial.println("🎓 Processing attendance code: " + nim);
-  
-  // Double check if we're in attendance mode
-  if (currentMode != MODE_ATTENDANCE) {
-    Serial.println("❌ Cannot process attendance: Device is in " + getModeString(currentMode) + " mode");
-    return;
-  }
-  
-  // Validate NIM format
-  if (!isValidNIM(nim)) {
-    Serial.println("❌ Invalid NIM format: " + nim);
-    broadcastAttendanceResult(nim, false);
-    return;
-  }
-  
-  // Add to scan history
-  ScanData scanData;
-  scanData.barcode = nim;
-  scanData.timestamp = String(millis());
-  scanData.deviceId = deviceConfig.deviceId;
-  scanData.processed = false;
-  scanData.sentToFirebase = false;
-  
-  // Send attendance record to Firebase if connected
-  if (isWiFiConnected && strlen(deviceConfig.firebaseUrl) > 0) {
-    bool sentToFirebase = sendAttendanceToFirebase(nim);
-    scanData.sentToFirebase = sentToFirebase;
-    
-    if (sentToFirebase) {
-      Serial.println("✅ Attendance record sent to Firebase successfully");
-      broadcastAttendanceResult(nim, true);
-    } else {
-      Serial.println("❌ Failed to send attendance record to Firebase");
-      broadcastAttendanceResult(nim, false);
-    }
-  } else {
-    Serial.println("⚠️ Not connected to WiFi or Firebase URL not configured");
-    broadcastAttendanceResult(nim, false);
-  }
-  
-  // Add to history (limit to last 20 items)
-  scanHistory.push_back(scanData);
-  if (scanHistory.size() > 20) {
-    scanHistory.erase(scanHistory.begin());
-  }
-}
-
-// Process inventory barcode
-void processInventoryBarcode(String barcode) {
-  Serial.println("🏭 Processing inventory barcode: " + barcode);
-  
-  // Double check if we're in inventory mode
-  if (currentMode != MODE_INVENTORY) {
-    Serial.println("❌ Cannot process inventory: Device is in " + getModeString(currentMode) + " mode");
-    return;
-  }
-  
-  // Add to scan history
-  ScanData scanData;
-  scanData.barcode = barcode;
-  scanData.timestamp = String(millis());
-  scanData.deviceId = deviceConfig.deviceId;
-  scanData.processed = false;
-  scanData.sentToFirebase = false;
-  
-  // Send to Firebase if connected
-  if (isWiFiConnected && strlen(deviceConfig.firebaseUrl) > 0) {
-    bool sentToFirebase = sendBarcodeToFirebase(barcode);
-    scanData.sentToFirebase = sentToFirebase;
-    
-    if (sentToFirebase) {
-      Serial.println("✅ Inventory barcode sent to Firebase successfully");
-    } else {
-      Serial.println("❌ Failed to send inventory barcode to Firebase");
-    }
-    
-    // Broadcast the scan result to any connected clients
-    broadcastBarcodeScan(barcode);
-  } else {
-    Serial.println("⚠️ Not connected to WiFi or Firebase URL not configured");
-  }
-  
-  // Add to history (limit to last 20 items)
-  scanHistory.push_back(scanData);
-  if (scanHistory.size() > 20) {
-    scanHistory.erase(scanHistory.begin());
-  }
+  String res; serializeJson(doc, res);
+  server->sendHeader("Access-Control-Allow-Origin","*");
+  server->send(200,"application/json",res);
 }
 
 void handleApiScan() {
   if (!server) return;
-  
-  server->sendHeader("Access-Control-Allow-Origin", "*");
-  
-  DynamicJsonDocument doc(1024);
-  
-  if (lastBarcode.length() == 0) {
-    doc["status"] = "no_scan";
-    doc["message"] = "Tidak ada barcode yang di-scan";
-  } else {
-    doc["status"] = "success";
-    doc["barcode"] = lastBarcode;
-    doc["timestamp"] = lastScanTime;
-    doc["deviceId"] = deviceConfig.deviceId;
-    doc["sentToFirebase"] = true;
-    doc["firebaseProject"] = "barcodescanesp32";
-    doc["isOnline"] = isOnline;
-  }
-  
-  String response;
-  serializeJson(doc, response);
-  server->send(200, "application/json", response);
+  if (server->hasArg("test")) processBarcodeInput(server->arg("test"));
+  DynamicJsonDocument doc(512);
+  doc["status"]      = lastBarcode.length() > 0 ? "success" : "no_scan";
+  doc["barcode"]     = lastBarcode;
+  doc["scanCount"]   = scanCount;
+  doc["currentMode"] = "inventory";
+  doc["isOnline"]    = isOnline;
+  String res; serializeJson(doc, res);
+  server->sendHeader("Access-Control-Allow-Origin","*");
+  server->send(200,"application/json",res);
 }
 
 void handleApiHistory() {
   if (!server) return;
-  
-  server->sendHeader("Access-Control-Allow-Origin", "*");
-  
   DynamicJsonDocument doc(2048);
-  JsonArray scans = doc.createNestedArray("scans");
-  
-  for (const auto& scan : scanHistory) {
-    JsonObject scanObj = scans.createNestedObject();
-    scanObj["barcode"] = scan.barcode;
-    scanObj["timestamp"] = scan.timestamp;
-    scanObj["deviceId"] = scan.deviceId;
-    scanObj["processed"] = scan.processed;
-    scanObj["sentToFirebase"] = scan.sentToFirebase;
+  JsonArray arr = doc.createNestedArray("scans");
+  for (const auto& s : scanHistory) {
+    JsonObject o        = arr.createNestedObject();
+    o["barcode"]        = s.barcode;
+    o["timestamp"]      = s.timestamp;
+    o["deviceId"]       = s.deviceId;
+    o["processed"]      = s.processed;
+    o["sentToFirebase"] = s.sentToFirebase;
+    o["mode"]           = "inventory";
+    o["type"]           = "inventory_scan";
   }
-  
-  doc["total"] = scanHistory.size();
+  doc["total"]    = scanHistory.size();
   doc["deviceId"] = deviceConfig.deviceId;
-  doc["firebaseProject"] = "barcodescanesp32";
-  doc["firebaseEnabled"] = strlen(deviceConfig.firebaseUrl) > 0;
-  doc["isOnline"] = isOnline;
-  
-  String response;
-  serializeJson(doc, response);
-  server->send(200, "application/json", response);
+  String res; serializeJson(doc, res);
+  server->sendHeader("Access-Control-Allow-Origin","*");
+  server->send(200,"application/json",res);
 }
 
 void handleApiConfig() {
   if (!server) return;
-  
-  server->sendHeader("Access-Control-Allow-Origin", "*");
-  
+  server->sendHeader("Access-Control-Allow-Origin","*");
   if (server->hasArg("plain")) {
     DynamicJsonDocument doc(1024);
     deserializeJson(doc, server->arg("plain"));
-    
-    if (doc.containsKey("serverUrl")) {
-      strncpy(deviceConfig.serverUrl, doc["serverUrl"], sizeof(deviceConfig.serverUrl) - 1);
-    }
-    
-    if (doc.containsKey("firebaseUrl")) {
-      strncpy(deviceConfig.firebaseUrl, doc["firebaseUrl"], sizeof(deviceConfig.firebaseUrl) - 1);
-    }
-    
-    if (doc.containsKey("apiKey")) {
-      strncpy(deviceConfig.apiKey, doc["apiKey"], sizeof(deviceConfig.apiKey) - 1);
-    }
-    
+    if (doc.containsKey("firebaseUrl")) strncpy(deviceConfig.firebaseUrl, doc["firebaseUrl"], sizeof(deviceConfig.firebaseUrl)-1);
+    if (doc.containsKey("serverUrl"))   strncpy(deviceConfig.serverUrl,   doc["serverUrl"],   sizeof(deviceConfig.serverUrl)  -1);
+    if (doc.containsKey("apiKey"))      strncpy(deviceConfig.apiKey,      doc["apiKey"],      sizeof(deviceConfig.apiKey)     -1);
     saveDeviceConfig();
-    
-    DynamicJsonDocument response(512);
-    response["status"] = "success";
-    response["message"] = "Configuration updated";
-    
-    String responseStr;
-    serializeJson(response, responseStr);
-    server->send(200, "application/json", responseStr);
+    server->send(200,"application/json","{\"status\":\"success\",\"message\":\"Konfigurasi disimpan\"}");
   } else {
-    server->send(400, "application/json", "{\"error\":\"No data provided\"}");
+    server->send(400,"application/json","{\"error\":\"No data\"}");
   }
 }
 
 void handleReset() {
   if (!server) return;
-  
-  server->sendHeader("Access-Control-Allow-Origin", "*");
-  server->send(200, "text/plain", "Configuration reset. Restarting...");
-  
-  // Reset all configuration
-  memset(&wifiConfig, 0, sizeof(wifiConfig));
+  server->send(200,"text/plain","Resetting...");
+  memset(&wifiConfig,   0, sizeof(wifiConfig));
   memset(&deviceConfig, 0, sizeof(deviceConfig));
-  wifiConfig.isValid = false;
-  deviceConfig.isConfigured = false;
-  
-  EEPROM.put(WIFI_CONFIG_ADDR, wifiConfig);
+  wifiConfig.isValid = false; deviceConfig.isConfigured = false;
+  EEPROM.put(WIFI_CONFIG_ADDR,   wifiConfig);
   EEPROM.put(DEVICE_CONFIG_ADDR, deviceConfig);
   EEPROM.commit();
-  
   delay(1000);
   ESP.restart();
 }
 
 void handleOptions() {
   if (!server) return;
-  
   server->sendHeader("Access-Control-Allow-Origin", "*");
-  server->sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  server->sendHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  server->send(200, "text/plain", "");
+  server->sendHeader("Access-Control-Allow-Methods","GET,POST,OPTIONS");
+  server->sendHeader("Access-Control-Allow-Headers","Content-Type,Authorization");
+  server->send(200,"text/plain","");
 }
 
-void processBarcodeInput(String input) {
-  input.trim();
-  
-  if (input.length() == 0) return;
-  
-  Serial.println("📱 Processing input: " + input);
-  Serial.println("🔄 Current mode: " + getModeString(currentMode));
-  
-  // Check if it's a WiFi QR code
-  if (input.startsWith("WIFI:")) {
-    String ssid, password, security;
-    if (parseWiFiQR(input, ssid, password, security)) {
-      // Save WiFi configuration
-      strncpy(wifiConfig.ssid, ssid.c_str(), sizeof(wifiConfig.ssid) - 1);
-      strncpy(wifiConfig.password, password.c_str(), sizeof(wifiConfig.password) - 1);
-      wifiConfig.isValid = true;
-      
-      saveWiFiConfig();
-      
-      Serial.println("🔄 WiFi configured, attempting connection...");
-      
-      if (connectToWiFi()) {
-        startWebServer();
-        Serial.println("✅ WiFi connected and web server started!");
-      }
-    }
-    return;
-  }
-  
-  // Update common variables
-  lastBarcode = input;
-  lastScanTime = millis();
-  scanCount++;
-  
-  Serial.println("✅ Processing scan: " + input);
-  
-  // Process based on current mode
-  switch (currentMode) {
-    case MODE_ATTENDANCE:
-      processAttendanceBarcode(input);
-      break;
-      
-    case MODE_INVENTORY:
-    default:
-      processInventoryBarcode(input);
-      break;
-  }
-  
-  Serial.println("✅ Barcode processed in " + getModeString(currentMode) + " mode: " + input);
-}
 
-// Broadcast barcode scan to connected clients
-void broadcastBarcodeScan(String barcode) {
-  // This function would normally use WebSockets to broadcast to clients
-  // But since WebSockets are not implemented in this code yet, we'll just log
-  Serial.println("📡 Would broadcast barcode: " + barcode);
-  
-  // Future implementation would be something like:
-  // if (webSocket && webSocket.connectedClients() > 0) {
-  //   DynamicJsonDocument doc(512);
-  //   doc["type"] = "barcode_scan";
-  //   doc["barcode"] = barcode;
-  //   doc["timestamp"] = millis();
-  //   doc["deviceId"] = deviceConfig.deviceId;
-  //   
-  //   String jsonString;
-  //   serializeJson(doc, jsonString);
-  //   webSocket.broadcastTXT(jsonString);
-  // }
-}
-
-// Broadcast attendance result to connected clients
-void broadcastAttendanceResult(String nim, bool success) {
-  // This function would normally use WebSockets to broadcast to clients
-  // But since WebSockets are not implemented in this code yet, we'll just log
-  Serial.println("📡 Would broadcast attendance: " + nim + " (success: " + String(success) + ")");
-  
-  // Future implementation would be something like:
-  // if (webSocket && webSocket.connectedClients() > 0) {
-  //   DynamicJsonDocument doc(512);
-  //   doc["type"] = "attendance_result";
-  //   doc["nim"] = nim;
-  //   doc["success"] = success;
-  //   doc["timestamp"] = millis();
-  //   doc["deviceId"] = deviceConfig.deviceId;
-  //   
-  //   String jsonString;
-  //   serializeJson(doc, jsonString);
-  //   webSocket.broadcastTXT(jsonString);
-  // }
-}
-
-// Setup function
+// =============================================================================
+//  SETUP & LOOP
+// =============================================================================
 void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
-  delay(1000);
-  
-  bootTime = millis(); // Record boot time
-  
-  Serial.println("\n🚀 ESP32 barcodescanesp32 Scanner v3.3");
-  Serial.println("==========================================");
-  Serial.println("🔥 Firebase Project: barcodescanesp32");
-  Serial.println("📦 Enhanced Inventory Management System");
-  Serial.println("🎓 Attendance System Support");
-  Serial.println("🔄 Dynamic Mode Switching");
-  Serial.println("🔌 WebSocket Support");
-  Serial.println("📡 Real-time Communication");
-  Serial.println("💓 Advanced Heartbeat Monitoring");
-  Serial.println("🔧 Auto-Reconnect WiFi");
-  Serial.println("🌏 Region: Asia Southeast 1 (Singapore)");
-  Serial.println("==========================================");
-  Serial.println("Default Mode (before EEPROM load): " + getModeString(currentMode));
-  Serial.println("==========================================");
-  
-  // Initialize EEPROM
+  delay(500);
+  bootTime = millis();
+
+  initOLED();
+  oledShowBoot();
+  delay(1500);
+
+  Serial.println("\nESP32 GM67 Scanner v6.0 - Inventory Only");
+  Serial.println("=========================================");
+  Serial.println("Firebase: barcodescanesp32");
+  Serial.println("Paths: /scans /devices /inventory /analytics");
+  Serial.println("OLED: " + String(oledAvailable ? "OK" : "NOT FOUND"));
+
   EEPROM.begin(EEPROM_SIZE);
-  Serial.println("💾 EEPROM initialized");
-  
-  // Load configurations
   loadWiFiConfig();
   loadDeviceConfig();
-  
-  Serial.println("==========================================");
-  Serial.println("Current Mode (after EEPROM load): " + getModeString(currentMode));
-  Serial.println("==========================================");
-  
-  // Set WiFi mode
-  WiFi.mode(WIFI_STA);
-  delay(500);
-  
-  // Try to connect to WiFi if credentials available
+
+  WiFi.mode(WIFI_STA); delay(500);
+
   if (wifiConfig.isValid) {
-    Serial.println("📋 WiFi credentials found, attempting connection...");
-    
     if (connectToWiFi()) {
       startWebServer();
-      Serial.println("✅ ESP32 barcodescanesp32 Scanner ready and operational!");
-      Serial.println("🌐 Web interface: http://" + WiFi.localIP().toString());
-      Serial.println("🔌 WebSocket: ws://" + WiFi.localIP().toString() + ":81");
-      Serial.println("🔥 Firebase URL: " + String(deviceConfig.firebaseUrl));
+      Serial.println("Web: http://" + WiFi.localIP().toString());
     } else {
-      Serial.println("❌ WiFi connection failed");
-      Serial.println("💡 Scan WiFi QR code to configure network");
+      oledShowNoWiFi();
     }
   } else {
-    Serial.println("🔧 No WiFi configuration found");
-    Serial.println("💡 Scan WiFi QR code to configure network");
-    Serial.println("   Format: WIFI:S:SSID;T:WPA;P:PASSWORD;H:false;;");
+    Serial.println("Scan QR WiFi: WIFI:S:SSID;T:WPA;P:PASS;H:false;;");
+    oledShowNoWiFi();
   }
-  
-  Serial.println("🎯 Setup completed - Ready for operation!");
-  Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
-  Serial.println("📱 Ready to scan barcodes...");
-  
-  // Initialize heartbeat
-  lastHeartbeat = millis();
+
+  lastHeartbeat   = millis();
+  lastOledRefresh = millis();
+  Serial.println("Ready - Mode: INVENTORY");
 }
 
 void loop() {
-  // Handle web server
-  if (isServerStarted && server) {
-    server->handleClient();
-  }
-  
-  // Monitor WiFi connection setiap 10 detik
+  if (isServerStarted && server) server->handleClient();
+
   checkWiFiConnection();
-  
-  // Read from Serial2 (barcode scanner)
+
   if (Serial2.available()) {
     String input = Serial2.readStringUntil('\n');
     processBarcodeInput(input);
   }
-  
-  // Read from Serial (for testing)
+
   if (Serial.available()) {
     String input = Serial.readStringUntil('\n');
-    Serial.println("🧪 Test input received: " + input);
+    Serial.println("Test: " + input);
     processBarcodeInput(input);
   }
-  
-  // Send heartbeat setiap 8 detik (lebih responsif dengan 30 detik timeout)
+
   if (millis() - lastHeartbeat > 8000) {
-    if (isWiFiConnected) {
-      // Send to Firebase first
-      if (strlen(deviceConfig.firebaseUrl) > 0) {
-        bool sentToFirebase = sendHeartbeatToFirebase();
-        if (sentToFirebase) {
-          Serial.println("💓 Heartbeat sent to Firebase barcodescanesp32");
-        } else {
-          Serial.println("❌ Heartbeat failed - checking connection...");
-          checkWiFiConnection();
-        }
-      }
-    }
+    if (isWiFiConnected) sendHeartbeatToFirebase();
     lastHeartbeat = millis();
   }
-  
+
+  oledUpdateIdle();
   delay(100);
 }

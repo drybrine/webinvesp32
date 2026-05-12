@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
-import { onValue, off, ref, update } from "firebase/database"
+import { limitToLast, off, onValue, orderByChild, query, ref, update } from "firebase/database"
 import { database, isFirebaseConfigured } from "@/lib/firebase"
 import { ESP32_CONFIG, ESP32_HELPERS } from "@/lib/esp32-config"
 import { UnifiedQuickActionPopup } from "./unified-quick-action-popup"
@@ -156,7 +156,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
       console.log('🔥 Setting up Firebase scan listener for mobile:', isMobile)
 
       // Listen to scan events from Firebase Realtime Database
-      const scansRef = ref(database!, "scans")
+      const scansRef = query(ref(database!, "scans"), orderByChild("timestamp"), limitToLast(1))
 
       const unsubscribe = onValue(scansRef, (snapshot) => {
       const data = snapshot.val()
@@ -169,13 +169,11 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
       })
       
       if (data) {
-        // Get the most recent scan
-        const scansArray = Object.keys(data)
-          .map((key) => ({
-            id: key,
-            ...data[key],
-          }))
-          .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+        // Query is limited to the newest scan, avoiding full scans download/sort on every update.
+        const scansArray = Object.keys(data).map((key) => ({
+          id: key,
+          ...data[key],
+        }))
 
         if (scansArray.length > 0) {
           const latestScan = scansArray[0]

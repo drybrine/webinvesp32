@@ -5,11 +5,9 @@ import "./globals.css"
 import Navigation from "@/components/navigation"
 import { Toaster } from "@/components/ui/toaster"
 import { RealtimeScanProvider } from "@/components/realtime-scan-provider"
-import { DeviceStatusMonitorProvider } from "@/components/device-status-monitor-provider"
 import ServiceWorkerRegistration from "@/components/service-worker-registration"
 import PerformanceMonitor from "@/components/performance-monitor"
 import FirebaseDeprecationSuppressor from "./firebase-deprecation-suppressor"
-import CSSOptimizer from "@/components/css-optimizer"
 import { criticalCSS } from "@/lib/critical-css"
 
 // Optimized font loading
@@ -59,30 +57,15 @@ export default function RootLayout({
   return (
     <html lang="id" className={inter.className}>
       <head>
-        {/* Critical CSS preload hints */}
-        <link rel="preload" href="/_next/static/css/app/layout.css" as="style" />
-        <link rel="preload" href="/_next/static/css/app/globals.css" as="style" />
-        
         {/* Preconnect to critical origins for faster connections */}
         <link rel="preconnect" href="https://apis.google.com" />
         <link rel="preconnect" href="https://barcodescanesp32.firebaseapp.com" />
         <link rel="preconnect" href="https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app" />
         <link rel="preconnect" href="https://s-apse1c-nss-2204.asia-southeast1.firebasedatabase.app" />
-        
-        {/* DNS prefetch and preconnect for fonts and other resources */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+
+        {/* DNS prefetch for Firebase resources. next/font handles font preconnect/preload. */}
         <link rel="dns-prefetch" href="//www.googleapis.com" />
         <link rel="dns-prefetch" href="//firebasedatabase.app" />
-        
-        {/* Preload critical fonts */}
-        <link
-          rel="preload"
-          href="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
         
         {/* PWA and meta tags */}
         <link rel="manifest" href="/manifest.json" />
@@ -102,16 +85,13 @@ export default function RootLayout({
       </head>
       <body>
         <FirebaseDeprecationSuppressor />
-        <CSSOptimizer />
         <ServiceWorkerRegistration />
         {process.env.NODE_ENV === 'production' && <PerformanceMonitor />}
-        <DeviceStatusMonitorProvider>
-          <RealtimeScanProvider>
+        <RealtimeScanProvider>
             <Navigation />
             <main>{children}</main>
             <Toaster />
           </RealtimeScanProvider>
-        </DeviceStatusMonitorProvider>
       </body>
     </html>
   )

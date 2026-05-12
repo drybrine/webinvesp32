@@ -8,11 +8,13 @@ export async function GET() {
     const db = ensureFirebaseInitialized()
     
     if (!db) {
-      console.error("❌ Firebase database not available")
-      return NextResponse.json(
-        { error: "Firebase database initialization failed" },
-        { status: 500 }
-      )
+      return NextResponse.json({
+        devices: [],
+        total: 0,
+        online: 0,
+        offline: 0,
+        timestamp: new Date().toISOString(),
+      })
     }
 
     const devicesRef = ref(db, "devices")

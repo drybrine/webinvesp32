@@ -3,10 +3,6 @@ import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEm
 import { initializeConnectionMonitor } from "./firebase-connection-monitor"
 import { initializeFirebaseErrorHandling } from "./firebase-error-suppressor" // Use new enhanced error suppressor
 
-// Lazy load Firebase Auth only when needed
-const Auth: any = null;
-const getAuth: any = null;
-
 // Firebase configuration from environment variables
 // These values are loaded from .env file for security
 const firebaseConfig = {
@@ -20,8 +16,10 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "",
 }
 
+let firebaseConfigWarningShown = false
+
 // Validasi konfigurasi Firebase untuk keamanan
-const validateFirebaseConfig = () => {
+const validateFirebaseConfig = (logIssues = true) => {
   const requiredFields: (keyof typeof firebaseConfig)[] = [
     'apiKey', 'authDomain', 'databaseURL', 'projectId', 
     'storageBucket', 'messagingSenderId', 'appId'
@@ -30,32 +28,40 @@ const validateFirebaseConfig = () => {
   const missingFields = requiredFields.filter(field => !firebaseConfig[field]);
   
   if (missingFields.length > 0) {
-    console.error('❌ Firebase configuration incomplete. Missing fields:', missingFields);
-    console.error('💡 Please check your .env file and ensure all required environment variables are set.');
-    console.error('💡 Required environment variables:');
-    console.error('   - NEXT_PUBLIC_FIREBASE_API_KEY');
-    console.error('   - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN');
-    console.error('   - NEXT_PUBLIC_FIREBASE_DATABASE_URL');
-    console.error('   - NEXT_PUBLIC_FIREBASE_PROJECT_ID');
-    console.error('   - NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
-    console.error('   - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID');
-    console.error('   - NEXT_PUBLIC_FIREBASE_APP_ID');
+    if (logIssues && !firebaseConfigWarningShown) {
+      firebaseConfigWarningShown = true
+      console.error('❌ Firebase configuration incomplete. Missing fields:', missingFields);
+      console.error('💡 Please check your .env file and ensure all required environment variables are set.');
+      console.error('💡 Required environment variables:');
+      console.error('   - NEXT_PUBLIC_FIREBASE_API_KEY');
+      console.error('   - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN');
+      console.error('   - NEXT_PUBLIC_FIREBASE_DATABASE_URL');
+      console.error('   - NEXT_PUBLIC_FIREBASE_PROJECT_ID');
+      console.error('   - NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
+      console.error('   - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID');
+      console.error('   - NEXT_PUBLIC_FIREBASE_APP_ID');
+    }
     return false;
   }
   
   // Validasi format API key
   if (firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('AIza')) {
-    console.error('❌ Invalid Firebase API key format');
+    if (logIssues && !firebaseConfigWarningShown) {
+      firebaseConfigWarningShown = true
+      console.error('❌ Invalid Firebase API key format');
+    }
     return false;
   }
   
   // Validasi domain
   if (firebaseConfig.authDomain && !firebaseConfig.authDomain.includes('firebaseapp.com')) {
-    console.error('❌ Invalid Firebase auth domain');
+    if (logIssues && !firebaseConfigWarningShown) {
+      firebaseConfigWarningShown = true
+      console.error('❌ Invalid Firebase auth domain');
+    }
     return false;
   }
   
-  console.log('✅ Firebase configuration validated successfully');
   return true;
 };
 
@@ -226,6 +232,13 @@ const initializeFirebase = () => {
 // Server-side Firebase initialization
 const initializeFirebaseServer = () => {
   try {
+    if (!validateFirebaseConfig(false)) {
+      database = null
+      dbRefs = null
+      firebaseInitialized = false
+      return null
+    }
+
     // Check if Firebase apps have already been initialized
     if (getApps().length === 0) {
       // No apps initialized, so initialize Firebase
@@ -470,6 +483,11 @@ export const isFirebaseConfigured = (): boolean => {
 // Function to wait for Firebase to be ready
 export const waitForFirebaseReady = (timeout: number = 5000): Promise<boolean> => {
   return new Promise((resolve) => {
+    if (!validateFirebaseConfig(false)) {
+      resolve(false);
+      return;
+    }
+
     if (isFirebaseConfigured()) {
       resolve(true);
       return;
@@ -499,7 +517,7 @@ export const getFirebaseStatus = () => {
     hasDatabase: database !== null,
     hasRefs: dbRefs !== null,
     isConfigured: isFirebaseConfigured(),
-    hasValidConfig: validateFirebaseConfig(),
+    hasValidConfig: validateFirebaseConfig(false),
     databaseUrl: firebaseConfig.databaseURL,
   };
 };
