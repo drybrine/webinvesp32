@@ -172,6 +172,37 @@ export default function DashboardPage() {
     stockoutAlertedRef.current = true
   }, [stockRisks, inventoryLoading, transactionsLoading, toast])
 
+  const batteryAlertedRef = useRef(false)
+  useEffect(() => {
+    if (batteryAlertedRef.current) return
+    if (devicesLoading || devices.length === 0) return
+
+    const lowBattery = devices.filter(
+      (d) => d.status === "online" && d.batteryLevel != null && d.batteryLevel < 20,
+    )
+    if (lowBattery.length === 0) return
+
+    const today = new Date().toISOString().slice(0, 10)
+    if (typeof window !== "undefined") {
+      const notifiedIds = new Set(
+        (sessionStorage.getItem(`battery-notified-${today}`) || "").split(",").filter(Boolean),
+      )
+      const newOnes = lowBattery.filter((d) => !notifiedIds.has(d.deviceId))
+      if (newOnes.length === 0) return
+
+      newOnes.forEach((d) => {
+        toast({
+          title: `Baterai rendah: ${d.name || d.deviceId}`,
+          description: `Level ${d.batteryLevel}% — segera charge perangkat.`,
+          variant: "destructive",
+        })
+        notifiedIds.add(d.deviceId)
+      })
+      sessionStorage.setItem(`battery-notified-${today}`, Array.from(notifiedIds).join(","))
+    }
+    batteryAlertedRef.current = true
+  }, [devices, devicesLoading, toast])
+
   if (inventoryLoading || scansLoading || devicesLoading) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center">

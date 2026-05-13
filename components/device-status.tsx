@@ -11,17 +11,21 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { 
-  Smartphone, 
-  RefreshCw, 
-  Wifi, 
-  WifiOff, 
-  Clock, 
-  Database, 
-  Power, 
-  Info, 
+import {
+  Smartphone,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  Clock,
+  Database,
+  Power,
+  Info,
   AlertTriangle,
-  Loader2
+  Loader2,
+  BatteryFull,
+  BatteryMedium,
+  BatteryLow,
+  BatteryWarning
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -95,7 +99,7 @@ const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceI
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center pt-4 border-t border-gray-200/80">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center pt-4 border-t border-gray-200/80">
           <div className="space-y-1">
             <p className="text-xs font-medium text-gray-500">IP Address</p>
             <p className="text-sm font-semibold text-gray-800">{device.ipAddress || "-"}</p>
@@ -105,6 +109,32 @@ const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceI
             <Badge variant={isOnline ? "default" : "destructive"} className={cn(isOnline ? "bg-emerald-500" : "bg-red-500")}>
               {isOnline ? "Online" : "Offline"}
             </Badge>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-500">Baterai</p>
+            <p className="text-sm font-semibold flex items-center justify-center space-x-1">
+              {device.batteryLevel != null ? (
+                <>
+                  {device.batteryLevel >= 60 ? (
+                    <BatteryFull className="h-4 w-4 text-emerald-600" />
+                  ) : device.batteryLevel >= 20 ? (
+                    <BatteryMedium className="h-4 w-4 text-amber-500" />
+                  ) : device.batteryLevel > 5 ? (
+                    <BatteryLow className="h-4 w-4 text-red-500" />
+                  ) : (
+                    <BatteryWarning className="h-4 w-4 text-red-600 animate-pulse" />
+                  )}
+                  <span className={cn(
+                    device.batteryLevel >= 60 ? "text-emerald-700" :
+                    device.batteryLevel >= 20 ? "text-amber-600" : "text-red-600"
+                  )}>
+                    {device.batteryLevel}%
+                  </span>
+                </>
+              ) : (
+                <span className="text-gray-400">—</span>
+              )}
+            </p>
           </div>
           <div className="space-y-1">
             <p className="text-xs font-medium text-gray-500">Total Scan</p>

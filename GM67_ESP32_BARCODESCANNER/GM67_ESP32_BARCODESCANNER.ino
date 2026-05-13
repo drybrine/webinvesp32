@@ -39,7 +39,15 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.0"
+#define FIRMWARE_VERSION   "6.1"
+
+// --- Battery Monitoring (voltage divider R1=R2=100kΩ) ------------------------
+#define BATTERY_PIN          34
+#define BATTERY_MAX_MV     4200  // Li-ion full charge
+#define BATTERY_MIN_MV     3200  // Li-ion cut-off
+#define BATTERY_DIVIDER    2.0f  // (R1+R2)/R2 = 200k/100k
+#define BATTERY_SAMPLES       5  // averaging samples
+// -----------------------------------------------------------------------------
 
 // --- Structs -----------------------------------------------------------------
 struct WiFiConfig {
@@ -123,6 +131,7 @@ void          checkWiFiConnection();
 void          setDeviceOffline();
 uint32_t      calculateChecksum(const void* data, size_t length);
 void          initOLED();
+int           readBatteryLevel();
 void          oledShowBoot();
 void          oledShowStatus();
 void          oledShowBarcode(String barcode, String itemName, bool sent);
@@ -132,6 +141,24 @@ void          oledShowWiFiConnected(String ip);
 void          oledShowNoWiFi();
 void          oledUpdateIdle();
 // -----------------------------------------------------------------------------
+
+
+// =============================================================================
+//  BATTERY LEVEL
+// =============================================================================
+int readBatteryLevel() {
+  long sum = 0;
+  for (int i = 0; i < BATTERY_SAMPLES; i++) {
+    sum += analogRead(BATTERY_PIN);
+    delay(2);
+  }
+  int raw = sum / BATTERY_SAMPLES;
+  float voltageMv = (raw * 3300.0f / 4095.0f) * BATTERY_DIVIDER;
+  int percent = (int)((voltageMv - BATTERY_MIN_MV) * 100.0f / (BATTERY_MAX_MV - BATTERY_MIN_MV));
+  if (percent > 100) percent = 100;
+  if (percent < 0) percent = 0;
+  return percent;
+}
 
 
 // =============================================================================
@@ -629,6 +656,7 @@ bool sendHeartbeatToFirebase() {
   doc["ipAddress"]     = WiFi.localIP().toString();
   doc["uptime"]        = (millis() - bootTime) / 1000;
   doc["freeHeap"]      = ESP.getFreeHeap();
+  doc["batteryLevel"]  = readBatteryLevel();
   doc["scanCount"]     = scanCount;
   doc["rssi"]          = WiFi.RSSI();
   doc["version"]       = FIRMWARE_VERSION;
