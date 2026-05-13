@@ -149,7 +149,17 @@ export default function StatsCards({
                   .map((device, index) => (
                     <div key={device.deviceId || index} className="flex items-center justify-between">
                       <span className="truncate">{device.deviceId || 'Unknown'}</span>
-                      <span className="text-emerald-600 font-medium ml-2">{device.ipAddress || 'N/A'}</span>
+                      <div className="flex items-center gap-2 ml-2">
+                        {device.batteryLevel != null && (
+                          <span className={`text-xs font-medium ${
+                            device.batteryLevel >= 60 ? 'text-emerald-600' :
+                            device.batteryLevel >= 20 ? 'text-amber-500' : 'text-red-500'
+                          }`}>
+                            {device.batteryLevel}%
+                          </span>
+                        )}
+                        <span className="text-emerald-600 font-medium">{device.ipAddress || 'N/A'}</span>
+                      </div>
                     </div>
                   ))}
                 {devices.filter(device => device.status === 'online').length > 2 && (

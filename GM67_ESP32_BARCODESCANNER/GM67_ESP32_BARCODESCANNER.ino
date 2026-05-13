@@ -43,10 +43,11 @@ unsigned long lastBarcodeOnOled   = 0;
 
 // --- Battery Monitoring (voltage divider R1=R2=100kΩ) ------------------------
 #define BATTERY_PIN          34
-#define BATTERY_MAX_MV     4200  // Li-ion full charge
-#define BATTERY_MIN_MV     3200  // Li-ion cut-off
+#define BATTERY_MAX_MV     3800  // calibrated: full charge reads ~3785mV via divider
+#define BATTERY_MIN_MV     3000  // low cut-off (adjust if needed)
 #define BATTERY_DIVIDER    2.0f  // (R1+R2)/R2 = 200k/100k
-#define BATTERY_SAMPLES       5  // averaging samples
+#define BATTERY_SAMPLES      10  // averaging samples per read
+#define BATTERY_EMA_ALPHA  0.1f  // EMA smoothing (0.1 = very smooth, 0.5 = responsive)
 // -----------------------------------------------------------------------------
 
 // --- Structs -----------------------------------------------------------------
@@ -146,7 +147,10 @@ void          oledUpdateIdle();
 // =============================================================================
 //  BATTERY LEVEL
 // =============================================================================
+float batteryEma = -1.0f;  // persistent EMA state (-1 = uninitialized)
+
 int readBatteryLevel() {
+  // Read multiple samples and average to reduce instant noise
   long sum = 0;
   for (int i = 0; i < BATTERY_SAMPLES; i++) {
     sum += analogRead(BATTERY_PIN);
@@ -154,9 +158,18 @@ int readBatteryLevel() {
   }
   int raw = sum / BATTERY_SAMPLES;
   float voltageMv = (raw * 3300.0f / 4095.0f) * BATTERY_DIVIDER;
-  int percent = (int)((voltageMv - BATTERY_MIN_MV) * 100.0f / (BATTERY_MAX_MV - BATTERY_MIN_MV));
+
+  // Apply EMA smoothing across heartbeat calls
+  if (batteryEma < 0) {
+    batteryEma = voltageMv;  // first reading: initialize
+  } else {
+    batteryEma = BATTERY_EMA_ALPHA * voltageMv + (1.0f - BATTERY_EMA_ALPHA) * batteryEma;
+  }
+
+  int percent = (int)((batteryEma - BATTERY_MIN_MV) * 100.0f / (BATTERY_MAX_MV - BATTERY_MIN_MV));
   if (percent > 100) percent = 100;
   if (percent < 0) percent = 0;
+  Serial.printf("Battery: raw=%d, voltageMv=%.0f, ema=%.0f, percent=%d%%\n", raw, voltageMv, batteryEma, percent);
   return percent;
 }
 
