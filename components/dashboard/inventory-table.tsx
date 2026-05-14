@@ -349,12 +349,9 @@ function DesktopRow({ item, onView, onEdit, onDelete, onStockAdjust }: {
           <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => onEdit({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Edit">
             <Edit className="h-4 w-4" />
           </Button>
-          {isLowStock && (
-            <Button size="sm" variant="default" className="h-8 px-2 text-xs" onClick={() => onStockAdjust(item, "add")} title="Restock">
-              <Plus className="h-3 w-3 mr-1" />
-              Restock
-            </Button>
-          )}
+          <Button variant="outline" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:bg-emerald-50" onClick={() => onStockAdjust(item, "add")} title="Tambah Stok">
+            <Plus className="h-4 w-4" />
+          </Button>
           <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => onStockAdjust(item, "subtract")} disabled={item.quantity <= 0} title="Kurangi">
             <Minus className="h-4 w-4" />
           </Button>
