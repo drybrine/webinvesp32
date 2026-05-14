@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import Link from "next/link"
 import {
   Card,
@@ -26,6 +26,7 @@ import {
   buildDailySeriesFromTransactions,
   predictStock,
   type StockDataPoint,
+  type PredictionResult,
 } from "@/lib/stock-prediction"
 import PredictionChart from "@/components/prediction-chart"
 
@@ -56,6 +57,8 @@ export default function PrediksiPage() {
     [activeInventory, selectedId],
   )
 
+  const [predictionSource, setPredictionSource] = useState<"sklearn" | "client" | null>(null)
+
   const history: StockDataPoint[] = useMemo(() => {
     if (!selectedItem) return []
     const itemTx = transactions
@@ -68,14 +71,68 @@ export default function PrediksiPage() {
     return buildDailySeriesFromTransactions(itemTx, Number(selectedItem.quantity) || 0)
   }, [selectedItem, transactions])
 
-  const prediction = useMemo(() => {
-    if (history.length < 2) return null
-    try {
-      return predictStock(history, { horizonDays, trainRatio })
-    } catch {
-      return null
+  const [prediction, setPrediction] = useState<PredictionResult | null>(null)
+
+  useEffect(() => {
+    if (history.length < 2 || !selectedItem) {
+      setPrediction(null)
+      setPredictionSource(null)
+      return
     }
-  }, [history, horizonDays, trainRatio])
+
+    const itemTx = transactions
+      .filter((t) => t.productBarcode === selectedItem.barcode)
+      .map((t) => ({
+        timestamp: Number(t.timestamp) || Date.now(),
+        quantity: Number(t.quantity) || 0,
+        type: t.type as "in" | "out" | "adjustment",
+      }))
+
+    const fetchFromAPI = async () => {
+      try {
+        const res = await fetch("/api/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transactions: itemTx,
+            currentQuantity: Number(selectedItem.quantity) || 0,
+            horizonDays,
+            trainRatio,
+          }),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (data.error) throw new Error(data.error)
+
+        setPrediction({
+          model: {
+            slope: data.model.slope,
+            intercept: data.model.intercept,
+            baseTimestamp: Date.now(),
+            n: data.model.n,
+            avgDailyConsumption: data.model.avgDailyConsumption,
+            dowConsumption: data.model.dowConsumption,
+          },
+          metrics: { mae: data.metrics.mae, rmse: data.metrics.rmse, r2: data.metrics.r2 },
+          forecast: data.forecast,
+          stockoutDate: data.stockoutDate ? new Date(data.stockoutDate) : null,
+        })
+        setPredictionSource("sklearn")
+      } catch {
+        // Fallback ke client-side
+        try {
+          const result = predictStock(history, { horizonDays, trainRatio })
+          setPrediction(result)
+          setPredictionSource("client")
+        } catch {
+          setPrediction(null)
+          setPredictionSource(null)
+        }
+      }
+    }
+
+    fetchFromAPI()
+  }, [history, horizonDays, trainRatio, selectedItem, transactions])
 
   const chartData = useMemo(() => {
     if (!prediction || history.length === 0) return []
@@ -85,7 +142,7 @@ export default function PrediksiPage() {
       actual: h.quantity,
       predicted: null as number | null,
     }))
-    const fc = prediction.forecast.map((f) => ({
+    const fc = prediction.forecast.map((f: { timestamp: number; predictedQuantity: number; estimatedConsumption: number }) => ({
       date: fmt(f.timestamp),
       timestamp: f.timestamp,
       actual: null as number | null,
@@ -106,9 +163,16 @@ export default function PrediksiPage() {
             </Link>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Prediksi Stok</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Linear regression untuk memperkirakan level stok ke depan berdasarkan riwayat transaksi.
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-sm text-muted-foreground">
+              Linear regression untuk memperkirakan level stok ke depan berdasarkan riwayat transaksi.
+            </p>
+            {predictionSource && (
+              <Badge variant={predictionSource === "sklearn" ? "default" : "secondary"} className="text-[10px]">
+                {predictionSource === "sklearn" ? "sklearn (server)" : "client-side"}
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
 
@@ -235,7 +299,7 @@ export default function PrediksiPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
-                {prediction.forecast.map((f) => {
+                {prediction.forecast.map((f: { timestamp: number; predictedQuantity: number; estimatedConsumption: number }) => {
                   const below = f.predictedQuantity < selectedItem.minStock
                   const habis = f.predictedQuantity <= 0
                   return (

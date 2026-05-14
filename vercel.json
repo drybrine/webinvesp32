@@ -7,6 +7,10 @@
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 30
+    },
+    "api/predict.py": {
+      "runtime": "@vercel/python@4.0",
+      "maxDuration": 30
     }
   },
   "headers": [
