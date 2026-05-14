@@ -18,7 +18,7 @@ class handler(BaseHTTPRequestHandler):
             if len(transactions) < 2:
                 self._send_json(400, {
                     'error': 'Minimal 2 transaksi diperlukan',
-                    'source': 'sklearn'
+                    'source': 'numpy-ols'
                 })
                 return
 
@@ -27,7 +27,7 @@ class handler(BaseHTTPRequestHandler):
             if len(series) < 3:
                 self._send_json(400, {
                     'error': 'Data harian kurang dari 3 titik',
-                    'source': 'sklearn'
+                    'source': 'numpy-ols'
                 })
                 return
 
@@ -35,7 +35,7 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(200, result)
 
         except Exception as e:
-            self._send_json(500, {'error': str(e), 'source': 'sklearn'})
+            self._send_json(500, {'error': str(e), 'source': 'numpy-ols'})
 
     def do_OPTIONS(self):
         self.send_response(200)
@@ -56,7 +56,6 @@ MS_PER_DAY = 86400000
 
 
 def build_daily_series(transactions, current_quantity):
-    """Rekonstruksi level stok harian dari transaksi."""
     daily_delta = {}
     for tx in transactions:
         ts = int(tx.get('timestamp', 0))
@@ -82,11 +81,17 @@ def build_daily_series(transactions, current_quantity):
     return series
 
 
-def predict_stock(series, horizon_days=14, train_ratio=0.8):
-    """Linear Regression dengan lag features (sklearn)."""
-    from sklearn.linear_model import LinearRegression
-    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+def ols_fit(X, y):
+    """Ordinary Least Squares via normal equation: beta = (X'X)^-1 X'y"""
+    X_b = np.column_stack([np.ones(len(X)), X])
+    try:
+        beta = np.linalg.lstsq(X_b, y, rcond=None)[0]
+    except np.linalg.LinAlgError:
+        beta = np.zeros(X_b.shape[1])
+    return beta[0], beta[1:]  # intercept, coefficients
 
+
+def predict_stock(series, horizon_days=14, train_ratio=0.8):
     series = sorted(series, key=lambda x: x['timestamp'])
     timestamps = [s['timestamp'] for s in series]
     quantities = [s['quantity'] for s in series]
@@ -98,15 +103,16 @@ def predict_stock(series, horizon_days=14, train_ratio=0.8):
     for i in range(7, n):
         ts = timestamps[i]
         dow = datetime.fromtimestamp(ts / 1000).weekday()
+        window = quantities[max(0, i-7):i]
         features = [
-            quantities[i - 1],                          # lag1
-            quantities[i - 3],                          # lag3
-            quantities[i - 7],                          # lag7
-            np.mean(quantities[max(0, i-7):i]),         # rolling_mean_7
-            np.std(quantities[max(0, i-7):i]),          # rolling_std_7
-            dow,                                        # day_of_week
-            1 if dow >= 5 else 0,                       # is_weekend
-            i,                                          # day_number (trend)
+            quantities[i - 1],              # lag1
+            quantities[i - 3],              # lag3
+            quantities[i - 7],              # lag7
+            float(np.mean(window)),         # rolling_mean_7
+            float(np.std(window)),          # rolling_std_7
+            dow,                            # day_of_week
+            1 if dow >= 5 else 0,           # is_weekend
+            i,                              # day_number (trend)
         ]
         X.append(features)
         y.append(quantities[i])
@@ -114,34 +120,41 @@ def predict_stock(series, horizon_days=14, train_ratio=0.8):
     if len(X) < 4:
         return {
             'error': 'Tidak cukup data setelah feature engineering',
-            'source': 'sklearn'
+            'source': 'numpy-ols'
         }
 
-    X = np.array(X)
-    y = np.array(y)
+    X = np.array(X, dtype=np.float64)
+    y = np.array(y, dtype=np.float64)
 
     # Train/test split kronologis
     split_idx = max(2, int(len(X) * train_ratio))
     X_train, X_test = X[:split_idx], X[split_idx:]
     y_train, y_test = y[:split_idx], y[split_idx:]
 
-    # Fit model
-    model = LinearRegression()
-    model.fit(X_train, y_train)
+    # Fit OLS
+    intercept, coefs = ols_fit(X_train, y_train)
+
+    # Predict function
+    def predict_ols(X_input):
+        return X_input @ coefs + intercept
 
     # Evaluate
     if len(X_test) > 0:
-        y_pred_test = model.predict(X_test)
-        mae = float(mean_absolute_error(y_test, y_pred_test))
-        rmse = float(np.sqrt(mean_squared_error(y_test, y_pred_test)))
-        r2 = float(r2_score(y_test, y_pred_test))
+        y_pred_test = predict_ols(X_test)
+        mae = float(np.mean(np.abs(y_test - y_pred_test)))
+        rmse = float(np.sqrt(np.mean((y_test - y_pred_test) ** 2)))
+        ss_res = float(np.sum((y_test - y_pred_test) ** 2))
+        ss_tot = float(np.sum((y_test - np.mean(y_test)) ** 2))
+        r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
     else:
-        y_pred_train = model.predict(X_train)
-        mae = float(mean_absolute_error(y_train, y_pred_train))
-        rmse = float(np.sqrt(mean_squared_error(y_train, y_pred_train)))
-        r2 = float(r2_score(y_train, y_pred_train))
+        y_pred_train = predict_ols(X_train)
+        mae = float(np.mean(np.abs(y_train - y_pred_train)))
+        rmse = float(np.sqrt(np.mean((y_train - y_pred_train) ** 2)))
+        ss_res = float(np.sum((y_train - y_pred_train) ** 2))
+        ss_tot = float(np.sum((y_train - np.mean(y_train)) ** 2))
+        r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
-    # Hitung avg daily consumption dan dow pattern
+    # Avg daily consumption dan dow pattern
     daily_deltas = []
     dow_deltas = [[] for _ in range(7)]
     for i in range(1, n):
@@ -154,7 +167,7 @@ def predict_stock(series, horizon_days=14, train_ratio=0.8):
                 dow = datetime.fromtimestamp(timestamps[i] / 1000).weekday()
                 dow_deltas[dow].append(consumption)
 
-    avg_daily = float(np.mean(daily_deltas)) if daily_deltas else abs(float(model.coef_[0])) if model.coef_[0] != 0 else 1.0
+    avg_daily = float(np.mean(daily_deltas)) if daily_deltas else abs(float(coefs[7])) if len(coefs) > 7 and coefs[7] != 0 else 1.0
     dow_consumption = [float(np.mean(d)) if d else avg_daily for d in dow_deltas]
 
     # Iterative forecast
@@ -163,14 +176,10 @@ def predict_stock(series, horizon_days=14, train_ratio=0.8):
     last_ts = timestamps[-1]
     forecast = []
 
-    # Build recent history for lag features
-    recent_quantities = list(quantities[-7:])
-
+    np.random.seed(42)
     for day in range(1, horizon_days + 1):
         ts = last_ts + day * MS_PER_DAY
         dow = datetime.fromtimestamp(ts / 1000).weekday()
-
-        # Consumption with dow pattern + noise
         consumption = dow_consumption[dow] * (0.8 + np.random.random() * 0.4)
         current_qty = max(0, current_qty - consumption)
 
@@ -180,8 +189,6 @@ def predict_stock(series, horizon_days=14, train_ratio=0.8):
             'estimatedConsumption': round(float(consumption), 1),
         })
 
-        recent_quantities.append(current_qty)
-
     # Stockout estimation
     stockout_date = None
     if avg_daily > 0 and last_qty > 0:
@@ -190,14 +197,14 @@ def predict_stock(series, horizon_days=14, train_ratio=0.8):
         stockout_date = stockout_ts.strftime('%Y-%m-%d')
 
     return {
-        'source': 'sklearn',
+        'source': 'numpy-ols',
         'model': {
-            'slope': float(model.coef_[7]) if len(model.coef_) > 7 else float(model.coef_[0]),
-            'intercept': float(model.intercept_),
+            'slope': float(coefs[7]) if len(coefs) > 7 else float(coefs[0]),
+            'intercept': float(intercept),
             'avgDailyConsumption': round(avg_daily, 2),
             'dowConsumption': [round(d, 2) for d in dow_consumption],
             'n': int(split_idx),
-            'coefficients': [round(float(c), 4) for c in model.coef_],
+            'coefficients': [round(float(c), 4) for c in coefs],
             'featureNames': ['lag1', 'lag3', 'lag7', 'rolling_mean_7', 'rolling_std_7', 'day_of_week', 'is_weekend', 'day_number'],
         },
         'metrics': {
