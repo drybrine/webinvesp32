@@ -230,13 +230,14 @@ export default function PrediksiPage() {
             <CardHeader>
               <CardTitle className="text-base">Tabel Forecast</CardTitle>
               <CardDescription>
-                Prediksi kuantitas {horizonDays} hari ke depan
+                Prediksi kuantitas {horizonDays} hari ke depan (iterative, tanpa restock)
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
                 {prediction.forecast.map((f) => {
                   const below = f.predictedQuantity < selectedItem.minStock
+                  const habis = f.predictedQuantity <= 0
                   return (
                     <div
                       key={f.timestamp}
@@ -246,11 +247,18 @@ export default function PrediksiPage() {
                       <div className="font-semibold text-base">
                         {f.predictedQuantity.toFixed(1)}
                       </div>
-                      {below && (
+                      <div className="text-muted-foreground">
+                        -{f.estimatedConsumption.toFixed(1)}/hari
+                      </div>
+                      {habis ? (
                         <Badge variant="destructive" className="text-[10px]">
-                          di bawah min
+                          habis
                         </Badge>
-                      )}
+                      ) : below ? (
+                        <Badge variant="secondary" className="text-[10px]">
+                          rendah
+                        </Badge>
+                      ) : null}
                     </div>
                   )
                 })}
@@ -268,6 +276,7 @@ export default function PrediksiPage() {
             <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <KV k="Slope" v={`${prediction.model.slope.toFixed(4)} /hari`} />
               <KV k="Intercept" v={prediction.model.intercept.toFixed(4)} />
+              <KV k="Avg Konsumsi" v={`${prediction.model.avgDailyConsumption.toFixed(2)} /hari`} />
               <KV k="n train" v={String(prediction.model.n)} />
               <KV k="n test" v={String(Math.max(0, history.length - prediction.model.n))} />
               <KV k="MAE" v={prediction.metrics.mae.toFixed(3)} />

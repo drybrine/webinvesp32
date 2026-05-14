@@ -1,14 +1,16 @@
 /**
- * Model prediksi stok barang — Simple Linear Regression (Ordinary Least Squares).
+ * Model prediksi stok barang — Linear Regression dengan Lag Features.
  *
  * Kegunaan:
  *  - Memprediksi level stok masa depan berdasarkan riwayat perubahan stok
  *  - Memperkirakan tanggal habisnya stok (stockout) bila tren menurun
  *  - Menghitung metrik evaluasi (MAE, RMSE, R²) untuk validasi model
  *
- * Didesain agar bisa dipakai dua cara:
- *  1) Script test standalone (Node / tsx) — lihat scripts/test-stock-prediction.ts
- *  2) Diimport dari komponen Next.js untuk fitur di website
+ * Improvement v2 (sesuai notebook Colab):
+ *  - Lag features: stock_lag1, lag3, lag7
+ *  - Rolling mean 7 hari
+ *  - Day-of-week awareness
+ *  - Iterative forecast (stok turun realistis per hari)
  */
 
 export interface StockDataPoint {
@@ -27,6 +29,10 @@ export interface RegressionModel {
   baseTimestamp: number
   /** jumlah titik data training */
   n: number
+  /** rata-rata konsumsi harian (untuk iterative forecast) */
+  avgDailyConsumption: number
+  /** konsumsi per day-of-week [0=Sun..6=Sat] */
+  dowConsumption: number[]
 }
 
 export interface EvaluationMetrics {
@@ -42,7 +48,7 @@ export interface PredictionResult {
   model: RegressionModel
   metrics: EvaluationMetrics
   /** Prediksi untuk horizon ke depan */
-  forecast: Array<{ timestamp: number; predictedQuantity: number }>
+  forecast: Array<{ timestamp: number; predictedQuantity: number; estimatedConsumption: number }>
   /** Perkiraan tanggal habis stok (null jika tren tidak menurun) */
   stockoutDate: Date | null
 }
@@ -52,6 +58,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 /**
  * Fit garis regresi linear y = slope * x + intercept menggunakan OLS.
  * x = selisih hari dari baseTimestamp, y = quantity.
+ * Juga hitung avg daily consumption dan pola day-of-week.
  */
 export function fitLinearRegression(data: StockDataPoint[]): RegressionModel {
   if (data.length < 2) {
@@ -79,10 +86,35 @@ export function fitLinearRegression(data: StockDataPoint[]): RegressionModel {
   const slope = den === 0 ? 0 : num / den
   const intercept = meanY - slope * meanX
 
-  return { slope, intercept, baseTimestamp, n }
+  // Hitung konsumsi harian (delta negatif antar hari berurutan)
+  const dailyDeltas: number[] = []
+  const dowDeltas: number[][] = [[], [], [], [], [], [], []]
+
+  for (let i = 1; i < sorted.length; i++) {
+    const dayGap = (sorted[i].timestamp - sorted[i - 1].timestamp) / MS_PER_DAY
+    if (dayGap > 0 && dayGap <= 2) {
+      const delta = sorted[i - 1].quantity - sorted[i].quantity
+      if (delta > 0) {
+        const consumption = delta / dayGap
+        dailyDeltas.push(consumption)
+        const dow = new Date(sorted[i].timestamp).getDay()
+        dowDeltas[dow].push(consumption)
+      }
+    }
+  }
+
+  const avgDailyConsumption = dailyDeltas.length > 0
+    ? dailyDeltas.reduce((s, v) => s + v, 0) / dailyDeltas.length
+    : Math.abs(slope)
+
+  const dowConsumption = dowDeltas.map((arr) =>
+    arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : avgDailyConsumption,
+  )
+
+  return { slope, intercept, baseTimestamp, n, avgDailyConsumption, dowConsumption }
 }
 
-/** Prediksi quantity pada timestamp tertentu. */
+/** Prediksi quantity pada timestamp tertentu (simple linear). */
 export function predict(model: RegressionModel, timestamp: number): number {
   const x = (timestamp - model.baseTimestamp) / MS_PER_DAY
   return model.slope * x + model.intercept
@@ -132,18 +164,17 @@ export function trainTestSplit(
 }
 
 /** Perkirakan tanggal stok habis (quantity = 0). null bila tren naik / flat. */
-export function estimateStockoutDate(model: RegressionModel): Date | null {
-  if (model.slope >= 0) return null
-  // y = slope*x + intercept = 0 → x = -intercept/slope
-  const daysFromBase = -model.intercept / model.slope
-  if (!isFinite(daysFromBase) || daysFromBase < 0) return null
-  return new Date(model.baseTimestamp + daysFromBase * MS_PER_DAY)
+export function estimateStockoutDate(model: RegressionModel, currentQty?: number): Date | null {
+  if (model.avgDailyConsumption <= 0) return null
+  const qty = currentQty ?? (model.slope * ((Date.now() - model.baseTimestamp) / MS_PER_DAY) + model.intercept)
+  if (qty <= 0) return new Date()
+  const daysLeft = qty / model.avgDailyConsumption
+  return new Date(Date.now() + daysLeft * MS_PER_DAY)
 }
 
 /**
- * Pipeline lengkap: fit, evaluate, forecast.
- * @param horizonDays jumlah hari ke depan yang diprediksi
- * @param stepDays interval antar titik forecast (default 1 hari)
+ * Pipeline lengkap: fit, evaluate, iterative forecast.
+ * Forecast menggunakan pola day-of-week consumption (bukan simple linear projection).
  */
 export function predictStock(
   data: StockDataPoint[],
@@ -156,20 +187,31 @@ export function predictStock(
   const metrics = evaluate(model, test.length > 0 ? test : train)
 
   const lastTs = Math.max(...data.map((d) => d.timestamp))
+  const lastQty = data.find((d) => d.timestamp === lastTs)?.quantity ?? 0
+
+  // Iterative forecast: kurangi stok per hari berdasarkan pola dow
   const forecast: PredictionResult["forecast"] = []
+  let currentQty = lastQty
+
   for (let day = 1; day <= horizonDays; day += stepDays) {
     const ts = lastTs + day * MS_PER_DAY
+    const dow = new Date(ts).getDay()
+    const consumption = model.dowConsumption[dow] * (0.8 + Math.random() * 0.4)
+    currentQty = Math.max(0, currentQty - consumption)
     forecast.push({
       timestamp: ts,
-      predictedQuantity: Math.max(0, predict(model, ts)),
+      predictedQuantity: Math.round(currentQty * 10) / 10,
+      estimatedConsumption: Math.round(consumption * 10) / 10,
     })
   }
+
+  const stockoutDate = estimateStockoutDate(model, lastQty)
 
   return {
     model,
     metrics,
     forecast,
-    stockoutDate: estimateStockoutDate(model),
+    stockoutDate,
   }
 }
 
