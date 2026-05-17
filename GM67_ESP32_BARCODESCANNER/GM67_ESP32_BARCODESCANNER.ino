@@ -696,13 +696,7 @@ bool sendHeartbeatToFirebase() {
 void processInventoryBarcode(String barcode) {
   Serial.println("Inventory barcode: " + barcode);
 
-  InventoryItem item = lookupInventoryByBarcode(barcode);
-  if (item.found) {
-    Serial.printf("Item: %s | Qty: %d | MinStock: %d\n",
-                  item.name.c_str(), item.quantity, item.minStock);
-    oledShowInventoryFound(item.name, item.quantity, item.minStock);
-  }
-
+  // POST ke /scans dulu agar website popup muncul cepat
   bool sent = sendScanToFirebase(barcode);
 
   ScanData sd;
@@ -714,7 +708,15 @@ void processInventoryBarcode(String barcode) {
   scanHistory.push_back(sd);
   if (scanHistory.size() > 20) scanHistory.erase(scanHistory.begin());
 
-  oledShowBarcode(barcode, item.found ? item.name : "", sent);
+  // Lookup inventory setelah scan terkirim (untuk OLED display)
+  InventoryItem item = lookupInventoryByBarcode(barcode);
+  if (item.found) {
+    Serial.printf("Item: %s | Qty: %d | MinStock: %d\n",
+                  item.name.c_str(), item.quantity, item.minStock);
+    oledShowInventoryFound(item.name, item.quantity, item.minStock);
+  } else {
+    oledShowBarcode(barcode, "", sent);
+  }
 }
 
 void processBarcodeInput(String input) {
