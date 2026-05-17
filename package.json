@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "check-env": "node scripts/check-env.js",
-    "dev": "npm run check-env && next dev --webpack",
-    "build": "next build --webpack",
+    "dev": "npm run check-env && next dev",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
