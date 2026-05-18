@@ -14,6 +14,8 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <time.h>
+#include <esp_adc_cal.h>
+#include <driver/adc.h>
 
 // --- OLED SSD1306 I2C --------------------------------------------------------
 #include <Wire.h>
@@ -44,10 +46,13 @@ unsigned long lastBarcodeOnOled   = 0;
 // --- Battery Monitoring (voltage divider R1=R2=100kΩ) ------------------------
 #define BATTERY_PIN          34
 #define BATTERY_MAX_MV     3800  // calibrated: full charge reads ~3785mV via divider
-#define BATTERY_MIN_MV     3000  // low cut-off (adjust if needed)
+#define BATTERY_MIN_MV     3200  // PCM cut-off ~3.2V (LP902040 mati di ~30% dengan MIN=3000)
 #define BATTERY_DIVIDER    2.0f  // (R1+R2)/R2 = 200k/100k
 #define BATTERY_SAMPLES      10  // averaging samples per read
-#define BATTERY_EMA_ALPHA  0.1f  // EMA smoothing (0.1 = very smooth, 0.5 = responsive)
+#define BATTERY_EMA_ALPHA  0.05f // EMA smoothing (lower = smoother, less WiFi sag noise)
+#define BATTERY_HYSTERESIS   2   // only update reported level if change >= 2%
+#define BATTERY_ADC_CHANNEL  ADC1_CHANNEL_6  // GPIO34 = ADC1_CH6
+#define BATTERY_ADC_ATTEN    ADC_ATTEN_DB_11 // 0-3.3V range
 // -----------------------------------------------------------------------------
 
 // --- Structs -----------------------------------------------------------------
@@ -132,6 +137,10 @@ void          checkWiFiConnection();
 void          setDeviceOffline();
 uint32_t      calculateChecksum(const void* data, size_t length);
 void          initOLED();
+void          drawBatteryIcon(int x, int y, int percent);
+void          drawWifiIcon(int x, int y, int rssi);
+void          initBatteryADC();
+void          sampleBattery();
 int           readBatteryLevel();
 void          oledShowBoot();
 void          oledShowStatus();
@@ -145,21 +154,40 @@ void          oledUpdateIdle();
 
 
 // =============================================================================
-//  BATTERY LEVEL
+//  BATTERY LEVEL (esp_adc_cal calibrated)
 // =============================================================================
-float batteryEma = -1.0f;  // persistent EMA state (-1 = uninitialized)
+float batteryEma = -1.0f;       // persistent EMA state (-1 = uninitialized)
+int   lastReportedBattery = -1; // hysteresis: last sent value
+int   cachedBatteryLevel  = -1; // pre-sampled before WiFi activity
+esp_adc_cal_characteristics_t adcCal;  // ADC calibration characteristics
+bool  adcCalibrated = false;
 
-int readBatteryLevel() {
-  // Read multiple samples and average to reduce instant noise
-  long sum = 0;
+void initBatteryADC() {
+  adc1_config_width(ADC_WIDTH_BIT_12);
+  adc1_config_channel_atten(BATTERY_ADC_CHANNEL, BATTERY_ADC_ATTEN);
+
+  esp_adc_cal_value_t calType = esp_adc_cal_characterize(
+    ADC_UNIT_1, BATTERY_ADC_ATTEN, ADC_WIDTH_BIT_12, 1100, &adcCal
+  );
+
+  adcCalibrated = true;
+  Serial.printf("ADC Cal: type=%s, Vref=%dmV\n",
+    (calType == ESP_ADC_CAL_VAL_EFUSE_VREF) ? "eFuse Vref" :
+    (calType == ESP_ADC_CAL_VAL_EFUSE_TP)   ? "eFuse Two Point" :
+    "Default Vref", adcCal.vref);
+}
+
+// Sample battery ADC (call BEFORE any WiFi/HTTP to avoid voltage sag)
+void sampleBattery() {
+  // Use esp_adc_cal multisampling for accurate mV reading
+  uint32_t adcSum = 0;
   for (int i = 0; i < BATTERY_SAMPLES; i++) {
-    sum += analogRead(BATTERY_PIN);
+    adcSum += esp_adc_cal_raw_to_voltage(adc1_get_raw(BATTERY_ADC_CHANNEL), &adcCal);
     delay(2);
   }
-  int raw = sum / BATTERY_SAMPLES;
-  float voltageMv = (raw * 3300.0f / 4095.0f) * BATTERY_DIVIDER;
+  float voltageMv = (adcSum / (float)BATTERY_SAMPLES) * BATTERY_DIVIDER;
 
-  // Apply EMA smoothing across heartbeat calls
+  // EMA smoothing across calls
   if (batteryEma < 0) {
     batteryEma = voltageMv;  // first reading: initialize
   } else {
@@ -169,8 +197,21 @@ int readBatteryLevel() {
   int percent = (int)((batteryEma - BATTERY_MIN_MV) * 100.0f / (BATTERY_MAX_MV - BATTERY_MIN_MV));
   if (percent > 100) percent = 100;
   if (percent < 0) percent = 0;
-  Serial.printf("Battery: raw=%d, voltageMv=%.0f, ema=%.0f, percent=%d%%\n", raw, voltageMv, batteryEma, percent);
-  return percent;
+
+  // Hysteresis: only change reported value if delta >= threshold
+  if (lastReportedBattery < 0 || abs(percent - lastReportedBattery) >= BATTERY_HYSTERESIS) {
+    lastReportedBattery = percent;
+  }
+  cachedBatteryLevel = lastReportedBattery;
+
+  Serial.printf("Battery: mV=%.0f, ema=%.0f, pct=%d%%, reported=%d%%\n",
+                voltageMv, batteryEma, percent, cachedBatteryLevel);
+}
+
+// Return cached battery level (safe to call during WiFi activity)
+int readBatteryLevel() {
+  if (cachedBatteryLevel < 0) sampleBattery(); // fallback if never sampled
+  return cachedBatteryLevel;
 }
 
 
@@ -227,39 +268,85 @@ void oledShowBoot() {
   display.display();
 }
 
+// Draw battery icon at (x, y), size 16x8 pixels
+void drawBatteryIcon(int x, int y, int percent) {
+  // Battery body outline (12x7)
+  display.drawRect(x, y, 13, 7, SSD1306_WHITE);
+  // Battery tip (positive terminal)
+  display.fillRect(x + 13, y + 2, 2, 3, SSD1306_WHITE);
+  // Fill level (0-4 bars inside)
+  int bars = (percent > 80) ? 4 : (percent > 55) ? 3 : (percent > 30) ? 2 : (percent > 10) ? 1 : 0;
+  for (int i = 0; i < bars; i++) {
+    display.fillRect(x + 2 + (i * 3), y + 2, 2, 3, SSD1306_WHITE);
+  }
+}
+
+// Draw WiFi signal icon at (x, y) — 4 bars vertical
+void drawWifiIcon(int x, int y, int rssi) {
+  // bars: bottom-to-top fill based on RSSI
+  // -30 to -50 dBm = 4 bars, -50 to -60 = 3, -60 to -70 = 2, -70 to -80 = 1, < -80 = 0
+  int bars = (rssi >= -50) ? 4 : (rssi >= -60) ? 3 : (rssi >= -70) ? 2 : (rssi >= -80) ? 1 : 0;
+  int h = 2;  // bar height
+  for (int i = 0; i < 4; i++) {
+    int bw = (i + 1) * 2;   // bottom bar widest, top bar narrowest
+    int by = y + 6 - (i + 1) * h;
+    if (i < bars) {
+      display.fillRect(x + (4 - bw) / 2, by, bw, h - 1, SSD1306_WHITE);
+    } else {
+      display.drawRect(x + (4 - bw) / 2, by, bw, h - 1, SSD1306_WHITE);
+    }
+  }
+}
+
 // Status idle
 void oledShowStatus() {
   if (!oledAvailable) return;
   display.clearDisplay();
   display.setTextSize(1);
 
-  // -- ZONA KUNING (y=0..15) --
-  display.setCursor(4, 0);
-  display.println("INVENTORY SCANNER");
-  display.setCursor(0, 8);
-  display.println(isOnline ? "Status: [ONLINE] " : "Status: [OFFLINE]");
+  int batLvl = readBatteryLevel();
 
-  // -- ZONA BIRU (y=16..63) --
+  // -- Row 1 (y=0): Title + Battery icon
+  display.setCursor(0, 0); display.print("SCANNER v6.1");
+  drawBatteryIcon(105, 0, batLvl);
+
+  // -- Row 2 (y=9): Status + Battery %
+  display.setCursor(0, 9);
+  display.print(isOnline ? "[ONLINE]" : "[OFFLINE]");
+  display.setCursor(106, 9);
+  display.print(batLvl); display.print("%");
+
+  // -- Separator 1 (y=17)
   display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
 
-  display.setCursor(0, 20);
+  // -- Row 3 (y=20): WiFi name + signal icon (2 lines to avoid overlap)
   if (isWiFiConnected) {
+    int rssi = WiFi.RSSI();
     String ssid = String(wifiConfig.ssid);
-    if (ssid.length() > 13) ssid = ssid.substring(0, 13) + "..";
-    display.print("WiFi: "); display.println(ssid);
+    if (ssid.length() > 14) ssid = ssid.substring(0, 14) + "..";
+    display.setCursor(0, 20);
+    display.print("WiFi: "); display.print(ssid);
+    display.setCursor(0, 29);
+    display.print("RSSI: "); display.print(rssi); display.print(" dBm");
+    drawWifiIcon(105, 23, rssi);
   } else {
-    display.println("WiFi: Disconnected");
+    display.setCursor(0, 20); display.println("WiFi: Disconnected");
   }
 
-  display.setCursor(0, 30);
+  // -- Row 4 (y=38): IP address
+  display.setCursor(0, 38);
   display.print("IP: ");
   display.println(isWiFiConnected ? WiFi.localIP().toString() : "--.--.--.--");
 
-  display.setCursor(0, 40);
-  display.print("Total Scan: "); display.println(scanCount);
+  // -- Row 5 (y=47): Scan count
+  display.setCursor(0, 47);
+  display.print("Scan: "); display.println(scanCount);
 
-  display.drawLine(0, 51, 127, 51, SSD1306_WHITE);
-  display.setCursor(4, 55); display.println("Ready to scan...");
+  // -- Separator 2 (y=55)
+  display.drawLine(0, 55, 127, 55, SSD1306_WHITE);
+
+  // -- Row 6 (y=57): Ready status
+  display.setCursor(0, 57); display.println("Ready");
 
   display.display();
 }
@@ -506,11 +593,10 @@ bool connectToWiFi() {
   if (!wifiConfig.isValid || strlen(wifiConfig.ssid) == 0) return false;
   Serial.printf("Connecting WiFi: %s\n", wifiConfig.ssid);
   oledShowWiFiConnecting(String(wifiConfig.ssid));
-  WiFi.disconnect(true); delay(1000);
-  WiFi.mode(WIFI_STA);   delay(500);
+  WiFi.disconnect(true); delay(100);  // quick flush, tidak perlu 1000ms
   WiFi.begin(wifiConfig.ssid, wifiConfig.password);
   int att = 0;
-  while (WiFi.status() != WL_CONNECTED && att < 30) { delay(1000); Serial.print("."); att++; }
+  while (WiFi.status() != WL_CONNECTED && att < 20) { delay(500); Serial.print("."); att++; }
   if (WiFi.status() == WL_CONNECTED) {
     Serial.printf("\nWiFi OK: %s\n", WiFi.localIP().toString().c_str());
     isWiFiConnected = true; isOnline = true;
@@ -959,12 +1045,12 @@ void handleOptions() {
 void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
-  delay(500);
+  delay(100);  // minimal stabilize
   bootTime = millis();
 
   initOLED();
   oledShowBoot();
-  delay(1500);
+  delay(500);  // singkat, cukup baca "Initializing..."
 
   Serial.println("\nESP32 GM67 Scanner v6.0 - Inventory Only");
   Serial.println("=========================================");
@@ -976,7 +1062,10 @@ void setup() {
   loadWiFiConfig();
   loadDeviceConfig();
 
-  WiFi.mode(WIFI_STA); delay(500);
+  // Fast WiFi init — persistent=false cegah tulis flash, lebih cepat boot
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(true);
+  WiFi.mode(WIFI_STA);
 
   if (wifiConfig.isValid) {
     if (connectToWiFi()) {
@@ -992,6 +1081,8 @@ void setup() {
 
   lastHeartbeat   = millis();
   lastOledRefresh = millis();
+  initBatteryADC();   // calibrate ADC using eFuse Vref
+  sampleBattery();    // initial battery reading before first heartbeat
   Serial.println("Ready - Mode: INVENTORY");
 }
 
@@ -1012,6 +1103,7 @@ void loop() {
   }
 
   if (millis() - lastHeartbeat > 8000) {
+    sampleBattery();  // read ADC BEFORE WiFi HTTP to avoid voltage sag noise
     if (isWiFiConnected) sendHeartbeatToFirebase();
     lastHeartbeat = millis();
   }
