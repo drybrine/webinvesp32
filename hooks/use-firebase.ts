@@ -451,7 +451,7 @@ export function useFirebaseDevices() {
   }
 }
 
-export function useFirebaseTransactions(limit: number = 1000) {
+export function useFirebaseTransactions(limit: number = 5000) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
