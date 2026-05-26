@@ -113,7 +113,7 @@ export function useFirebaseInventory() {
       }
 
       try {
-        const inventoryRef = ref(database, "inventory");
+        const inventoryRef = query(ref(database, "inventory"), orderByChild("lastUpdated"));
         unsubscribe = onValue(
           inventoryRef,
           (snapshot: DataSnapshot) => {

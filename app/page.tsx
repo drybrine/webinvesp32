@@ -46,7 +46,7 @@ export default function DashboardPage() {
     deleteItem,
   } = useFirebaseInventory()
   const { loading: scansLoading, error: scansError } = { loading: false, error: null }
-  const { transactions, loading: transactionsLoading } = useFirebaseTransactions()
+  const { transactions, loading: transactionsLoading } = useFirebaseTransactions(500)
 
   const {
     devices,
