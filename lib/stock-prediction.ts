@@ -63,15 +63,9 @@ export interface PredictionResult {
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 const FEATURE_NAMES = [
-  "lag1",
-  "lag3",
-  "lag7",
-  "rolling_mean_7",
-  "rolling_std_7",
-  "daily_change",
-  "day_of_week",
-  "is_weekend",
-  "day_number",
+  "lag1",              // stok kemarin (paling prediktif)
+  "daily_change",      // perubahan stok kemarin
+  "rolling_mean_7",    // rata-rata 7 hari
 ] as const
 
 // =============================================================================
@@ -108,21 +102,17 @@ function buildFeatures(quantities: number[], timestamps: number[]): {
   const X: number[][] = []
   const y: number[] = []
 
-  // Skip 7 hari pertama agar lag7 valid
+  // Skip 7 hari pertama agar rolling_mean_7 valid
   for (let i = 7; i < quantities.length - 1; i++) {
-    const lag1 = quantities[i - 1]
-    const lag3 = quantities[i - 3]
-    const lag7 = quantities[i - 7]
     const window = quantities.slice(i - 7, i)
     const mean7 = window.reduce((s, v) => s + v, 0) / window.length
-    const variance = window.reduce((s, v) => s + (v - mean7) ** 2, 0) / window.length
-    const std7 = Math.sqrt(variance)
     const dailyChange = quantities[i] - quantities[i - 1]
-    const dow = new Date(timestamps[i]).getDay()
-    const isWeekend = dow === 0 || dow === 6 ? 1 : 0
-    const dayNum = i
 
-    X.push([lag1, lag3, lag7, mean7, std7, dailyChange, dow, isWeekend, dayNum])
+    X.push([
+      quantities[i - 1],     // lag1
+      dailyChange,           // daily_change
+      mean7,                 // rolling_mean_7
+    ])
     y.push(quantities[i + 1])  // target = stok besok
   }
 
@@ -305,19 +295,15 @@ export function evaluate(model: RegressionModel, testData: StockDataPoint[]): Ev
   for (let i = startIdx; i < quantities.length; i++) {
     let yPred: number
     if (hasMLR && i >= 7) {
-      const lag1 = quantities[i - 1]
-      const lag3 = quantities[i - 3]
-      const lag7 = quantities[i - 7]
       const window = quantities.slice(i - 7, i)
       const mean7 = window.reduce((s, v) => s + v, 0) / window.length
-      const variance = window.reduce((s, v) => s + (v - mean7) ** 2, 0) / window.length
-      const std7 = Math.sqrt(variance)
       const dailyChange = quantities[i - 1] - quantities[i - 2]
-      const dow = new Date(sorted[i].timestamp).getDay()
-      const isWeekend = dow === 0 || dow === 6 ? 1 : 0
-      const dayNum = model.n + i
 
-      const features = [lag1, lag3, lag7, mean7, std7, dailyChange, dow, isWeekend, dayNum]
+      const features = [
+        quantities[i - 1],   // lag1
+        dailyChange,         // daily_change
+        mean7,               // rolling_mean_7
+      ]
       const scaled = features.map((v, j) => (v - model.scalerMean![j]) / model.scalerStd![j])
       yPred = scaled.reduce((s, v, j) => s + v * model.coefficients![j], model.intercept)
       yPred = Math.max(0, yPred)
@@ -394,19 +380,15 @@ function predictNextDay(
     model.scalerStd
   ) {
     const i = history.length
-    const lag1 = history[i - 1]
-    const lag3 = history[i - 3]
-    const lag7 = history[i - 7]
     const window = history.slice(i - 7, i)
     const mean7 = window.reduce((s, v) => s + v, 0) / window.length
-    const variance = window.reduce((s, v) => s + (v - mean7) ** 2, 0) / window.length
-    const std7 = Math.sqrt(variance)
-    const dailyChange = history.length >= 2 ? history[i - 1] - history[i - 2] : 0
-    const dow = new Date(ts).getDay()
-    const isWeekend = dow === 0 || dow === 6 ? 1 : 0
-    const dayNum = model.n + (history.length - model.n)
+    const dailyChange = i >= 2 ? history[i - 1] - history[i - 2] : 0
 
-    const features = [lag1, lag3, lag7, mean7, std7, dailyChange, dow, isWeekend, dayNum]
+    const features = [
+      history[i - 1],   // lag1
+      dailyChange,      // daily_change
+      mean7,            // rolling_mean_7
+    ]
     const scaled = features.map((v, j) => (v - model.scalerMean![j]) / model.scalerStd![j])
     const pred = scaled.reduce((s, v, j) => s + v * model.coefficients![j], model.intercept)
     return Math.max(0, pred)

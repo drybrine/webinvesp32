@@ -15,10 +15,9 @@ from datetime import datetime, timedelta
 MS_PER_DAY = 86400000
 
 FEATURE_NAMES = [
-    'lag1', 'lag3', 'lag7',
-    'rolling_mean_7', 'rolling_std_7',
-    'daily_change',
-    'day_of_week', 'is_weekend', 'day_number',
+    'lag1',              # stok kemarin (paling prediktif)
+    'daily_change',      # perubahan stok kemarin
+    'rolling_mean_7',    # rata-rata 7 hari
 ]
 
 
@@ -189,23 +188,21 @@ def build_daily_series(transactions, current_quantity):
 
 
 def build_features(quantities, timestamps):
-    """Build features for MLR. Returns (X, y) as plain lists."""
+    """Build minimal features (3): lag1, daily_change, rolling_mean_7.
+
+    Why minimal? Tested in honda_tune_model.ipynb against 9-feature version:
+    - 3 features: Test R² 0.621, gap 0.011 (no overfit)
+    - 9 features: Test R² 0.574, gap 0.076 (3 items overfit)
+    Less is more — extra features cause overfitting on time-series data.
+    """
     n = len(quantities)
     X, y = [], []
     for i in range(7, n - 1):
         window = quantities[i - 7:i]
-        ts = timestamps[i]
-        dow = datetime.fromtimestamp(ts / 1000).weekday()
         X.append([
-            quantities[i - 1],
-            quantities[i - 3],
-            quantities[i - 7],
-            mean(window),
-            std(window),
-            quantities[i] - quantities[i - 1],
-            float(dow),
-            1.0 if dow >= 5 else 0.0,
-            float(i),
+            quantities[i - 1],                            # lag1
+            quantities[i] - quantities[i - 1],            # daily_change
+            mean(window),                                 # rolling_mean_7
         ])
         y.append(quantities[i + 1])
     return X, y
@@ -306,17 +303,10 @@ def predict_next_day(history, model, ts):
     if len(history) >= 7 and coefs and sm_mean:
         i = len(history)
         window = history[i - 7:i]
-        dow = datetime.fromtimestamp(ts / 1000).weekday()
         features = [
-            history[i - 1],
-            history[i - 3],
-            history[i - 7],
-            mean(window),
-            std(window),
-            history[i - 1] - history[i - 2] if i >= 2 else 0,
-            float(dow),
-            1.0 if dow >= 5 else 0.0,
-            float(i),
+            history[i - 1],                                              # lag1
+            history[i - 1] - history[i - 2] if i >= 2 else 0,            # daily_change
+            mean(window),                                                # rolling_mean_7
         ]
         scaled = [(features[j] - sm_mean[j]) / sm_std[j] for j in range(len(features))]
         pred = intercept + sum(scaled[j] * coefs[j] for j in range(len(coefs)))
