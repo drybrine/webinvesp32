@@ -24,7 +24,6 @@ import { AlertTriangle, TrendingDown, TrendingUp, Activity, ArrowLeft } from "lu
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase"
 import {
   buildDailySeriesFromTransactions,
-  predictStock,
   type StockDataPoint,
   type PredictionResult,
 } from "@/lib/stock-prediction"
@@ -57,7 +56,8 @@ export default function PrediksiPage() {
     [activeInventory, selectedId],
   )
 
-  const [predictionSource, setPredictionSource] = useState<"sklearn" | "client" | null>(null)
+  const [predictionSource, setPredictionSource] = useState<"server" | null>(null)
+  const [predictionError, setPredictionError] = useState<string | null>(null)
 
   const history: StockDataPoint[] = useMemo(() => {
     if (!selectedItem) return []
@@ -89,6 +89,7 @@ export default function PrediksiPage() {
       }))
 
     const fetchFromAPI = async () => {
+      setPredictionError(null)
       try {
         const res = await fetch("/api/predict", {
           method: "POST",
@@ -100,7 +101,7 @@ export default function PrediksiPage() {
             trainRatio,
           }),
         })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        if (!res.ok) throw new Error(`Server error: HTTP ${res.status}`)
         const data = await res.json()
         if (data.error) throw new Error(data.error)
 
@@ -117,17 +118,11 @@ export default function PrediksiPage() {
           forecast: data.forecast,
           stockoutDate: data.stockoutDate ? new Date(data.stockoutDate) : null,
         })
-        setPredictionSource("sklearn")
-      } catch {
-        // Fallback ke client-side
-        try {
-          const result = predictStock(history, { horizonDays, trainRatio })
-          setPrediction(result)
-          setPredictionSource("client")
-        } catch {
-          setPrediction(null)
-          setPredictionSource(null)
-        }
+        setPredictionSource("server")
+      } catch (err) {
+        setPrediction(null)
+        setPredictionSource(null)
+        setPredictionError((err as Error).message || "Gagal menghubungi server prediksi.")
       }
     }
 
@@ -172,8 +167,8 @@ export default function PrediksiPage() {
               Linear regression untuk memperkirakan level stok ke depan berdasarkan riwayat transaksi.
             </p>
             {predictionSource && (
-              <Badge variant={predictionSource === "sklearn" ? "default" : "secondary"} className="text-[10px]">
-                {predictionSource === "sklearn" ? "MLR + StandardScaler (server)" : "client-side"}
+              <Badge variant="default" className="text-[10px]">
+                MLR + StandardScaler (server)
               </Badge>
             )}
           </div>
@@ -229,6 +224,15 @@ export default function PrediksiPage() {
           <CardContent className="py-12 text-center text-muted-foreground">
             Data transaksi untuk <strong>{selectedItem.name}</strong> belum cukup (minimal 2 titik).
             Tambahkan transaksi in/out lebih dulu agar model dapat fit.
+          </CardContent>
+        </Card>
+      )}
+
+      {predictionError && selectedItem && history.length >= 2 && (
+        <Card>
+          <CardContent className="py-12 text-center text-destructive">
+            <p className="font-medium">Gagal memuat prediksi</p>
+            <p className="text-sm mt-1 text-muted-foreground">{predictionError}</p>
           </CardContent>
         </Card>
       )}
