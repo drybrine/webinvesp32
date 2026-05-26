@@ -72,3 +72,4 @@ Thumbs.db
 # Dummy data + Arduino build artifacts
 honda-dummy.json
 GM67_ESP32_BARCODESCANNER/build/
+api/__pycache__/
