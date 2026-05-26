@@ -11,7 +11,7 @@ StokManager adalah sistem manajemen inventaris untuk AHASS (Honda Authorized Ser
 - **Hardware**: ESP32 + GM67 Barcode Scanner + OLED SSD1306 + baterai Li-Po
 - **Backend**: Firebase Realtime Database (sumber kebenaran tunggal)
 - **Frontend**: Next.js 16 (App Router, Turbopack) di Vercel
-- **ML**: Linear Regression (OLS) untuk prediksi stockout
+- **ML**: Multi Linear Regression + EMA Smoothing untuk prediksi stockout
 
 ---
 
@@ -40,8 +40,8 @@ StokManager adalah sistem manajemen inventaris untuk AHASS (Honda Authorized Ser
 ┌─────────────────────────────────────────────────────────┐
 │              Next.js 16 Website (Vercel)                 │
 │  Dashboard   → inventaris, stock ±, prediksi ringkas    │
-│  /transaksi  → history, filter, export CSV              │
-│  /prediksi   → Linear Regression chart + forecast       │
+│  /transaksi  → history, filter, export CSV, pagination  │
+│  /prediksi   → MLR chart + forecast + metrics           │
 │  /scan       → manual barcode input                     │
 │  /api/*      → Next.js API Routes + Python serverless   │
 └─────────────────────────────────────────────────────────┘
@@ -75,7 +75,7 @@ GND           ←   GND             GND          ← GND
 
 ### Battery Monitoring
 
-- ADC kalibrasi via `esp_adc_cal` (eFuse Vref)
+- ADC kalibrasi via `esp_adc_cal` (eFuse Vref) + `driver/adc.h`
 - EMA alpha=0.05 untuk smoothing antar heartbeat
 - Hysteresis ±2% — hanya update jika perubahan ≥2%
 - `sampleBattery()` dipanggil **sebelum** HTTP request (hindari voltage sag WiFi)
@@ -92,10 +92,10 @@ GND           ←   GND             GND          ← GND
 
 ```
 Boot (~3 detik)
-  → initOLED → oledShowBoot
+  → initOLED → oledShowBoot (500ms)
   → loadWiFiConfig (EEPROM)
   → WiFi.persistent(false) + connectToWiFi
-  → initBatteryADC + sampleBattery
+  → initBatteryADC (esp_adc_cal eFuse Vref) + sampleBattery
   → loop()
 
 loop() setiap iterasi:
@@ -110,7 +110,7 @@ loop() setiap iterasi:
 
 ```
 GM67 scan barcode
-  → POST /scans/{id}       ← PERTAMA (popup website muncul cepat)
+  → POST /scans/{id}         ← PERTAMA (popup website muncul cepat)
   → GET /inventory/{barcode} ← lookup nama produk
   → tampil di OLED
 ```
@@ -123,7 +123,7 @@ GM67 scan barcode
 │ [ONLINE]               98%    │  status + battery %
 │────────────────────────────────│
 │ WiFi: MySSID                  │  ssid (max 14 char)
-│ RSSI: -50 dBm          [▓▓▓░] │  rssi dBm + wifi icon
+│ RSSI: -50 dBm          [▓▓▓░] │  rssi dBm + wifi signal icon
 │ IP: 192.168.1.100             │  ip address
 │ Scan: 12                      │  total scan
 │────────────────────────────────│
@@ -179,12 +179,13 @@ GM67 scan barcode
   "transactions": {
     "{id}": {
       "itemId": "{id}",
-      "itemName": "Oli Mesin AHM",
-      "type": "stock_in",
+      "productName": "Oli Mesin AHM",
+      "productBarcode": "8992017013015",
+      "type": "out",
       "quantity": 10,
-      "operator": "Manual",
-      "reason": "Restock",
-      "source": "dashboard",
+      "operator": "Mekanik AHASS",
+      "reason": "Penjualan",
+      "source": "scanner",
       "timestamp": 1716123456789
     }
   },
@@ -198,7 +199,7 @@ GM67 scan barcode
 
 ### Realtime Strategy
 
-Semua data di-subscribe via `onValue` listener (bukan polling). Device online/offline dideteksi client-side: threshold 15 detik, re-evaluasi tiap 3 detik.
+Semua data di-subscribe via `onValue` listener (bukan polling). Device online/offline dideteksi client-side: threshold 15 detik, re-evaluasi tiap 3 detik. Transaksi di-fetch dengan `limitToLast(5000)` untuk performa.
 
 ---
 
@@ -208,9 +209,9 @@ Semua data di-subscribe via `onValue` listener (bukan polling). Device online/of
 
 | Route | File | Fungsi |
 |-------|------|--------|
-| `/` | `app/page.tsx` | Dashboard utama: inventaris, stock ±, prediksi ringkas, device status |
-| `/transaksi` | `app/transaksi/page.tsx` | History transaksi, filter jenis/sumber/periode, export CSV |
-| `/prediksi` | `app/prediksi/page.tsx` | Linear Regression chart, forecast tabel, badge model |
+| `/` | `app/page.tsx` | Dashboard: inventaris, stock ±, prediksi ringkas (server-side batch), device status |
+| `/transaksi` | `app/transaksi/page.tsx` | History transaksi, filter, export CSV, pagination 50/halaman |
+| `/prediksi` | `app/prediksi/page.tsx` | MLR chart (30 hari historis + forecast), metrics, badge model |
 | `/scan` | `app/scan/page.tsx` | Manual barcode input |
 
 ### Komponen Utama
@@ -229,7 +230,7 @@ Semua data di-subscribe via `onValue` listener (bukan polling). Device online/of
 
 | Hook | Fungsi |
 |------|--------|
-| `hooks/use-firebase.ts` | CRUD inventaris + transaksi via Firebase |
+| `hooks/use-firebase.ts` | CRUD inventaris + transaksi via Firebase (`limitToLast(5000)`) |
 | `hooks/use-realtime-scan.ts` | Subscribe `/scans` via `onValue` |
 | `hooks/use-realtime-device-status.ts` | Subscribe `/devices`, hitung online/offline |
 | `hooks/use-mobile.tsx` | Deteksi mobile viewport |
@@ -239,7 +240,7 @@ Semua data di-subscribe via `onValue` listener (bukan polling). Device online/of
 | File | Fungsi |
 |------|--------|
 | `lib/firebase.ts` | Firebase init + helper functions |
-| `lib/stock-prediction.ts` | Linear Regression client-side (TypeScript fallback) |
+| `lib/stock-prediction.ts` | MLR client-side fallback (TypeScript, pure math) |
 | `lib/critical-css.ts` | Inline critical CSS untuk performa |
 
 ---
@@ -248,7 +249,7 @@ Semua data di-subscribe via `onValue` listener (bukan polling). Device online/of
 
 | Method | Path | Fungsi |
 |--------|------|--------|
-| POST | `/api/predict` | Python OLS prediction (numpy) — primary |
+| POST | `/api/predict` | Python MLR prediction — single item atau batch (`mode: 'batch'`) |
 | POST | `/api/barcode-scan` | Process barcode scan dari ESP32 |
 | GET | `/api/devices-status` | Status semua device |
 | GET | `/api/heartbeat` | Health check |
@@ -259,39 +260,62 @@ Semua data di-subscribe via `onValue` listener (bukan polling). Device online/of
 
 ---
 
-## 8. Prediksi Stok (Linear Regression)
+## 8. Prediksi Stok (Multi Linear Regression)
 
 ### Model
 
-OLS via normal equation (`numpy.linalg.lstsq`) — pure numpy, tanpa sklearn (Vercel 250MB limit).
+Pure Python (no numpy) — OLS via Gauss-Jordan elimination + Tikhonov ridge regularization (λ=1.0). Tidak pakai numpy agar fit dalam Vercel 250MB serverless limit.
+
+### Pipeline
+
+```
+1. Build daily stock series dari transaksi
+2. Konversi level → raw consumption (clip restock ke 0)
+3. EMA smoothing (alpha=0.05) → smoothed consumption
+4. Feature engineering: [consumption_lag1, day_of_week, is_weekend]
+5. StandardScaler (mean=0, std=1)
+6. OLS fit (train 85%)
+7. Iterative forecast: predict consumption → kurangi dari current_stock
+```
 
 ### Features
 
 | Feature | Deskripsi |
 |---------|-----------|
-| `lag1`, `lag3`, `lag7` | Stok hari sebelumnya |
-| `rolling_mean_7` | Rata-rata 7 hari |
-| `rolling_std_7` | Standar deviasi 7 hari |
-| `day_of_week` | Pola mingguan (0=Senin) |
-| `is_weekend` | Flag akhir pekan |
-| `day_number` | Trend linear |
+| `consumption_lag1` | Konsumsi smoothed kemarin |
+| `day_of_week` | Hari dalam minggu (0=Mon..6=Sun) |
+| `is_weekend` | Flag akhir pekan (Sabtu/Minggu) |
+
+### Kenapa EMA + Consumption (bukan level stok)?
+
+Training pada **level stok** menyebabkan model belajar pola restock → forecast zigzag naik-turun. Training pada **konsumsi smoothed** menghasilkan forecast monoton turun yang realistis.
 
 ### Endpoint
 
 ```
 POST /api/predict
-Body: { transactions: [...], currentQuantity: number, horizonDays: number }
-Response: { forecast: [...], metrics: {mae, rmse, r2}, stockoutDate, model: "numpy-ols (server)" }
+Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
+Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
+Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, source: 'mlr-py' }
 ```
+
+### Performa (dataset uji: 20 suku cadang Honda, 365 hari)
+
+| Metric | Nilai |
+|--------|-------|
+| Avg R² | 0.65 |
+| Items R² > 0.7 | 10/20 (50%) |
+| Items R² > 0.5 | 15/20 (75%) |
+| Zigzag forecast | 0/20 |
+| Train ratio | 85/15 |
 
 ### Fallback
 
-Jika Python serverless gagal → client-side TypeScript OLS di `lib/stock-prediction.ts` dengan badge "client-side".
+Jika Python serverless gagal → client-side TypeScript di `lib/stock-prediction.ts` dengan badge "client-side".
 
-### Performa (dataset uji)
+### Dashboard Batch Prediction
 
-- 20 suku cadang Honda, 365 hari data
-- Test R² = 0.72, gap < 0.05 (tidak overfitting)
+Dashboard memanggil `/api/predict` dengan `mode: 'batch'` untuk mendapatkan top-3 item berisiko stockout. Prediksi dilakukan server-side agar browser tidak berat.
 
 ---
 
@@ -306,7 +330,7 @@ Jika Python serverless gagal → client-side TypeScript OLS di `lib/stock-predic
 | Layer | Platform |
 |-------|----------|
 | Frontend + API Routes | Vercel (auto-deploy dari branch `555`) |
-| Python Serverless | Vercel Python Runtime (`api/predict.py`) |
+| Python Serverless | Vercel Python Runtime (`api/predict.py`) — pure Python, no numpy |
 | Database | Firebase Realtime Database (asia-southeast1) |
 | Production URL | https://stokmanager.app |
 
@@ -332,10 +356,10 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 | Frontend | Next.js 16 (Turbopack), React 19, TypeScript 5.8 |
 | Styling | Tailwind CSS 3.4, shadcn/ui, Radix UI |
 | Backend | Firebase Realtime Database, Next.js API Routes |
-| ML | Python 3 + numpy (serverless), TypeScript fallback |
-| Hardware | ESP32 + GM67 + OLED SSD1306 + TP4056 + Li-Po |
+| ML | Pure Python (OLS + EMA + StandardScaler), TypeScript fallback |
+| Hardware | ESP32 + GM67 + OLED SSD1306 + TP4056 + Li-Po LP902040 |
 | Deploy | Vercel |
 
 ---
 
-*Updated: 2026-05-19*
+*Updated: 2026-05-26*

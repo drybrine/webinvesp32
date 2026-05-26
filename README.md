@@ -1,8 +1,8 @@
 # StokManager
 
-Sistem Manajemen Inventaris Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner dan prediksi stok menggunakan Linear Regression.
+Sistem Manajemen Inventaris Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner dan prediksi stok menggunakan Multi Linear Regression.
 
-Updated: 2026-05-17
+Updated: 2026-05-26
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.1.0-blue)](https://reactjs.org/)
@@ -33,30 +33,34 @@ Buka http://localhost:3000
 - Transaksi otomatis tercatat saat stock in/out (manual maupun scanner)
 - Filter transaksi berdasarkan sumber: Manual (Dashboard) / Scanner ESP32
 - Export data ke CSV
+- Pagination 50 transaksi per halaman
 
-### Prediksi Stok (Linear Regression)
+### Prediksi Stok (Multi Linear Regression)
 - Halaman `/prediksi` — pilih item, atur horizon 1-90 hari
-- Model OLS dengan lag features (lag1/3/7), rolling mean, day-of-week pattern
-- Iterative forecast (stok turun realistis per hari, bukan garis lurus)
-- Python serverless API (`/api/predict`) dengan numpy OLS, fallback ke client-side
-- Kartu ringkas di dashboard: top-3 barang paling berisiko stockout
+- Model: EMA-smoothed consumption + OLS (pure Python, no numpy)
+- Pipeline: level → consumption → EMA(α=0.05) → MLR(lag1, dow, is_weekend)
+- Iterative forecast (stok turun smooth, tidak zigzag)
+- Train ratio 85/15 (optimal dari TSCV tuning)
+- Avg R² = 0.65, 50% item R² > 0.7 (dataset 20 suku cadang Honda, 365 hari)
+- Kartu ringkas di dashboard: top-3 barang paling berisiko stockout (server-side batch)
 - Notifikasi otomatis saat prediksi habis ≤ 7 hari
-- Badge sumber prediksi: "numpy-ols (server)" atau "client-side"
+- Badge sumber prediksi: "MLR + StandardScaler (server)" atau "client-side"
 
 ### Device Management (ESP32)
 - Monitoring realtime via Firebase `onValue` listener (bukan polling)
 - Deteksi online/offline dalam ~16 detik (threshold 15s, re-evaluasi tiap 3s)
-- Battery level monitoring (voltage divider GPIO34, EMA smoothing)
+- Battery level monitoring (voltage divider GPIO34, `esp_adc_cal` eFuse Vref, EMA + hysteresis ±2%)
+- Battery icon + WiFi signal icon di OLED display
 - Notifikasi baterai rendah (<20%) otomatis
-- OLED SSD1306 display: status, IP, scan result
+- OLED SSD1306 display: status, IP, RSSI, battery, scan count
 
 ### Teknologi
 
 | Layer | Stack |
 |-------|-------|
 | Frontend | Next.js 16 (Turbopack), React 19, TypeScript, Tailwind, shadcn/ui |
-| Backend | Firebase Realtime Database, Next.js API Routes, Python Serverless (numpy) |
-| Hardware | ESP32 + GM67 Barcode Scanner + OLED SSD1306 + TP4056 + Li-ion |
+| Backend | Firebase Realtime Database, Next.js API Routes, Python Serverless (pure Python OLS) |
+| Hardware | ESP32 + GM67 Barcode Scanner + OLED SSD1306 + TP4056 + Li-Po LP902040 |
 | Deploy | Vercel (auto-deploy dari branch `555`) |
 
 ## Arsitektur
@@ -80,10 +84,10 @@ Firebase Realtime Database
     ▼
 Next.js Website (Vercel)
     ├── Dashboard             (inventaris, stock +/-, prediksi ringkas, device status)
-    ├── /transaksi            (history, filter jenis/sumber/periode, export CSV)
-    ├── /prediksi             (linear regression, chart SVG, forecast tabel)
+    ├── /transaksi            (history, filter jenis/sumber/periode, export CSV, pagination)
+    ├── /prediksi             (MLR chart, forecast tabel, metrics)
     ├── /scan                 (manual barcode input)
-    └── /api/predict          (Python serverless, numpy OLS)
+    └── /api/predict          (Python serverless, pure Python OLS + EMA)
 ```
 
 ### Data Flow
@@ -125,9 +129,9 @@ npm run check-env  # Validate Firebase env vars
 - ESP32 DevKit V1
 - GM67 Barcode Scanner (UART: RX=GPIO16, TX=GPIO17)
 - OLED SSD1306 128x64 (I2C: SDA=GPIO21, SCL=GPIO22)
-- TP4056 Li-ion Charger
-- Li-ion Battery 3.7V
-- Voltage Divider: 2x 100kΩ (B+ → GPIO34 → GND)
+- TP4056 Li-Po Charger
+- Li-Po Battery LP902040 3.7V 700mAh (PCM)
+- Voltage Divider: 2x 100kΩ + kapasitor 100nF (B+ → GPIO34 → GND)
 
 ### Wiring
 
@@ -136,7 +140,7 @@ ESP32              GM67 Scanner        OLED SSD1306       Battery Monitor
 ─────              ────────────        ────────────       ───────────────
 GPIO16 (RX2)  ←    TX                 GPIO21 (SDA) ↔ SDA  B+ ── R1(100k) ── GPIO34
 GPIO17 (TX2)  →    RX                 GPIO22 (SCL) ↔ SCL  GPIO34 ── R2(100k) ── GND
-5V            →    VCC                3.3V         → VCC
+5V            →    VCC                3.3V         → VCC  C(100nF) antara GPIO34 & GND
 GND           ←    GND                GND          ← GND
 ```
 
@@ -145,38 +149,54 @@ GND           ←    GND                GND          ← GND
 - Version: 6.1
 - Mode: Inventory only (single mode)
 - Heartbeat: tiap 8 detik ke Firebase `/devices/{id}`
-- Battery: EMA smoothing, 10 samples, calibrated (MAX=3800mV, MIN=3000mV)
-- Libraries: WiFi, WebServer, EEPROM, HTTPClient, ArduinoJson v6, Wire, Adafruit_GFX, Adafruit_SSD1306
+- Battery: `esp_adc_cal` eFuse Vref + EMA(α=0.05) + hysteresis ±2%, MIN=3200mV, MAX=3800mV
+- OLED: battery icon (4-bar) + WiFi signal icon (4-bar RSSI)
+- Boot time: ~3 detik (`WiFi.persistent(false)`, delay minimal)
+- Libraries: WiFi, WebServer, EEPROM, HTTPClient, ArduinoJson v6, Wire, Adafruit_GFX, Adafruit_SSD1306, esp_adc_cal, driver/adc
 
 ## Prediksi Stok
 
 ### Model
-Linear Regression (OLS) via normal equation (`numpy.linalg.lstsq`).
+Multi Linear Regression (OLS) via Gauss-Jordan elimination + Tikhonov ridge (λ=1.0). Pure Python — tidak pakai numpy agar fit dalam Vercel 250MB serverless limit.
 
-### Features
-- `lag1`, `lag3`, `lag7` — stok hari sebelumnya
-- `rolling_mean_7`, `rolling_std_7` — statistik 7 hari
-- `day_of_week`, `is_weekend` — pola mingguan
-- `day_number` — trend
+### Pipeline
+```
+1. Transaksi → daily stock series
+2. Level → raw consumption (clip restock ke 0)
+3. EMA smoothing (alpha=0.05) → smoothed consumption
+4. Features: [consumption_lag1, day_of_week, is_weekend]
+5. StandardScaler (mean=0, std=1)
+6. OLS fit (train 85%)
+7. Iterative forecast: predict consumption → kurangi dari current_stock
+```
+
+### Kenapa EMA + Consumption?
+Training pada level stok menyebabkan model belajar pola restock → forecast zigzag. Training pada konsumsi smoothed menghasilkan forecast monoton turun yang realistis.
+
+### Performa (dataset uji)
+- 20 suku cadang Honda AHASS, 365 hari, 6736 transaksi
+- Avg R² = 0.65, R² > 0.7: 10/20 item, Zigzag: 0/20
+- Tuning notebook: `scripts/honda_tune_model.ipynb`
 
 ### Endpoint
 ```
 POST /api/predict
-Body: { transactions: [...], currentQuantity: number, horizonDays: number }
-Response: { forecast: [...], metrics: {mae, rmse, r2}, stockoutDate, model: {...} }
+Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
+Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
+Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, source: 'mlr-py' }
 ```
 
 ### Notebook Testing
 ```bash
 # Google Colab (upload langsung)
-scripts/stock_forecast_colab.ipynb
+scripts/honda_tune_model.ipynb      # model tuning (TSCV, alpha, features)
+scripts/honda_test_model.ipynb      # model testing (4 model comparison)
+scripts/stock_forecast_colab.ipynb  # original notebook
 
-# Atau lokal
-~/.jupyter-venv/bin/jupyter notebook scripts/stock_forecast_colab.ipynb
+# Generate dummy data
+npx tsx scripts/generate-honda-dummy.ts --test
+npx tsx scripts/generate-honda-dummy.ts --output honda-dummy.json
 ```
-
-Dataset: 20 suku cadang Honda, 365 hari, realistic mix (promo/dead days/random variation).
-Hasil: Test R² = 0.72, Gap < 0.05 (no overfitting).
 
 ## Deployment
 
@@ -193,20 +213,18 @@ Set environment variables di Vercel Dashboard → Project Settings → Environme
 - Framework: Next.js
 - Build Command: `npm run build`
 - Output: `.next`
-- Python Function: `api/predict.py` (@vercel/python@4.3.1)
+- Python Function: `api/predict.py` (@vercel/python, pure Python no numpy)
 
 ## Service Worker
 
 `public/sw.js` caches static assets. Firebase Realtime Database traffic (`firebasedatabase.app`, `firebaseio.com`) di-exclude dari cache agar `onValue` listeners tetap realtime.
 
-Setelah deploy baru, user mungkin perlu clear site data jika muncul chunk error dari cache lama.
-
 ## API Endpoints
 
 | Method | Path | Fungsi |
 |--------|------|--------|
-| POST | `/api/predict` | Python OLS prediction (numpy) |
-| POST | `/api/check-device-status` | Cek status device (legacy, tidak dipakai hook) |
+| POST | `/api/predict` | Python MLR prediction — single item atau batch (`mode: 'batch'`) |
+| POST | `/api/check-device-status` | Cek status device (legacy) |
 | POST | `/api/barcode-scan` | Process barcode scan |
 | GET | `/api/devices-status` | Get all device status |
 | GET | `/api/current-page` | ESP32 page mode detection |
