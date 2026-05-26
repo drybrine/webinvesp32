@@ -45,7 +45,7 @@ export default function PrediksiPage() {
 
   const [selectedId, setSelectedId] = useState<string>("")
   const [horizonDays, setHorizonDays] = useState<number>(14)
-  const [trainRatio, setTrainRatio] = useState<number>(0.8)
+  const trainRatio = 0.85  // optimal dari TSCV tuning (notebook honda_tune_model)
 
   const activeInventory = useMemo(
     () => inventory.filter((i) => !i.deleted),
@@ -181,7 +181,7 @@ export default function PrediksiPage() {
           <CardTitle className="text-base">Parameter Model</CardTitle>
           <CardDescription>Pilih barang dan atur horizon prediksi</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="item">Barang</Label>
             <Select value={selectedId} onValueChange={setSelectedId} disabled={loading}>
@@ -207,19 +207,6 @@ export default function PrediksiPage() {
               max={90}
               value={horizonDays}
               onChange={(e) => setHorizonDays(Math.max(1, Math.min(90, Number(e.target.value) || 14)))}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="ratio">Rasio Train ({(trainRatio * 100).toFixed(0)}%)</Label>
-            <Input
-              id="ratio"
-              type="range"
-              min={0.5}
-              max={0.95}
-              step={0.05}
-              value={trainRatio}
-              onChange={(e) => setTrainRatio(Number(e.target.value))}
             />
           </div>
         </CardContent>

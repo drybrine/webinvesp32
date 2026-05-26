@@ -146,7 +146,7 @@ export default function DashboardPage() {
             items,
             transactions: txs,
             horizonDays: 14,
-            trainRatio: 0.8,
+            trainRatio: 0.85,
             topN: 3,
             recentDays: 90,
           }),

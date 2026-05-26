@@ -35,7 +35,7 @@ class handler(BaseHTTPRequestHandler):
             transactions = data.get('transactions', [])
             current_quantity = data.get('currentQuantity', 0)
             horizon_days = data.get('horizonDays', 14)
-            train_ratio = data.get('trainRatio', 0.8)
+            train_ratio = data.get('trainRatio', 0.85)
 
             if len(transactions) < 2:
                 self._send_json(400, {'error': 'Minimal 2 transaksi diperlukan', 'source': 'mlr-py'})
@@ -56,7 +56,7 @@ class handler(BaseHTTPRequestHandler):
         items = data.get('items', [])
         transactions = data.get('transactions', [])
         horizon_days = data.get('horizonDays', 14)
-        train_ratio = data.get('trainRatio', 0.8)
+        train_ratio = data.get('trainRatio', 0.85)
         top_n = data.get('topN', 3)
         recent_days = data.get('recentDays', 90)
 
@@ -323,7 +323,7 @@ def predict_next_day(history, model, ts):
     return max(0, history[-1] - consumption)
 
 
-def predict_stock(series, horizon_days=14, train_ratio=0.8):
+def predict_stock(series, horizon_days=14, train_ratio=0.85):
     series = sorted(series, key=lambda x: x['timestamp'])
     timestamps = [s['timestamp'] for s in series]
     quantities = [s['quantity'] for s in series]

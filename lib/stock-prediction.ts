@@ -347,7 +347,7 @@ export function evaluate(model: RegressionModel, testData: StockDataPoint[]): Ev
  */
 export function trainTestSplit(
   data: StockDataPoint[],
-  trainRatio = 0.8,
+  trainRatio = 0.85,
 ): { train: StockDataPoint[]; test: StockDataPoint[] } {
   const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp)
   const cut = Math.max(2, Math.floor(sorted.length * trainRatio))
@@ -409,7 +409,7 @@ export function predictStock(
   data: StockDataPoint[],
   options: { horizonDays?: number; stepDays?: number; trainRatio?: number } = {},
 ): PredictionResult {
-  const { horizonDays = 14, stepDays = 1, trainRatio = 0.8 } = options
+  const { horizonDays = 14, stepDays = 1, trainRatio = 0.85 } = options
 
   const { train, test } = trainTestSplit(data, trainRatio)
   const model = fitLinearRegression(train)
