@@ -1,22 +1,25 @@
 """
 Stock prediction API — Multi Linear Regression + StandardScaler.
 
-Reference: Tested in scripts/honda_test_model.ipynb on 20 Honda spareparts,
-avg R² 0.61, 18/20 items with R² > 0.5.
-
-Pipeline:
-  1. Build daily stock series from transactions
-  2. Feature engineering (lag1/3/7, rolling mean/std, dow, daily_change, day_number)
-  3. StandardScaler (mean=0, std=1)
-  4. OLS via numpy.linalg.lstsq
-  5. Train/test split (chronological)
-  6. Iterative forecast (predict day -> push as lag1 -> repeat)
+Pure Python implementation (no numpy) to fit Vercel 250MB serverless limit.
+Math: OLS via Gauss-Jordan elimination, StandardScaler manual.
 """
 
 from http.server import BaseHTTPRequestHandler
 import json
-import numpy as np
+import math
+import random
 from datetime import datetime, timedelta
+
+
+MS_PER_DAY = 86400000
+
+FEATURE_NAMES = [
+    'lag1', 'lag3', 'lag7',
+    'rolling_mean_7', 'rolling_std_7',
+    'daily_change',
+    'day_of_week', 'is_weekend', 'day_number',
+]
 
 
 class handler(BaseHTTPRequestHandler):
@@ -26,35 +29,31 @@ class handler(BaseHTTPRequestHandler):
             body = self.rfile.read(content_length)
             data = json.loads(body)
 
-            # Batch mode: predict top-N risks across all items
             if data.get('mode') == 'batch':
                 self._handle_batch(data)
                 return
 
-            # Single item mode (default)
             transactions = data.get('transactions', [])
             current_quantity = data.get('currentQuantity', 0)
             horizon_days = data.get('horizonDays', 14)
             train_ratio = data.get('trainRatio', 0.8)
 
             if len(transactions) < 2:
-                self._send_json(400, {'error': 'Minimal 2 transaksi diperlukan', 'source': 'mlr-numpy'})
+                self._send_json(400, {'error': 'Minimal 2 transaksi diperlukan', 'source': 'mlr-py'})
                 return
 
             series = build_daily_series(transactions, current_quantity)
-
             if len(series) < 10:
-                self._send_json(400, {'error': 'Data harian < 10 titik (perlu untuk MLR)', 'source': 'mlr-numpy'})
+                self._send_json(400, {'error': 'Data harian < 10 titik (perlu untuk MLR)', 'source': 'mlr-py'})
                 return
 
             result = predict_stock(series, horizon_days, train_ratio)
             self._send_json(200, result)
 
         except Exception as e:
-            self._send_json(500, {'error': str(e), 'source': 'mlr-numpy'})
+            self._send_json(500, {'error': str(e), 'source': 'mlr-py'})
 
     def _handle_batch(self, data):
-        """Predict top-N stockout risks across all inventory items."""
         items = data.get('items', [])
         transactions = data.get('transactions', [])
         horizon_days = data.get('horizonDays', 14)
@@ -66,11 +65,9 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(400, {'error': 'No items provided', 'source': 'mlr-batch'})
             return
 
-        # Filter to recent transactions
         cutoff = (datetime.now().timestamp() * 1000) - recent_days * MS_PER_DAY
         recent_tx = [t for t in transactions if int(t.get('timestamp', 0)) >= cutoff]
 
-        # Group by productBarcode
         tx_by_barcode = {}
         for tx in recent_tx:
             bc = tx.get('productBarcode')
@@ -155,24 +152,25 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(data).encode())
 
 
-MS_PER_DAY = 86400000
+# =============================================================================
+#  Helpers (pure Python)
+# =============================================================================
 
-FEATURE_NAMES = [
-    'lag1', 'lag3', 'lag7',
-    'rolling_mean_7', 'rolling_std_7',
-    'daily_change',
-    'day_of_week', 'is_weekend', 'day_number',
-]
+def mean(xs):
+    if not xs: return 0.0
+    return sum(xs) / len(xs)
 
+def std(xs):
+    if not xs: return 0.0
+    m = mean(xs)
+    return math.sqrt(sum((x - m) ** 2 for x in xs) / len(xs))
 
 def build_daily_series(transactions, current_quantity):
-    """Rekonstruksi level stok harian dari transaksi."""
     daily_delta = {}
     for tx in transactions:
         ts = int(tx.get('timestamp', 0))
         qty = int(tx.get('quantity', 0))
         tx_type = tx.get('type', 'out')
-
         day_key = (ts // MS_PER_DAY) * MS_PER_DAY
         signed_qty = -abs(qty) if tx_type == 'out' else abs(qty) if tx_type == 'in' else qty
         daily_delta[day_key] = daily_delta.get(day_key, 0) + signed_qty
@@ -183,7 +181,6 @@ def build_daily_series(transactions, current_quantity):
 
     total_delta = sum(daily_delta.values())
     level = current_quantity - total_delta
-
     series = []
     for day in days:
         level += daily_delta[day]
@@ -192,78 +189,126 @@ def build_daily_series(transactions, current_quantity):
 
 
 def build_features(quantities, timestamps):
-    """Feature engineering untuk MLR.
-
-    Returns:
-        X: (n, 9) matrix of features
-        y: (n,) target = stok besok
-    """
+    """Build features for MLR. Returns (X, y) as plain lists."""
     n = len(quantities)
     X, y = [], []
-
     for i in range(7, n - 1):
-        lag1 = quantities[i - 1]
-        lag3 = quantities[i - 3]
-        lag7 = quantities[i - 7]
         window = quantities[i - 7:i]
-        mean7 = float(np.mean(window))
-        std7 = float(np.std(window))
-        daily_change = quantities[i] - quantities[i - 1]
-        dow = datetime.fromtimestamp(timestamps[i] / 1000).weekday()
-        is_weekend = 1 if dow >= 5 else 0
-        day_num = i
-
-        X.append([lag1, lag3, lag7, mean7, std7, daily_change, dow, is_weekend, day_num])
+        ts = timestamps[i]
+        dow = datetime.fromtimestamp(ts / 1000).weekday()
+        X.append([
+            quantities[i - 1],
+            quantities[i - 3],
+            quantities[i - 7],
+            mean(window),
+            std(window),
+            quantities[i] - quantities[i - 1],
+            float(dow),
+            1.0 if dow >= 5 else 0.0,
+            float(i),
+        ])
         y.append(quantities[i + 1])
-
-    return np.array(X, dtype=np.float64), np.array(y, dtype=np.float64)
+    return X, y
 
 
 def fit_scaler(X):
-    """StandardScaler: mean=0, std=1 per feature."""
-    mean = X.mean(axis=0)
-    std = X.std(axis=0)
-    std[std == 0] = 1.0
-    return mean, std
+    """StandardScaler. X: list of feature rows."""
+    if not X: return [], []
+    k = len(X[0])
+    means = [0.0] * k
+    for row in X:
+        for j in range(k):
+            means[j] += row[j]
+    n = len(X)
+    means = [m / n for m in means]
+
+    stds = [0.0] * k
+    for row in X:
+        for j in range(k):
+            stds[j] += (row[j] - means[j]) ** 2
+    stds = [math.sqrt(s / n) for s in stds]
+    stds = [s if s != 0 else 1.0 for s in stds]
+    return means, stds
 
 
-def transform_scaler(X, mean, std):
-    return (X - mean) / std
+def transform_scaler(X, means, stds):
+    return [[(row[j] - means[j]) / stds[j] for j in range(len(means))] for row in X]
 
 
 def ols_fit(X, y):
-    """OLS via normal equation."""
-    X_b = np.column_stack([np.ones(len(X)), X])
-    try:
-        beta = np.linalg.lstsq(X_b, y, rcond=None)[0]
-    except np.linalg.LinAlgError:
-        beta = np.zeros(X_b.shape[1])
-    return beta[0], beta[1:]  # intercept, coefficients
+    """OLS via Gauss-Jordan. Returns (intercept, [coefficients])."""
+    n = len(X)
+    if n == 0:
+        return 0.0, []
+    k = len(X[0])
+
+    # Add intercept column: Xb[i] = [1, *X[i]]
+    Xb = [[1.0] + list(row) for row in X]
+
+    # XtX: (k+1) x (k+1)
+    size = k + 1
+    XtX = [[0.0] * size for _ in range(size)]
+    Xty = [0.0] * size
+
+    for i in range(n):
+        for a in range(size):
+            Xty[a] += Xb[i][a] * y[i]
+            for b in range(size):
+                XtX[a][b] += Xb[i][a] * Xb[i][b]
+
+    # Solve via Gaussian elimination
+    M = [row[:] + [Xty[i]] for i, row in enumerate(XtX)]
+    for col in range(size):
+        # Pivot
+        pivot = col
+        for row in range(col + 1, size):
+            if abs(M[row][col]) > abs(M[pivot][col]):
+                pivot = row
+        M[col], M[pivot] = M[pivot], M[col]
+
+        if abs(M[col][col]) < 1e-12:
+            continue
+        for row in range(col + 1, size):
+            factor = M[row][col] / M[col][col]
+            for j in range(col, size + 1):
+                M[row][j] -= factor * M[col][j]
+
+    # Back substitution
+    beta = [0.0] * size
+    for row in range(size - 1, -1, -1):
+        if abs(M[row][row]) < 1e-12:
+            continue
+        s = M[row][size]
+        for j in range(row + 1, size):
+            s -= M[row][j] * beta[j]
+        beta[row] = s / M[row][row]
+
+    return beta[0], beta[1:]
 
 
 def predict_next_day(history, model, ts):
-    """Predict stok besok pakai MLR (jika tersedia) atau fallback dow."""
     coefs = model.get('coefficients')
     sm_mean = model.get('scaler_mean')
     sm_std = model.get('scaler_std')
     intercept = model.get('intercept', 0.0)
 
-    if len(history) >= 7 and coefs is not None and sm_mean is not None:
+    if len(history) >= 7 and coefs and sm_mean:
         i = len(history)
-        lag1 = history[i - 1]
-        lag3 = history[i - 3]
-        lag7 = history[i - 7]
         window = history[i - 7:i]
-        mean7 = float(np.mean(window))
-        std7 = float(np.std(window))
-        daily_change = history[i - 1] - history[i - 2] if i >= 2 else 0
         dow = datetime.fromtimestamp(ts / 1000).weekday()
-        is_weekend = 1 if dow >= 5 else 0
-        day_num = i
-
-        features = np.array([lag1, lag3, lag7, mean7, std7, daily_change, dow, is_weekend, day_num])
-        scaled = (features - np.array(sm_mean)) / np.array(sm_std)
-        pred = float(scaled @ np.array(coefs) + intercept)
+        features = [
+            history[i - 1],
+            history[i - 3],
+            history[i - 7],
+            mean(window),
+            std(window),
+            history[i - 1] - history[i - 2] if i >= 2 else 0,
+            float(dow),
+            1.0 if dow >= 5 else 0.0,
+            float(i),
+        ]
+        scaled = [(features[j] - sm_mean[j]) / sm_std[j] for j in range(len(features))]
+        pred = intercept + sum(scaled[j] * coefs[j] for j in range(len(coefs)))
         return max(0, pred)
 
     # Fallback: dow consumption pattern
@@ -271,11 +316,10 @@ def predict_next_day(history, model, ts):
     avg = model.get('avgDailyConsumption', 1.0)
     if dow_consumption:
         dow = datetime.fromtimestamp(ts / 1000).weekday()
-        consumption = dow_consumption[dow] * (0.85 + np.random.random() * 0.3)
+        consumption = dow_consumption[dow] * (0.85 + random.random() * 0.3)
     else:
         consumption = avg
-    last_qty = history[-1]
-    return max(0, last_qty - consumption)
+    return max(0, history[-1] - consumption)
 
 
 def predict_stock(series, horizon_days=14, train_ratio=0.8):
@@ -284,7 +328,7 @@ def predict_stock(series, horizon_days=14, train_ratio=0.8):
     quantities = [s['quantity'] for s in series]
     n = len(series)
 
-    # Hitung dow consumption (untuk fallback + summary)
+    # Hitung dow consumption
     daily_deltas = []
     dow_deltas = [[] for _ in range(7)]
     for i in range(1, n):
@@ -297,53 +341,41 @@ def predict_stock(series, horizon_days=14, train_ratio=0.8):
                 dow = datetime.fromtimestamp(timestamps[i] / 1000).weekday()
                 dow_deltas[dow].append(consumption)
 
-    avg_daily = float(np.mean(daily_deltas)) if daily_deltas else 1.0
-    dow_consumption = [float(np.mean(d)) if d else avg_daily for d in dow_deltas]
+    avg_daily = mean(daily_deltas) if daily_deltas else 1.0
+    dow_consumption = [mean(d) if d else avg_daily for d in dow_deltas]
 
-    # Feature engineering
     X, y = build_features(quantities, timestamps)
-
     if len(X) < 5:
-        return {
-            'error': 'Data setelah feature engineering < 5 titik',
-            'source': 'mlr-numpy',
-        }
+        return {'error': 'Not enough data after FE'}
 
-    # Train/test split kronologis
     split_idx = max(2, int(len(X) * train_ratio))
     X_train, X_test = X[:split_idx], X[split_idx:]
     y_train, y_test = y[:split_idx], y[split_idx:]
 
-    # StandardScaler (fit on train)
     sm_mean, sm_std = fit_scaler(X_train)
     X_train_s = transform_scaler(X_train, sm_mean, sm_std)
-    X_test_s = transform_scaler(X_test, sm_mean, sm_std) if len(X_test) > 0 else None
-
-    # Fit OLS
     intercept, coefs = ols_fit(X_train_s, y_train)
 
-    # Evaluate
-    if X_test_s is not None and len(X_test_s) > 0:
-        y_pred_test = X_test_s @ coefs + intercept
-        mae = float(np.mean(np.abs(y_test - y_pred_test)))
-        rmse = float(np.sqrt(np.mean((y_test - y_pred_test) ** 2)))
-        ss_res = float(np.sum((y_test - y_pred_test) ** 2))
-        ss_tot = float(np.sum((y_test - np.mean(y_test)) ** 2))
+    # Eval on test
+    if X_test:
+        X_test_s = transform_scaler(X_test, sm_mean, sm_std)
+        y_pred = [intercept + sum(X_test_s[i][j] * coefs[j] for j in range(len(coefs))) for i in range(len(X_test_s))]
+        errs = [y_test[i] - y_pred[i] for i in range(len(y_test))]
+        mae = mean([abs(e) for e in errs])
+        rmse = math.sqrt(mean([e ** 2 for e in errs]))
+        my = mean(y_test)
+        ss_res = sum(e ** 2 for e in errs)
+        ss_tot = sum((y - my) ** 2 for y in y_test)
         r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
     else:
-        y_pred_train = X_train_s @ coefs + intercept
-        mae = float(np.mean(np.abs(y_train - y_pred_train)))
-        rmse = float(np.sqrt(np.mean((y_train - y_pred_train) ** 2)))
-        ss_res = float(np.sum((y_train - y_pred_train) ** 2))
-        ss_tot = float(np.sum((y_train - np.mean(y_train)) ** 2))
-        r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+        mae, rmse, r2 = 0.0, 0.0, 0.0
 
     # Iterative forecast
     model_state = {
-        'intercept': float(intercept),
-        'coefficients': coefs.tolist(),
-        'scaler_mean': sm_mean.tolist(),
-        'scaler_std': sm_std.tolist(),
+        'intercept': intercept,
+        'coefficients': coefs,
+        'scaler_mean': sm_mean,
+        'scaler_std': sm_std,
         'dowConsumption': dow_consumption,
         'avgDailyConsumption': avg_daily,
     }
@@ -354,20 +386,19 @@ def predict_stock(series, horizon_days=14, train_ratio=0.8):
     forecast = []
     prev_qty = last_qty
 
-    np.random.seed(42)
+    random.seed(42)
     for day in range(1, horizon_days + 1):
         ts = last_ts + day * MS_PER_DAY
         predicted = predict_next_day(history, model_state, ts)
         consumption = max(0, prev_qty - predicted)
         forecast.append({
             'timestamp': int(ts),
-            'predictedQuantity': round(float(predicted), 1),
-            'estimatedConsumption': round(float(consumption), 1),
+            'predictedQuantity': round(predicted, 1),
+            'estimatedConsumption': round(consumption, 1),
         })
         history.append(predicted)
         prev_qty = predicted
 
-    # Stockout estimation
     stockout_date = None
     if avg_daily > 0 and last_qty > 0:
         days_left = last_qty / avg_daily
@@ -375,25 +406,25 @@ def predict_stock(series, horizon_days=14, train_ratio=0.8):
         stockout_date = stockout_ts.strftime('%Y-%m-%d')
 
     return {
-        'source': 'mlr-numpy',
+        'source': 'mlr-py',
         'model': {
             'type': 'Multi Linear Regression + StandardScaler',
-            'intercept': round(float(intercept), 4),
-            'slope': round(-avg_daily, 4),  # backward compat
+            'intercept': round(intercept, 4),
+            'slope': round(-avg_daily, 4),
             'avgDailyConsumption': round(avg_daily, 2),
             'dowConsumption': [round(d, 2) for d in dow_consumption],
             'n': int(split_idx),
-            'coefficients': [round(float(c), 4) for c in coefs],
+            'coefficients': [round(c, 4) for c in coefs],
             'featureNames': FEATURE_NAMES,
-            'scalerMean': [round(float(m), 4) for m in sm_mean],
-            'scalerStd': [round(float(s), 4) for s in sm_std],
+            'scalerMean': [round(m, 4) for m in sm_mean],
+            'scalerStd': [round(s, 4) for s in sm_std],
         },
         'metrics': {
             'mae': round(mae, 3),
             'rmse': round(rmse, 3),
             'r2': round(r2, 3),
-            'nTrain': int(len(X_train)),
-            'nTest': int(len(X_test)),
+            'nTrain': len(X_train),
+            'nTest': len(X_test),
         },
         'forecast': forecast,
         'stockoutDate': stockout_date,
