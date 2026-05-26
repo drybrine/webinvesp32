@@ -64,8 +64,8 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 const FEATURE_NAMES = [
   "consumption_lag1",     // konsumsi smoothed kemarin
-  "consumption_avg_3",    // rata-rata konsumsi 3 hari
-  "rolling_mean_7",       // rata-rata konsumsi 7 hari
+  "day_of_week",          // 0=Mon..6=Sun
+  "is_weekend",           // binary weekend flag
 ] as const
 
 // =============================================================================
@@ -100,7 +100,6 @@ function buildFeatures(quantities: number[], timestamps: number[]): {
   y: number[]
 } {
   const n = quantities.length
-  // Raw consumption (clip restock)
   const raw: number[] = []
   for (let i = 1; i < n; i++) {
     const delta = quantities[i - 1] - quantities[i]
@@ -108,8 +107,8 @@ function buildFeatures(quantities: number[], timestamps: number[]): {
   }
   if (raw.length < 10) return { X: [], y: [] }
 
-  // EMA smoothing
-  const alpha = 0.3
+  // Heavy EMA smoothing (alpha=0.05)
+  const alpha = 0.05
   const smoothed: number[] = [raw[0]]
   for (let i = 1; i < raw.length; i++) {
     smoothed.push(alpha * raw[i] + (1 - alpha) * smoothed[i - 1])
@@ -117,16 +116,14 @@ function buildFeatures(quantities: number[], timestamps: number[]): {
 
   const X: number[][] = []
   const y: number[] = []
-  for (let i = 7; i < smoothed.length - 1; i++) {
-    const window = smoothed.slice(i - 7, i)
-    const last3 = smoothed.slice(i - 3, i)
-    const mean7 = window.reduce((s, v) => s + v, 0) / window.length
-    const mean3 = last3.reduce((s, v) => s + v, 0) / last3.length
+  for (let i = 1; i < smoothed.length - 1; i++) {
+    const targetTs = timestamps[i + 1] !== undefined ? timestamps[i + 1] : timestamps[timestamps.length - 1]
+    const dow = new Date(targetTs).getDay()
 
     X.push([
-      smoothed[i - 1],   // smoothed_lag1
-      mean3,             // avg 3 hari
-      mean7,             // rolling_mean_7
+      smoothed[i - 1],                        // consumption_lag1
+      dow,                                    // day_of_week
+      dow === 0 || dow === 6 ? 1 : 0,         // is_weekend
     ])
     y.push(smoothed[i])
   }
@@ -295,13 +292,14 @@ export function evaluate(model: RegressionModel, testData: StockDataPoint[]): Ev
 
   const sorted = [...testData].sort((a, b) => a.timestamp - b.timestamp)
   const quantities = sorted.map((d) => d.quantity)
+  const timestamps = sorted.map((d) => d.timestamp)
 
-  // Build smoothed consumption from level series
+  // Build smoothed consumption (EMA alpha=0.05) matching training
   const raw: number[] = []
   for (let i = 1; i < quantities.length; i++) {
     raw.push(Math.max(0, quantities[i - 1] - quantities[i]))
   }
-  const alpha = 0.3
+  const alpha = 0.05
   const smoothed: number[] = raw.length > 0 ? [raw[0]] : []
   for (let i = 1; i < raw.length; i++) {
     smoothed.push(alpha * raw[i] + (1 - alpha) * smoothed[i - 1])
@@ -315,14 +313,15 @@ export function evaluate(model: RegressionModel, testData: StockDataPoint[]): Ev
   const ys: number[] = []
   const yPreds: number[] = []
 
-  if (hasMLR && smoothed.length >= 8) {
-    for (let i = 7; i < smoothed.length; i++) {
-      const window = smoothed.slice(i - 7, i)
-      const last3 = smoothed.slice(i - 3, i)
-      const mean7 = window.reduce((s, v) => s + v, 0) / window.length
-      const mean3 = last3.reduce((s, v) => s + v, 0) / last3.length
-
-      const features = [smoothed[i - 1], mean3, mean7]
+  if (hasMLR && smoothed.length >= 2) {
+    for (let i = 1; i < smoothed.length - 1; i++) {
+      const targetTs = timestamps[i + 1] !== undefined ? timestamps[i + 1] : timestamps[timestamps.length - 1]
+      const dow = new Date(targetTs).getDay()
+      const features = [
+        smoothed[i - 1],
+        dow,
+        dow === 0 || dow === 6 ? 1 : 0,
+      ]
       const scaled = features.map((v, j) => (v - model.scalerMean![j]) / model.scalerStd![j])
       let yPred = scaled.reduce((s, v, j) => s + v * model.coefficients![j], model.intercept)
       yPred = Math.max(0, yPred)
@@ -331,7 +330,6 @@ export function evaluate(model: RegressionModel, testData: StockDataPoint[]): Ev
       yPreds.push(yPred)
     }
   } else {
-    // Fallback: avg consumption
     for (let i = 1; i < smoothed.length; i++) {
       ys.push(smoothed[i])
       yPreds.push(model.avgDailyConsumption)
@@ -390,23 +388,19 @@ export function estimateStockoutDate(model: RegressionModel, currentQty?: number
 function predictNextConsumption(
   consumptionHistory: number[],
   model: RegressionModel,
+  ts: number,
 ): number {
   if (
-    consumptionHistory.length >= 7 &&
+    consumptionHistory.length > 0 &&
     model.coefficients &&
     model.scalerMean &&
     model.scalerStd
   ) {
-    const i = consumptionHistory.length
-    const window = consumptionHistory.slice(i - 7, i)
-    const last3 = consumptionHistory.slice(i - 3, i)
-    const mean7 = window.reduce((s, v) => s + v, 0) / window.length
-    const mean3 = last3.reduce((s, v) => s + v, 0) / last3.length
-
+    const dow = new Date(ts).getDay()
     const features = [
-      consumptionHistory[i - 1],
-      mean3,
-      mean7,
+      consumptionHistory[consumptionHistory.length - 1],
+      dow,
+      dow === 0 || dow === 6 ? 1 : 0,
     ]
     const scaled = features.map((v, j) => (v - model.scalerMean![j]) / model.scalerStd![j])
     const pred = scaled.reduce((s, v, j) => s + v * model.coefficients![j], model.intercept)
@@ -433,13 +427,13 @@ export function predictStock(
   const lastTs = sorted[sorted.length - 1].timestamp
   const lastQty = sorted[sorted.length - 1].quantity
 
-  // Build smoothed consumption history (EMA alpha=0.3)
+  // Build smoothed consumption history (EMA alpha=0.05)
   const quantities = sorted.map(d => d.quantity)
   const rawConsumption: number[] = []
   for (let i = 1; i < quantities.length; i++) {
     rawConsumption.push(Math.max(0, quantities[i - 1] - quantities[i]))
   }
-  const alphaSmooth = 0.3
+  const alphaSmooth = 0.05
   const consumptionHistory: number[] = rawConsumption.length > 0 ? [rawConsumption[0]] : []
   for (let i = 1; i < rawConsumption.length; i++) {
     consumptionHistory.push(alphaSmooth * rawConsumption[i] + (1 - alphaSmooth) * consumptionHistory[i - 1])
@@ -451,7 +445,7 @@ export function predictStock(
 
   for (let day = 1; day <= horizonDays; day += stepDays) {
     const ts = lastTs + day * MS_PER_DAY
-    const predictedConsumption = predictNextConsumption(consumptionHistory, model)
+    const predictedConsumption = predictNextConsumption(consumptionHistory, model, ts)
     currentQty = Math.max(0, currentQty - predictedConsumption)
 
     forecast.push({
