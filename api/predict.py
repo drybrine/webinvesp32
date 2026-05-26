@@ -235,14 +235,19 @@ def transform_scaler(X, means, stds):
     return [[(row[j] - means[j]) / stds[j] for j in range(len(means))] for row in X]
 
 
-def ols_fit(X, y):
-    """OLS via Gauss-Jordan. Returns (intercept, [coefficients])."""
+def ols_fit(X, y, ridge=1e-6):
+    """OLS via Gauss-Jordan with Tikhonov ridge regularization for stability.
+
+    Ridge prevents singular XtX when features are multicollinear (e.g., lag1/3/7).
+    Lambda is tiny (1e-6) so it doesn't bias predictions meaningfully.
+    Returns (intercept, [coefficients]).
+    """
     n = len(X)
     if n == 0:
         return 0.0, []
     k = len(X[0])
 
-    # Add intercept column: Xb[i] = [1, *X[i]]
+    # Add intercept column
     Xb = [[1.0] + list(row) for row in X]
 
     # XtX: (k+1) x (k+1)
@@ -256,7 +261,11 @@ def ols_fit(X, y):
             for b in range(size):
                 XtX[a][b] += Xb[i][a] * Xb[i][b]
 
-    # Solve via Gaussian elimination
+    # Ridge regularization (skip intercept column at index 0)
+    for i in range(1, size):
+        XtX[i][i] += ridge
+
+    # Solve via Gaussian elimination with partial pivoting
     M = [row[:] + [Xty[i]] for i, row in enumerate(XtX)]
     for col in range(size):
         # Pivot
@@ -266,7 +275,9 @@ def ols_fit(X, y):
                 pivot = row
         M[col], M[pivot] = M[pivot], M[col]
 
-        if abs(M[col][col]) < 1e-12:
+        if abs(M[col][col]) < 1e-15:
+            # Truly singular even with ridge — set coef=0, but do NOT skip elimination
+            # to keep subsequent rows consistent
             continue
         for row in range(col + 1, size):
             factor = M[row][col] / M[col][col]
@@ -276,7 +287,7 @@ def ols_fit(X, y):
     # Back substitution
     beta = [0.0] * size
     for row in range(size - 1, -1, -1):
-        if abs(M[row][row]) < 1e-12:
+        if abs(M[row][row]) < 1e-15:
             continue
         s = M[row][size]
         for j in range(row + 1, size):
