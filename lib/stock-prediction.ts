@@ -63,9 +63,9 @@ export interface PredictionResult {
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 const FEATURE_NAMES = [
-  "lag1",              // stok kemarin (paling prediktif)
-  "daily_change",      // perubahan stok kemarin
-  "rolling_mean_7",    // rata-rata 7 hari
+  "consumption_lag1",     // konsumsi smoothed kemarin
+  "consumption_avg_3",    // rata-rata konsumsi 3 hari
+  "rolling_mean_7",       // rata-rata konsumsi 7 hari
 ] as const
 
 // =============================================================================
@@ -99,23 +99,37 @@ function buildFeatures(quantities: number[], timestamps: number[]): {
   X: number[][]
   y: number[]
 } {
-  const X: number[][] = []
-  const y: number[] = []
+  const n = quantities.length
+  // Raw consumption (clip restock)
+  const raw: number[] = []
+  for (let i = 1; i < n; i++) {
+    const delta = quantities[i - 1] - quantities[i]
+    raw.push(Math.max(0, delta))
+  }
+  if (raw.length < 10) return { X: [], y: [] }
 
-  // Skip 7 hari pertama agar rolling_mean_7 valid
-  for (let i = 7; i < quantities.length - 1; i++) {
-    const window = quantities.slice(i - 7, i)
-    const mean7 = window.reduce((s, v) => s + v, 0) / window.length
-    const dailyChange = quantities[i] - quantities[i - 1]
-
-    X.push([
-      quantities[i - 1],     // lag1
-      dailyChange,           // daily_change
-      mean7,                 // rolling_mean_7
-    ])
-    y.push(quantities[i + 1])  // target = stok besok
+  // EMA smoothing
+  const alpha = 0.3
+  const smoothed: number[] = [raw[0]]
+  for (let i = 1; i < raw.length; i++) {
+    smoothed.push(alpha * raw[i] + (1 - alpha) * smoothed[i - 1])
   }
 
+  const X: number[][] = []
+  const y: number[] = []
+  for (let i = 7; i < smoothed.length - 1; i++) {
+    const window = smoothed.slice(i - 7, i)
+    const last3 = smoothed.slice(i - 3, i)
+    const mean7 = window.reduce((s, v) => s + v, 0) / window.length
+    const mean3 = last3.reduce((s, v) => s + v, 0) / last3.length
+
+    X.push([
+      smoothed[i - 1],   // smoothed_lag1
+      mean3,             // avg 3 hari
+      mean7,             // rolling_mean_7
+    ])
+    y.push(smoothed[i])
+  }
   return { X, y }
 }
 
@@ -281,41 +295,47 @@ export function evaluate(model: RegressionModel, testData: StockDataPoint[]): Ev
 
   const sorted = [...testData].sort((a, b) => a.timestamp - b.timestamp)
   const quantities = sorted.map((d) => d.quantity)
-  const ys: number[] = []
-  const yPreds: number[] = []
+
+  // Build smoothed consumption from level series
+  const raw: number[] = []
+  for (let i = 1; i < quantities.length; i++) {
+    raw.push(Math.max(0, quantities[i - 1] - quantities[i]))
+  }
+  const alpha = 0.3
+  const smoothed: number[] = raw.length > 0 ? [raw[0]] : []
+  for (let i = 1; i < raw.length; i++) {
+    smoothed.push(alpha * raw[i] + (1 - alpha) * smoothed[i - 1])
+  }
 
   const hasMLR =
     model.coefficients !== undefined &&
     model.scalerMean !== undefined &&
     model.scalerStd !== undefined
 
-  // Mulai dari index 7 jika MLR (butuh lag7), atau 1 jika fallback
-  const startIdx = hasMLR && quantities.length >= 8 ? 7 : 1
+  const ys: number[] = []
+  const yPreds: number[] = []
 
-  for (let i = startIdx; i < quantities.length; i++) {
-    let yPred: number
-    if (hasMLR && i >= 7) {
-      const window = quantities.slice(i - 7, i)
+  if (hasMLR && smoothed.length >= 8) {
+    for (let i = 7; i < smoothed.length; i++) {
+      const window = smoothed.slice(i - 7, i)
+      const last3 = smoothed.slice(i - 3, i)
       const mean7 = window.reduce((s, v) => s + v, 0) / window.length
-      const dailyChange = quantities[i - 1] - quantities[i - 2]
+      const mean3 = last3.reduce((s, v) => s + v, 0) / last3.length
 
-      const features = [
-        quantities[i - 1],   // lag1
-        dailyChange,         // daily_change
-        mean7,               // rolling_mean_7
-      ]
+      const features = [smoothed[i - 1], mean3, mean7]
       const scaled = features.map((v, j) => (v - model.scalerMean![j]) / model.scalerStd![j])
-      yPred = scaled.reduce((s, v, j) => s + v * model.coefficients![j], model.intercept)
+      let yPred = scaled.reduce((s, v, j) => s + v * model.coefficients![j], model.intercept)
       yPred = Math.max(0, yPred)
-    } else {
-      const prev = quantities[i - 1]
-      const dow = new Date(sorted[i].timestamp).getDay()
-      const consumption = model.dowConsumption[dow] || model.avgDailyConsumption
-      yPred = Math.max(0, prev - consumption)
-    }
 
-    ys.push(quantities[i])
-    yPreds.push(yPred)
+      ys.push(smoothed[i])
+      yPreds.push(yPred)
+    }
+  } else {
+    // Fallback: avg consumption
+    for (let i = 1; i < smoothed.length; i++) {
+      ys.push(smoothed[i])
+      yPreds.push(model.avgDailyConsumption)
+    }
   }
 
   if (ys.length === 0) return { mae: 0, rmse: 0, r2: 0 }
@@ -367,38 +387,32 @@ export function estimateStockoutDate(model: RegressionModel, currentQty?: number
  * Predict satu hari ke depan menggunakan MLR (jika model punya scaler+coefficients).
  * Fallback ke dow consumption pattern jika model lama.
  */
-function predictNextDay(
+function predictNextConsumption(
+  consumptionHistory: number[],
   model: RegressionModel,
-  history: number[],
-  ts: number,
 ): number {
-  // Prerequisite untuk MLR: history >= 7 + scaler + coefs
   if (
-    history.length >= 7 &&
+    consumptionHistory.length >= 7 &&
     model.coefficients &&
     model.scalerMean &&
     model.scalerStd
   ) {
-    const i = history.length
-    const window = history.slice(i - 7, i)
+    const i = consumptionHistory.length
+    const window = consumptionHistory.slice(i - 7, i)
+    const last3 = consumptionHistory.slice(i - 3, i)
     const mean7 = window.reduce((s, v) => s + v, 0) / window.length
-    const dailyChange = i >= 2 ? history[i - 1] - history[i - 2] : 0
+    const mean3 = last3.reduce((s, v) => s + v, 0) / last3.length
 
     const features = [
-      history[i - 1],   // lag1
-      dailyChange,      // daily_change
-      mean7,            // rolling_mean_7
+      consumptionHistory[i - 1],
+      mean3,
+      mean7,
     ]
     const scaled = features.map((v, j) => (v - model.scalerMean![j]) / model.scalerStd![j])
     const pred = scaled.reduce((s, v, j) => s + v * model.coefficients![j], model.intercept)
     return Math.max(0, pred)
   }
-
-  // Fallback: dow consumption pattern
-  const dow = new Date(ts).getDay()
-  const consumption = model.dowConsumption[dow] * (0.85 + Math.random() * 0.3)
-  const lastQty = history[history.length - 1]
-  return Math.max(0, lastQty - consumption)
+  return Math.max(0, model.avgDailyConsumption)
 }
 
 /**
@@ -419,24 +433,34 @@ export function predictStock(
   const lastTs = sorted[sorted.length - 1].timestamp
   const lastQty = sorted[sorted.length - 1].quantity
 
-  // Iterative forecast: gunakan MLR jika available
+  // Build smoothed consumption history (EMA alpha=0.3)
+  const quantities = sorted.map(d => d.quantity)
+  const rawConsumption: number[] = []
+  for (let i = 1; i < quantities.length; i++) {
+    rawConsumption.push(Math.max(0, quantities[i - 1] - quantities[i]))
+  }
+  const alphaSmooth = 0.3
+  const consumptionHistory: number[] = rawConsumption.length > 0 ? [rawConsumption[0]] : []
+  for (let i = 1; i < rawConsumption.length; i++) {
+    consumptionHistory.push(alphaSmooth * rawConsumption[i] + (1 - alphaSmooth) * consumptionHistory[i - 1])
+  }
+
+  // Iterative forecast: predict konsumsi → kurangi dari current_stock
   const forecast: PredictionResult["forecast"] = []
-  const history: number[] = sorted.map((d) => d.quantity)
-  let prevQty = lastQty
+  let currentQty = lastQty
 
   for (let day = 1; day <= horizonDays; day += stepDays) {
     const ts = lastTs + day * MS_PER_DAY
-    const predicted = predictNextDay(model, history, ts)
-    const consumption = Math.max(0, prevQty - predicted)
+    const predictedConsumption = predictNextConsumption(consumptionHistory, model)
+    currentQty = Math.max(0, currentQty - predictedConsumption)
 
     forecast.push({
       timestamp: ts,
-      predictedQuantity: Math.round(predicted * 10) / 10,
-      estimatedConsumption: Math.round(consumption * 10) / 10,
+      predictedQuantity: Math.round(currentQty * 10) / 10,
+      estimatedConsumption: Math.round(predictedConsumption * 10) / 10,
     })
 
-    history.push(predicted)
-    prevQty = predicted
+    consumptionHistory.push(predictedConsumption)
   }
 
   const stockoutDate = estimateStockoutDate(model, lastQty)

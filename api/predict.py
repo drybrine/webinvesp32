@@ -15,9 +15,9 @@ from datetime import datetime, timedelta
 MS_PER_DAY = 86400000
 
 FEATURE_NAMES = [
-    'lag1',              # stok kemarin (paling prediktif)
-    'daily_change',      # perubahan stok kemarin
-    'rolling_mean_7',    # rata-rata 7 hari
+    'consumption_lag1',     # konsumsi kemarin
+    'consumption_avg_3',    # rata-rata konsumsi 3 hari lalu
+    'rolling_mean_7',       # rata-rata konsumsi 7 hari
 ]
 
 
@@ -188,23 +188,45 @@ def build_daily_series(transactions, current_quantity):
 
 
 def build_features(quantities, timestamps):
-    """Build minimal features (3): lag1, daily_change, rolling_mean_7.
+    """Train on SMOOTHED consumption (EMA) to reduce daily noise.
 
-    Why minimal? Tested in honda_tune_model.ipynb against 9-feature version:
-    - 3 features: Test R² 0.621, gap 0.011 (no overfit)
-    - 9 features: Test R² 0.574, gap 0.076 (3 items overfit)
-    Less is more — extra features cause overfitting on time-series data.
+    Why: raw daily consumption is too noisy (e.g. 0, 5, 0, 8, 2, 0...).
+    EMA smoothing makes the signal trainable. We forecast the smoothed
+    consumption rate which is more stable and prevents zigzag in level forecast.
+
+    Pipeline:
+      1. Convert level → raw consumption (max(0, prev - curr))
+      2. Apply EMA smoothing (alpha=0.3 = balance between recent + history)
+      3. Predict next-day smoothed consumption from lag1, mean3, mean7
+
+    Returns (X, y) where y is smoothed consumption.
     """
     n = len(quantities)
+    # Raw consumption (clip restock to 0)
+    raw = []
+    for i in range(1, n):
+        delta = quantities[i - 1] - quantities[i]
+        raw.append(max(0, delta))
+
+    if len(raw) < 10:
+        return [], []
+
+    # EMA smoothing
+    alpha = 0.3
+    smoothed = [raw[0]]
+    for i in range(1, len(raw)):
+        smoothed.append(alpha * raw[i] + (1 - alpha) * smoothed[-1])
+
     X, y = [], []
-    for i in range(7, n - 1):
-        window = quantities[i - 7:i]
+    for i in range(7, len(smoothed) - 1):
+        window = smoothed[i - 7:i]
+        last3 = smoothed[i - 3:i]
         X.append([
-            quantities[i - 1],                            # lag1
-            quantities[i] - quantities[i - 1],            # daily_change
-            mean(window),                                 # rolling_mean_7
+            smoothed[i - 1],          # smoothed_lag1
+            mean(last3),              # avg 3 hari
+            mean(window),             # rolling_mean_7
         ])
-        y.append(quantities[i + 1])
+        y.append(smoothed[i])
     return X, y
 
 
@@ -294,33 +316,29 @@ def ols_fit(X, y, ridge=1e-6):
     return beta[0], beta[1:]
 
 
-def predict_next_day(history, model, ts):
+def predict_next_consumption(consumption_history, model):
+    """Predict konsumsi hari berikutnya (≥0)."""
     coefs = model.get('coefficients')
     sm_mean = model.get('scaler_mean')
     sm_std = model.get('scaler_std')
     intercept = model.get('intercept', 0.0)
 
-    if len(history) >= 7 and coefs and sm_mean:
-        i = len(history)
-        window = history[i - 7:i]
+    if len(consumption_history) >= 7 and coefs and sm_mean:
+        i = len(consumption_history)
+        window = consumption_history[i - 7:i]
+        last3 = consumption_history[i - 3:i]
         features = [
-            history[i - 1],                                              # lag1
-            history[i - 1] - history[i - 2] if i >= 2 else 0,            # daily_change
-            mean(window),                                                # rolling_mean_7
+            consumption_history[i - 1],
+            mean(last3),
+            mean(window),
         ]
         scaled = [(features[j] - sm_mean[j]) / sm_std[j] for j in range(len(features))]
         pred = intercept + sum(scaled[j] * coefs[j] for j in range(len(coefs)))
         return max(0, pred)
 
-    # Fallback: dow consumption pattern
-    dow_consumption = model.get('dowConsumption', [])
+    # Fallback: avg
     avg = model.get('avgDailyConsumption', 1.0)
-    if dow_consumption:
-        dow = datetime.fromtimestamp(ts / 1000).weekday()
-        consumption = dow_consumption[dow] * (0.85 + random.random() * 0.3)
-    else:
-        consumption = avg
-    return max(0, history[-1] - consumption)
+    return max(0, avg)
 
 
 def predict_stock(series, horizon_days=14, train_ratio=0.85):
@@ -371,7 +389,7 @@ def predict_stock(series, horizon_days=14, train_ratio=0.85):
     else:
         mae, rmse, r2 = 0.0, 0.0, 0.0
 
-    # Iterative forecast
+    # Iterative forecast: predict konsumsi → kurangi dari current_stock
     model_state = {
         'intercept': intercept,
         'coefficients': coefs,
@@ -381,24 +399,32 @@ def predict_stock(series, horizon_days=14, train_ratio=0.85):
         'avgDailyConsumption': avg_daily,
     }
 
+    # Build smoothed consumption history (EMA alpha=0.3)
+    raw_consumption = []
+    for i in range(1, n):
+        delta = quantities[i - 1] - quantities[i]
+        raw_consumption.append(max(0, delta))
+
+    alpha_smooth = 0.3
+    consumption_history = [raw_consumption[0]] if raw_consumption else []
+    for i in range(1, len(raw_consumption)):
+        consumption_history.append(alpha_smooth * raw_consumption[i] + (1 - alpha_smooth) * consumption_history[-1])
+
     last_qty = quantities[-1]
     last_ts = timestamps[-1]
-    history = list(quantities)
+    current_qty = last_qty
     forecast = []
-    prev_qty = last_qty
 
-    random.seed(42)
     for day in range(1, horizon_days + 1):
         ts = last_ts + day * MS_PER_DAY
-        predicted = predict_next_day(history, model_state, ts)
-        consumption = max(0, prev_qty - predicted)
+        predicted_consumption = predict_next_consumption(consumption_history, model_state)
+        current_qty = max(0, current_qty - predicted_consumption)
         forecast.append({
             'timestamp': int(ts),
-            'predictedQuantity': round(predicted, 1),
-            'estimatedConsumption': round(consumption, 1),
+            'predictedQuantity': round(current_qty, 1),
+            'estimatedConsumption': round(predicted_consumption, 1),
         })
-        history.append(predicted)
-        prev_qty = predicted
+        consumption_history.append(predicted_consumption)
 
     stockout_date = None
     if avg_daily > 0 and last_qty > 0:
