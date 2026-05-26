@@ -9,7 +9,6 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, InventoryItem, useFirebaseTransactions } from "@/hooks/use-firebase"
 import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
 import { getFirebaseStatus, firebaseHelpers } from "@/lib/firebase"
-import { buildDailySeriesFromTransactions, predictStock } from "@/lib/stock-prediction"
 import StatsCards from "@/components/dashboard/stats-cards"
 import InventoryTable from "@/components/dashboard/inventory-table"
 import {
@@ -106,39 +105,88 @@ export default function DashboardPage() {
     }
   }, [onlineDevices, devicesLoading, toast]);
 
-  const stockRisks = useMemo(() => {
-    return inventory
-      .filter((item) => !item.deleted && item.barcode)
-      .map((item) => {
-        const itemTransactions = transactions
-          .filter((t) => t.productBarcode === item.barcode)
-          .map((t) => ({
-            timestamp: Number(t.timestamp) || Date.now(),
-            quantity: Number(t.quantity) || 0,
-            type: t.type as "in" | "out" | "adjustment",
+  // Server-side batch prediction via /api/predict-batch
+  const [stockRisks, setStockRisks] = useState<Array<{
+    item: InventoryItem
+    prediction: { model: { slope: number; avgDailyConsumption: number }; forecast: Array<{ timestamp: number; predictedQuantity: number; estimatedConsumption: number }>; stockoutDate: Date | null }
+    predictedLowest: number
+    daysToStockout: number | null
+  }>>([])
+
+  useEffect(() => {
+    if (inventoryLoading || transactionsLoading) return
+    if (inventory.length === 0 || transactions.length === 0) return
+
+    const controller = new AbortController()
+
+    const fetchRisks = async () => {
+      try {
+        const items = inventory
+          .filter(i => !i.deleted && i.barcode)
+          .map(i => ({
+            id: i.id,
+            barcode: i.barcode,
+            name: i.name,
+            quantity: Number(i.quantity) || 0,
+            minStock: Number(i.minStock) || 0,
           }))
-        const history = buildDailySeriesFromTransactions(itemTransactions, Number(item.quantity) || 0)
-        if (history.length < 2) return null
-        try {
-          const prediction = predictStock(history, { horizonDays: 14, trainRatio: 0.8 })
-          const predictedLowest = Math.min(...prediction.forecast.map((f) => f.predictedQuantity))
-          const daysToStockout = prediction.stockoutDate
-            ? Math.max(0, Math.round((prediction.stockoutDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
-            : null
-          return { item, prediction, predictedLowest, daysToStockout }
-        } catch {
-          return null
-        }
-      })
-      .filter((risk): risk is NonNullable<typeof risk> => risk !== null)
-      .sort((a, b) => {
-        if (a.daysToStockout !== null && b.daysToStockout !== null) return a.daysToStockout - b.daysToStockout
-        if (a.daysToStockout !== null) return -1
-        if (b.daysToStockout !== null) return 1
-        return a.predictedLowest - b.predictedLowest
-      })
-      .slice(0, 3)
-  }, [inventory, transactions])
+
+        const txs = transactions.map(t => ({
+          productBarcode: t.productBarcode,
+          type: t.type,
+          quantity: Number(t.quantity) || 0,
+          timestamp: Number(t.timestamp) || Date.now(),
+        }))
+
+        const res = await fetch("/api/predict-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items,
+            transactions: txs,
+            horizonDays: 14,
+            trainRatio: 0.8,
+            topN: 3,
+            recentDays: 90,
+          }),
+          signal: controller.signal,
+        })
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (data.error) throw new Error(data.error)
+
+        const risks = (data.risks || [])
+          .map((r: { itemId: string; predictedLowest: number; daysToStockout: number | null; avgDailyConsumption: number; slope: number; forecast: Array<{ timestamp: number; predictedQuantity: number; estimatedConsumption: number }> }) => {
+            const inv = inventory.find(i => i.id === r.itemId)
+            if (!inv) return null
+            return {
+              item: inv,
+              prediction: {
+                model: { slope: r.slope, avgDailyConsumption: r.avgDailyConsumption },
+                forecast: r.forecast,
+                stockoutDate: r.daysToStockout !== null
+                  ? new Date(Date.now() + r.daysToStockout * 24 * 60 * 60 * 1000)
+                  : null,
+              },
+              predictedLowest: r.predictedLowest,
+              daysToStockout: r.daysToStockout,
+            }
+          })
+          .filter((r: typeof risks[number] | null): r is NonNullable<typeof r> => r !== null)
+
+        setStockRisks(risks)
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return
+        // Silently fall back to empty (server error or unavailable)
+        console.warn("[stockRisks] batch predict failed:", err)
+        setStockRisks([])
+      }
+    }
+
+    fetchRisks()
+    return () => controller.abort()
+  }, [inventory, transactions, inventoryLoading, transactionsLoading])
 
   const stockoutAlertedRef = useRef(false)
   useEffect(() => {
@@ -366,7 +414,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in-up">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dashboard Inventaris</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dashboard Inventory</h1>
             <p className="text-sm text-muted-foreground mt-1">Kelola stok barang dengan mudah</p>
           </div>
           <Button onClick={() => setIsAddItemOpen(true)}>

@@ -68,3 +68,7 @@ Thumbs.db
 .parcel-cache/
 .next/cache/
 .vercel
+
+# Dummy data + Arduino build artifacts
+honda-dummy.json
+GM67_ESP32_BARCODESCANNER/build/

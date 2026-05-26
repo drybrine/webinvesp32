@@ -169,7 +169,7 @@ export default function PrediksiPage() {
             </p>
             {predictionSource && (
               <Badge variant={predictionSource === "sklearn" ? "default" : "secondary"} className="text-[10px]">
-                {predictionSource === "sklearn" ? "numpy-ols (server)" : "client-side"}
+                {predictionSource === "sklearn" ? "MLR + StandardScaler (server)" : "client-side"}
               </Badge>
             )}
           </div>

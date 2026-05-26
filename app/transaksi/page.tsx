@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,6 +48,8 @@ export default function TransaksiPage() {
   const [selectedType, setSelectedType] = useState("all")
   const [selectedPeriod, setSelectedPeriod] = useState("all")
   const [selectedSource, setSelectedSource] = useState("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 50
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
@@ -104,6 +106,17 @@ export default function TransaksiPage() {
       return matchesSearch && matchesType && matchesSource && matchesPeriod
     })
   }, [transactions, searchTerm, selectedType, selectedSource, selectedPeriod])
+
+  // Reset ke page 1 saat filter berubah
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, selectedType, selectedSource, selectedPeriod])
+
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE))
+  const pagedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE
+    return filteredTransactions.slice(start, start + PAGE_SIZE)
+  }, [filteredTransactions, currentPage])
 
   const handleAddTransaction = async () => {
     if (!formData.productBarcode || !formData.productName || !formData.quantity || !formData.unitPrice || !formData.reason) {
@@ -462,7 +475,7 @@ export default function TransaksiPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredTransactions.map((transaction) => (
+                    pagedTransactions.map((transaction) => (
                       <TableRow key={transaction.id}>
                         <TableCell className="text-sm">{formatDateTime(transaction.timestamp)}</TableCell>
                         <TableCell><Badge variant={getTypeVariant(transaction.type)}>{getTypeLabel(transaction.type)}</Badge></TableCell>
@@ -498,6 +511,36 @@ export default function TransaksiPage() {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Pagination */}
+            {filteredTransactions.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-2 py-3 border-t">
+                <div className="text-sm text-muted-foreground">
+                  Menampilkan {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, filteredTransactions.length)} dari {filteredTransactions.length}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Prev
+                  </Button>
+                  <span className="text-sm font-medium">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

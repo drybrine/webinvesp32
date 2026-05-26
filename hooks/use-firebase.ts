@@ -451,7 +451,7 @@ export function useFirebaseDevices() {
   }
 }
 
-export function useFirebaseTransactions() {
+export function useFirebaseTransactions(limit: number = 1000) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -475,7 +475,7 @@ export function useFirebaseTransactions() {
       return;
     }
 
-    const transactionsQuery = query(dbRefs.transactions, orderByChild('timestamp'));
+    const transactionsQuery = query(dbRefs.transactions, orderByChild('timestamp'), limitToLast(limit));
     unsubscribe = onValue(
       transactionsQuery,
       (snapshot: DataSnapshot) => {
@@ -500,7 +500,7 @@ export function useFirebaseTransactions() {
         unsubscribe();
       }
     };
-  }, []); // dbRefs might be a dependency if it can change, but typically it's stable after init.
+  }, [limit]); // dbRefs might be a dependency if it can change, but typically it's stable after init.
 
   // addTransaction is usually done via firebaseHelpers, not part of this read-hook.
 
