@@ -136,7 +136,11 @@ export default function PrediksiPage() {
 
   const chartData = useMemo(() => {
     if (!prediction || history.length === 0) return []
-    const hist = history.map((h) => ({
+    // Limit historical data to last 30 days for readability
+    const HISTORY_DAYS = 30
+    const cutoff = Date.now() - HISTORY_DAYS * MS_PER_DAY
+    const recentHistory = history.filter(h => h.timestamp >= cutoff)
+    const hist = recentHistory.map((h) => ({
       date: fmt(h.timestamp),
       timestamp: h.timestamp,
       actual: h.quantity,
@@ -269,7 +273,7 @@ export default function PrediksiPage() {
             <CardHeader>
               <CardTitle className="text-base">Grafik Historis & Forecast</CardTitle>
               <CardDescription>
-                Garis padat = data historis, garis putus = prediksi {horizonDays} hari
+                Garis padat = data 30 hari terakhir, garis putus = prediksi {horizonDays} hari
               </CardDescription>
             </CardHeader>
             <CardContent>
