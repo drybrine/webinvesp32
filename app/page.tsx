@@ -138,10 +138,11 @@ export default function DashboardPage() {
           timestamp: Number(t.timestamp) || Date.now(),
         }))
 
-        const res = await fetch("/api/predict-batch", {
+        const res = await fetch("/api/predict", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            mode: "batch",
             items,
             transactions: txs,
             horizonDays: 14,

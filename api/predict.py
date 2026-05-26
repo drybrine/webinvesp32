@@ -26,6 +26,12 @@ class handler(BaseHTTPRequestHandler):
             body = self.rfile.read(content_length)
             data = json.loads(body)
 
+            # Batch mode: predict top-N risks across all items
+            if data.get('mode') == 'batch':
+                self._handle_batch(data)
+                return
+
+            # Single item mode (default)
             transactions = data.get('transactions', [])
             current_quantity = data.get('currentQuantity', 0)
             horizon_days = data.get('horizonDays', 14)
@@ -46,6 +52,93 @@ class handler(BaseHTTPRequestHandler):
 
         except Exception as e:
             self._send_json(500, {'error': str(e), 'source': 'mlr-numpy'})
+
+    def _handle_batch(self, data):
+        """Predict top-N stockout risks across all inventory items."""
+        items = data.get('items', [])
+        transactions = data.get('transactions', [])
+        horizon_days = data.get('horizonDays', 14)
+        train_ratio = data.get('trainRatio', 0.8)
+        top_n = data.get('topN', 3)
+        recent_days = data.get('recentDays', 90)
+
+        if not items:
+            self._send_json(400, {'error': 'No items provided', 'source': 'mlr-batch'})
+            return
+
+        # Filter to recent transactions
+        cutoff = (datetime.now().timestamp() * 1000) - recent_days * MS_PER_DAY
+        recent_tx = [t for t in transactions if int(t.get('timestamp', 0)) >= cutoff]
+
+        # Group by productBarcode
+        tx_by_barcode = {}
+        for tx in recent_tx:
+            bc = tx.get('productBarcode')
+            if bc:
+                tx_by_barcode.setdefault(bc, []).append(tx)
+
+        risks = []
+        for item in items:
+            if item.get('deleted') or not item.get('barcode'):
+                continue
+
+            item_tx = tx_by_barcode.get(item['barcode'], [])
+            current_qty = int(item.get('quantity', 0))
+
+            series = build_daily_series(item_tx, current_qty)
+            if len(series) < 10:
+                continue
+
+            try:
+                result = predict_stock(series, horizon_days, train_ratio)
+                if 'error' in result:
+                    continue
+
+                forecast = result['forecast']
+                if not forecast:
+                    continue
+
+                predicted_lowest = min(f['predictedQuantity'] for f in forecast)
+                days_to_stockout = None
+                for i, f in enumerate(forecast):
+                    if f['predictedQuantity'] <= 0:
+                        days_to_stockout = i + 1
+                        break
+
+                if days_to_stockout is None:
+                    avg_daily = result['model'].get('avgDailyConsumption', 0)
+                    if avg_daily > 0 and current_qty > 0:
+                        days_to_stockout = round(current_qty / avg_daily)
+
+                risks.append({
+                    'itemId': item.get('id'),
+                    'itemName': item.get('name', ''),
+                    'barcode': item.get('barcode'),
+                    'currentQuantity': current_qty,
+                    'minStock': int(item.get('minStock', 0)),
+                    'avgDailyConsumption': result['model'].get('avgDailyConsumption', 0),
+                    'predictedLowest': predicted_lowest,
+                    'daysToStockout': days_to_stockout,
+                    'r2': result['metrics'].get('r2', 0),
+                    'mae': result['metrics'].get('mae', 0),
+                    'rmse': result['metrics'].get('rmse', 0),
+                    'slope': result['model'].get('slope', 0),
+                    'forecast': forecast,
+                })
+            except Exception:
+                continue
+
+        def sort_key(r):
+            if r['daysToStockout'] is not None:
+                return (0, r['daysToStockout'])
+            return (1, r['predictedLowest'])
+
+        risks.sort(key=sort_key)
+        self._send_json(200, {
+            'source': 'mlr-batch',
+            'totalAnalyzed': len(risks),
+            'risks': risks[:top_n],
+        })
 
     def do_OPTIONS(self):
         self.send_response(200)
