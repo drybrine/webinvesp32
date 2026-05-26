@@ -337,8 +337,9 @@ export const firebaseHelpers = {
     }
     try {
       const itemRef = ref(database, `inventory/${id}`);
-      await update(itemRef, { // Menggunakan update untuk partial update
+      await update(itemRef, {
         ...updates,
+        lastUpdated: Date.now(),  // rules check lastUpdated, not updatedAt
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
