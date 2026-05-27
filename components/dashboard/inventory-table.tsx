@@ -284,7 +284,7 @@ function MobileCard({ item, onView, onEdit, onDelete, onStockAdjust }: {
           <p className="font-medium truncate">{item.location || "-"}</p>
         </div>
       </div>
-      <div className="flex justify-between items-center pt-2 border-t">
+      <div className="flex flex-col gap-2 pt-2 border-t">
         <div className="flex gap-1">
           <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => onView({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })}>
             <Eye className="h-3 w-3" />
@@ -296,14 +296,14 @@ function MobileCard({ item, onView, onEdit, onDelete, onStockAdjust }: {
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
-        <div className="flex gap-1">
-          <Button size="sm" variant="outline" className="h-8 px-2 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => onStockAdjust(item, "add")}>
+        <div className="grid grid-cols-2 gap-1">
+          <Button size="sm" variant="outline" className="h-9 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => onStockAdjust(item, "add")}>
             <Plus className="h-3 w-3 mr-1" />
-            Tambah
+            Tambah Stok
           </Button>
-          <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => onStockAdjust(item, "subtract")} disabled={item.quantity <= 0}>
+          <Button size="sm" variant="outline" className="h-9" onClick={() => onStockAdjust(item, "subtract")} disabled={item.quantity <= 0}>
             <Minus className="h-3 w-3 mr-1" />
-            Kurang
+            Kurangi Stok
           </Button>
         </div>
       </div>
