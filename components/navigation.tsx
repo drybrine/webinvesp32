@@ -18,31 +18,23 @@ export default function Navigation() {
 	const pathname = usePathname()
 
 	return (
-		<nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
+		<nav className="sticky top-0 z-50 bg-background border-b border-border">
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-				<div className="flex justify-between h-16">
+				<div className="flex justify-between h-14">
 					{/* Logo */}
 					<div className="flex items-center">
-						<Link href="/" className="flex items-center gap-3 group">
-							<div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
-								<Package className="w-5 h-5 text-primary-foreground" />
+						<Link href="/" className="flex items-center gap-2.5 group">
+							<div className="w-7 h-7 bg-foreground rounded-md flex items-center justify-center">
+								<Package className="w-4 h-4 text-background" />
 							</div>
-							<div className="hidden sm:block">
-								<span className="text-xl font-bold text-foreground">
-									StokManager
-								</span>
-								<div className="text-xs text-muted-foreground -mt-0.5">
-									Smart Inventory
-								</div>
-							</div>
-							<span className="text-xl font-bold text-foreground sm:hidden">
-								SM
+							<span className="text-base font-bold text-foreground tracking-tight">
+								StokManager
 							</span>
 						</Link>
 					</div>
 
 					{/* Desktop Navigation */}
-					<div className="hidden md:flex md:items-center md:gap-1">
+					<div className="hidden md:flex md:items-center md:gap-0.5">
 						{navigation.map((item) => {
 							const Icon = item.icon
 							const isActive = pathname === item.href
@@ -51,13 +43,13 @@ export default function Navigation() {
 									key={item.name}
 									href={item.href}
 									className={cn(
-										"inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+										"inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
 										isActive
-											? "bg-primary text-primary-foreground"
+											? "bg-foreground text-background"
 											: "text-muted-foreground hover:text-foreground hover:bg-accent"
 									)}
 								>
-									<Icon className="w-4 h-4" />
+									<Icon className="w-3.5 h-3.5" />
 									{item.name}
 								</Link>
 							)
@@ -70,13 +62,13 @@ export default function Navigation() {
 							variant="ghost"
 							size="sm"
 							onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-							className="p-2 rounded-lg hover:bg-accent"
+							className="p-2 rounded-md hover:bg-accent"
 							aria-label={mobileMenuOpen ? "Tutup menu" : "Buka menu"}
 						>
 							{mobileMenuOpen ? (
-								<X className="w-5 h-5" />
+								<X className="w-4 h-4" />
 							) : (
-								<Menu className="w-5 h-5" />
+								<Menu className="w-4 h-4" />
 							)}
 						</Button>
 					</div>
@@ -86,7 +78,7 @@ export default function Navigation() {
 			{/* Mobile Navigation Menu */}
 			{mobileMenuOpen && (
 				<div className="md:hidden border-t border-border bg-background">
-					<div className="px-4 py-3 space-y-1">
+					<div className="px-4 py-2 space-y-0.5">
 						{navigation.map((item) => {
 							const Icon = item.icon
 							const isActive = pathname === item.href
@@ -96,13 +88,13 @@ export default function Navigation() {
 									href={item.href}
 									onClick={() => setMobileMenuOpen(false)}
 									className={cn(
-										"flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+										"flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
 										isActive
-											? "bg-primary text-primary-foreground"
+											? "bg-foreground text-background"
 											: "text-muted-foreground hover:text-foreground hover:bg-accent"
 									)}
 								>
-									<Icon className="w-5 h-5" />
+									<Icon className="w-4 h-4" />
 									{item.name}
 								</Link>
 							)
