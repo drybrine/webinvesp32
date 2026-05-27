@@ -496,7 +496,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
           <DialogDescription className="sr-only">
             {product 
               ? `Kelola stok untuk produk ${product.name} dengan barcode ${barcode}. Anda dapat melakukan stock in, stock out, atau mengedit informasi produk.`
-              : `Produk dengan barcode ${barcode} tidak ditemukan. Anda dapat menambahkan produk baru ke inventaris.`
+              : `Produk dengan barcode ${barcode} tidak ditemukan. Anda dapat menambahkan produk baru ke inventory.`
             }
           </DialogDescription>
         </DialogHeader>

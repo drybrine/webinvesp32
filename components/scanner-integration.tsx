@@ -415,7 +415,7 @@ export default function ScannerIntegration() {
             <h4 className="font-semibold">3. Fitur Real-time</h4>
             <ul className="list-disc list-inside text-sm space-y-1 ml-4">
               <li>Koneksi WebSocket untuk pembaruan pemindaian instan</li>
-              <li>Pencarian dan pembaruan inventaris otomatis</li>
+              <li>Pencarian dan pembaruan inventory otomatis</li>
               <li>Pemantauan status perangkat dan heartbeat</li>
               <li>Riwayat pemindaian dan analitik</li>
             </ul>

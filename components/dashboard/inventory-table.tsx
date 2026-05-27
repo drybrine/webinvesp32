@@ -82,7 +82,7 @@ export default function InventoryTable({
           <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
             <div>
               <CardTitle className="text-xl font-bold text-foreground">
-                Inventaris ({filteredInventory.length})
+                Inventory ({filteredInventory.length})
               </CardTitle>
               <CardDescription className="text-sm text-muted-foreground mt-1">
                 Kelola dan pantau stok barang Anda

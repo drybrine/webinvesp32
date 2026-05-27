@@ -389,7 +389,7 @@ export default function DashboardPage() {
     }
     const csvString = csvRows.join('\n');
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-    const fileName = `inventaris_${new Date().toISOString().split('T')[0]}.csv`;
+    const fileName = `inventory_${new Date().toISOString().split('T')[0]}.csv`;
     const link = document.createElement("a");
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
@@ -528,7 +528,7 @@ export default function DashboardPage() {
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Tambah Item Baru</DialogTitle>
-              <DialogDescription>Masukkan detail item inventaris.</DialogDescription>
+              <DialogDescription>Masukkan detail item inventory.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">

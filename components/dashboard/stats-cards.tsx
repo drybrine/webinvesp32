@@ -73,7 +73,7 @@ export default function StatsCards({
             <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground">
               Rp {totalValue.toLocaleString('id-ID')}
             </div>
-            <p className="text-xs text-muted-foreground">Nilai inventaris total</p>
+            <p className="text-xs text-muted-foreground">Nilai inventory total</p>
             <div className="w-full bg-muted rounded-full h-1.5">
               <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${Math.min(totalValue / 1000000, 100)}%` }} />
             </div>

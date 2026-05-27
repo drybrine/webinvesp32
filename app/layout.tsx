@@ -17,7 +17,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "StokManager - Sistem Manajemen Inventaris",
+  title: "StokManager - Sistem Manajemen Inventory",
   description: "Pemindai barcode real-time dengan integrasi ESP32",
   generator: "Next.js",
   keywords: ["inventory", "barcode", "esp32", "stock", "management"],
@@ -26,14 +26,14 @@ export const metadata: Metadata = {
   publisher: "StokManager",
   robots: "index, follow",
   openGraph: {
-    title: "StokManager - Sistem Manajemen Inventaris",
+    title: "StokManager - Sistem Manajemen Inventory",
     description: "Pemindai barcode real-time dengan integrasi ESP32",
     type: "website",
     locale: "id_ID",
   },
   twitter: {
     card: "summary_large_image",
-    title: "StokManager - Sistem Manajemen Inventaris",
+    title: "StokManager - Sistem Manajemen Inventory",
     description: "Pemindai barcode real-time dengan integrasi ESP32",
   },
   metadataBase: new URL('https://stokmanager.netlify.app'),
