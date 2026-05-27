@@ -428,6 +428,8 @@ def predict_stock(series, horizon_days=14, train_ratio=0.85):
         stockout_ts = datetime.now() + timedelta(days=days_left)
         stockout_date = stockout_ts.strftime('%Y-%m-%d')
 
+    anomalies = detect_anomalies(series)
+
     return {
         'source': 'mlr-py',
         'model': {
@@ -451,4 +453,98 @@ def predict_stock(series, horizon_days=14, train_ratio=0.85):
         },
         'forecast': forecast,
         'stockoutDate': stockout_date,
+        'anomalies': anomalies,
     }
+
+
+def detect_anomalies(series):
+    """IQR-based spike detection + gap detection.
+
+    Returns list of anomaly dicts:
+      { timestamp, type, value, expected, severity, description }
+    Types: 'spike_consumption', 'spike_restock', 'gap'
+    Severity: 'low', 'medium', 'high'
+    """
+    if len(series) < 5:
+        return []
+
+    series = sorted(series, key=lambda x: x['timestamp'])
+    timestamps = [s['timestamp'] for s in series]
+    quantities = [s['quantity'] for s in series]
+    n = len(series)
+
+    anomalies = []
+
+    # --- 1. Spike detection via IQR ---
+    consumptions = []
+    restocks = []
+    for i in range(1, n):
+        delta = quantities[i - 1] - quantities[i]
+        if delta > 0:
+            consumptions.append((i, delta))
+        elif delta < -5:
+            restocks.append((i, abs(delta)))
+
+    def iqr_bounds(values):
+        if len(values) < 4:
+            return None, None
+        sorted_v = sorted(values)
+        q1 = sorted_v[len(sorted_v) // 4]
+        q3 = sorted_v[3 * len(sorted_v) // 4]
+        iqr = q3 - q1
+        if iqr == 0:
+            return None, None
+        return q1 - 1.5 * iqr, q3 + 1.5 * iqr
+
+    if consumptions:
+        c_values = [v for _, v in consumptions]
+        c_mean = mean(c_values)
+        _, upper = iqr_bounds(c_values)
+        if upper is not None:
+            for idx, val in consumptions:
+                if val > upper:
+                    excess = val / c_mean if c_mean > 0 else 1
+                    severity = 'high' if excess > 3 else 'medium' if excess > 2 else 'low'
+                    anomalies.append({
+                        'timestamp': timestamps[idx],
+                        'type': 'spike_consumption',
+                        'value': round(val, 1),
+                        'expected': round(c_mean, 1),
+                        'severity': severity,
+                        'description': f'Konsumsi {round(val,1)} jauh di atas rata-rata {round(c_mean,1)}/hari',
+                    })
+
+    if restocks:
+        r_values = [v for _, v in restocks]
+        r_mean = mean(r_values)
+        _, upper_r = iqr_bounds(r_values)
+        if upper_r is not None:
+            for idx, val in restocks:
+                if val > upper_r:
+                    severity = 'high' if val > r_mean * 3 else 'medium'
+                    anomalies.append({
+                        'timestamp': timestamps[idx],
+                        'type': 'spike_restock',
+                        'value': round(val, 1),
+                        'expected': round(r_mean, 1),
+                        'severity': severity,
+                        'description': f'Restock {round(val,1)} unit tidak wajar (rata-rata {round(r_mean,1)})',
+                    })
+
+    # --- 2. Gap detection (tidak ada transaksi > 14 hari) ---
+    GAP_THRESHOLD_DAYS = 14
+    for i in range(1, n):
+        gap_ms = timestamps[i] - timestamps[i - 1]
+        gap_days = gap_ms / MS_PER_DAY
+        if gap_days > GAP_THRESHOLD_DAYS:
+            anomalies.append({
+                'timestamp': timestamps[i - 1],
+                'type': 'gap',
+                'value': round(gap_days, 0),
+                'expected': GAP_THRESHOLD_DAYS,
+                'severity': 'high' if gap_days > 30 else 'medium',
+                'description': f'Tidak ada transaksi selama {round(gap_days,0):.0f} hari',
+            })
+
+    anomalies.sort(key=lambda x: x['timestamp'])
+    return anomalies

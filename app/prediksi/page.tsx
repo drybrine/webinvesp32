@@ -27,7 +27,7 @@ import {
   type StockDataPoint,
   type PredictionResult,
 } from "@/lib/stock-prediction"
-import PredictionChart from "@/components/prediction-chart"
+import PredictionChart, { AnomalyPoint } from "@/components/prediction-chart"
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
@@ -72,12 +72,14 @@ export default function PrediksiPage() {
   }, [selectedItem, transactions])
 
   const [prediction, setPrediction] = useState<PredictionResult | null>(null)
+  const [anomalies, setAnomalies] = useState<AnomalyPoint[]>([])
 
   useEffect(() => {
     if (history.length < 2 || !selectedItem) {
       setPrediction(null)
       setPredictionSource(null)
       setPredictionError(null)
+      setAnomalies([])
       return
     }
 
@@ -122,6 +124,7 @@ export default function PrediksiPage() {
           forecast: data.forecast,
           stockoutDate: data.stockoutDate ? new Date(data.stockoutDate) : null,
         })
+        setAnomalies(data.anomalies || [])
         setPredictionSource("server")
       } catch (err) {
         if ((err as Error).name === "AbortError") return
@@ -287,9 +290,53 @@ export default function PrediksiPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <PredictionChart data={chartData} minStock={selectedItem.minStock} />
+              <PredictionChart data={chartData} minStock={selectedItem.minStock} anomalies={anomalies} />
             </CardContent>
           </Card>
+
+          {anomalies.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-500" />
+                  Anomali Terdeteksi ({anomalies.length})
+                </CardTitle>
+                <CardDescription>
+                  Pola tidak normal pada data historis transaksi (IQR + gap detection)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {anomalies.map((a, i) => {
+                    const severityClass =
+                      a.severity === "high"
+                        ? "border-red-200 bg-red-50 text-red-700"
+                        : a.severity === "medium"
+                        ? "border-orange-200 bg-orange-50 text-orange-700"
+                        : "border-yellow-200 bg-yellow-50 text-yellow-700"
+                    const typeLabel =
+                      a.type === "spike_consumption"
+                        ? "Lonjakan Konsumsi"
+                        : a.type === "spike_restock"
+                        ? "Restock Tidak Wajar"
+                        : "Gap Data"
+                    return (
+                      <div key={i} className={`flex items-start justify-between rounded-md border px-3 py-2 text-sm ${severityClass}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{typeLabel}</span>
+                          <span className="text-xs opacity-75">{fmt(a.timestamp)}</span>
+                        </div>
+                        <div className="text-right text-xs">
+                          <div>{a.description}</div>
+                          <div className="opacity-60 capitalize">{a.severity}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
