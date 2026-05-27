@@ -467,13 +467,6 @@ if (typeof window !== 'undefined') {
     console.log('🔥 Page hiding, cleaning up Firebase connections...');
     firebaseCleanup.cleanup();
   });
-  
-  window.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      console.log('🔥 Page hidden, cleaning up Firebase connections...');
-      firebaseCleanup.cleanup();
-    }
-  });
 }
 
 // Function to check if Firebase is properly configured and initialized

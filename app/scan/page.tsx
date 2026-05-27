@@ -70,14 +70,47 @@ export default function ScanPage() {
     )
   }
 
-  const processedScansList = scans.map(s => ({
-    ...s,
-    itemName: s.itemFound ? 'Item Ditemukan' : 'Tidak Ditemukan',
-    itemCategory: 'Unknown',
-    itemLocation: s.location || 'Unknown',
-    timeAgo: new Date(s.timestamp).toLocaleString(),
-    status: s.processed ? 'processed' : 'new' as 'new' | 'processed' | 'error'
-  }));
+  const processedScansList = scans
+    .filter(s => {
+      if (!searchTerm) return true
+      const term = searchTerm.toLowerCase()
+      return (
+        s.barcode?.toLowerCase().includes(term) ||
+        s.deviceId?.toLowerCase().includes(term) ||
+        s.location?.toLowerCase().includes(term)
+      )
+    })
+    .map(s => ({
+      ...s,
+      itemName: s.itemFound ? 'Item Ditemukan' : 'Tidak Ditemukan',
+      itemCategory: 'Unknown',
+      itemLocation: s.location || 'Unknown',
+      timeAgo: new Date(s.timestamp).toLocaleString(),
+      status: s.processed ? 'processed' : 'new' as 'new' | 'processed' | 'error'
+    }));
+
+  const exportScansToCSV = () => {
+    const headers = ["ID", "Barcode", "Device ID", "Timestamp", "Processed", "Location"]
+    const rows = scans.map(s => [
+      s.id,
+      s.barcode || "",
+      s.deviceId || "",
+      new Date(s.timestamp).toLocaleString(),
+      s.processed ? "Ya" : "Tidak",
+      s.location || "",
+    ])
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", `scan_history_${new Date().toISOString().split("T")[0]}.csv`)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -153,7 +186,7 @@ export default function ScanPage() {
                 <CardTitle>Riwayat Transaksi</CardTitle>
                 <CardDescription>Semua aktivitas scan akan muncul di sini</CardDescription>
               </div>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={exportScansToCSV}>
                 <Download className="w-4 h-4 mr-2" />
                 Export
               </Button>

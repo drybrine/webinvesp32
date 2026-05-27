@@ -84,6 +84,49 @@ export default function DashboardPage() {
     return ["all", ...new Set(inventory.map((item) => item.category).filter(cat => typeof cat === 'string' && cat.trim() !== ''))]
   }, [inventory, inventoryLoading]);
 
+  const filteredInventory = useMemo(() => {
+    let result = [...inventory]
+
+    // Search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      result = result.filter(
+        (item) =>
+          item.name.toLowerCase().includes(term) ||
+          (item.barcode && item.barcode.toLowerCase().includes(term)) ||
+          (item.category && item.category.toLowerCase().includes(term)) ||
+          (item.location && item.location.toLowerCase().includes(term)),
+      )
+    }
+
+    // Category filter
+    if (filterCategory && filterCategory !== "all") {
+      result = result.filter((item) => item.category === filterCategory)
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      switch (sortOrder) {
+        case "name-asc":
+          return a.name.localeCompare(b.name)
+        case "name-desc":
+          return b.name.localeCompare(a.name)
+        case "quantity-asc":
+          return b.quantity - a.quantity
+        case "quantity-desc":
+          return a.quantity - b.quantity
+        case "price-asc":
+          return a.price - b.price
+        case "price-desc":
+          return b.price - a.price
+        default:
+          return 0
+      }
+    })
+
+    return result
+  }, [inventory, searchTerm, filterCategory, sortOrder])
+
   const firebaseStatus = getFirebaseStatus()
   const onlineDevices = realtimeOnlineDevices
 
@@ -399,6 +442,7 @@ export default function DashboardPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
     toast({ title: "Export Berhasil", description: `${inventory.length} item diexport` });
   };
@@ -506,7 +550,7 @@ export default function DashboardPage() {
         {/* Inventory Table */}
         <InventoryTable
           inventory={inventory}
-          filteredInventory={inventory}
+          filteredInventory={filteredInventory}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           filterCategory={filterCategory}

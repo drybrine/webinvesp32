@@ -77,8 +77,11 @@ export default function PrediksiPage() {
     if (history.length < 2 || !selectedItem) {
       setPrediction(null)
       setPredictionSource(null)
+      setPredictionError(null)
       return
     }
+
+    const controller = new AbortController()
 
     const itemTx = transactions
       .filter((t) => t.productBarcode === selectedItem.barcode)
@@ -100,6 +103,7 @@ export default function PrediksiPage() {
             horizonDays,
             trainRatio,
           }),
+          signal: controller.signal,
         })
         if (!res.ok) throw new Error(`Server error: HTTP ${res.status}`)
         const data = await res.json()
@@ -120,6 +124,7 @@ export default function PrediksiPage() {
         })
         setPredictionSource("server")
       } catch (err) {
+        if ((err as Error).name === "AbortError") return
         setPrediction(null)
         setPredictionSource(null)
         setPredictionError((err as Error).message || "Gagal menghubungi server prediksi.")
@@ -127,6 +132,7 @@ export default function PrediksiPage() {
     }
 
     fetchFromAPI()
+    return () => controller.abort()
   }, [history, horizonDays, trainRatio, selectedItem, transactions])
 
   const chartData = useMemo(() => {

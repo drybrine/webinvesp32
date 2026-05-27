@@ -138,6 +138,13 @@ export default function TransaksiPage() {
     if (formData.type === "out") {
       finalQuantity = -Math.abs(quantityNum);
       totalAmount = finalQuantity * unitPriceNum;
+
+      // Cek stok cukup sebelum proses
+      const item = inventory.find(i => i.barcode === formData.productBarcode);
+      if (item && (item.quantity || 0) + finalQuantity < 0) {
+        toast({ title: "Error", description: `Stok tidak cukup. Stok saat ini: ${item.quantity}`, variant: "destructive" });
+        return;
+      }
     } else if (formData.type === "adjustment") {
       totalAmount = finalQuantity * unitPriceNum;
     } else {
@@ -158,17 +165,18 @@ export default function TransaksiPage() {
     }
 
     try {
+      const itemToUpdate = inventory.find(item => item.barcode === formData.productBarcode);
+      if (!itemToUpdate) {
+        toast({ title: "Error", description: `Produk dengan barcode ${formData.productBarcode} tidak ditemukan di inventory.`, variant: "destructive" });
+        return;
+      }
+
       await firebaseHelpers.addTransaction(newTransactionData);
 
-      const itemToUpdate = inventory.find(item => item.barcode === formData.productBarcode);
-      if (itemToUpdate) {
-        const currentStock = itemToUpdate.quantity || 0;
-        const newStock = currentStock + finalQuantity;
-        await updateInventoryItem(itemToUpdate.id, { quantity: newStock });
-        toast({ title: "Berhasil", description: "Transaksi berhasil ditambahkan." });
-      } else {
-        toast({ title: "Peringatan", description: `Produk dengan barcode ${formData.productBarcode} tidak ditemukan.` });
-      }
+      const currentStock = itemToUpdate.quantity || 0;
+      const newStock = currentStock + finalQuantity;
+      await updateInventoryItem(itemToUpdate.id, { quantity: newStock });
+      toast({ title: "Berhasil", description: "Transaksi berhasil ditambahkan." });
 
       setIsAddDialogOpen(false)
       resetForm()
