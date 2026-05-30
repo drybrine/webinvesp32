@@ -37,7 +37,7 @@ interface Transaction {
 }
 
 export default function TransaksiPage() {
-  const { items: inventory, loading: inventoryLoading, updateItem: updateInventoryItem } = useFirebaseInventory()
+  const { items: inventory, loading: inventoryLoading } = useFirebaseInventory()
   const {
     transactions,
     loading: transactionsLoading,
@@ -171,11 +171,9 @@ export default function TransaksiPage() {
         return;
       }
 
-      await firebaseHelpers.addTransaction(newTransactionData);
-
-      const currentStock = itemToUpdate.quantity || 0;
-      const newStock = currentStock + finalQuantity;
-      await updateInventoryItem(itemToUpdate.id, { quantity: newStock });
+      // Atomic: stock increment + transaction record in a single multi-path update.
+      // finalQuantity is the signed delta (negative for "out").
+      await firebaseHelpers.adjustStock(itemToUpdate.id, finalQuantity, newTransactionData);
       toast({ title: "Berhasil", description: "Transaksi berhasil ditambahkan." });
 
       setIsAddDialogOpen(false)

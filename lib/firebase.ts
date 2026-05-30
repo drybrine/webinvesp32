@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app"
-import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference, onValue } from "firebase/database" // Added update and onValue
+import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference, onValue, increment } from "firebase/database" // Added update, onValue, increment
 import { initializeConnectionMonitor } from "./firebase-connection-monitor"
 import { initializeFirebaseErrorHandling } from "./firebase-error-suppressor" // Use new enhanced error suppressor
 
@@ -70,6 +70,8 @@ let app: FirebaseApp | null = null // Use FirebaseApp type
 export let database: Database | null = null
 let auth: any = null // Auth will be lazy loaded
 let firebaseInitialized = false
+let connectionListenerRegistered = false
+let connectionMonitorRegistered = false
 
 // Define a type for dbRefs
 interface DbRefs {
@@ -107,14 +109,28 @@ const checkNetworkConnectivity = async (): Promise<boolean> => {
 };
 
 // Delayed Firebase initialization with network checking
+let initInProgress = false;
 const initializeFirebaseWithRetry = async (retryCount = 0): Promise<void> => {
   const maxRetries = 3;
-  
-  if (retryCount > maxRetries) {
-    console.warn("🔥 Max retries reached for Firebase initialization");
+
+  // Guard against concurrent retry chains (initial load + 'online' event).
+  // Already initialized → nothing to do.
+  if (firebaseInitialized) {
     return;
   }
-  
+  // Another chain is mid-flight → don't start a second one.
+  if (initInProgress && retryCount === 0) {
+    return;
+  }
+
+  if (retryCount > maxRetries) {
+    console.warn("🔥 Max retries reached for Firebase initialization");
+    initInProgress = false;
+    return;
+  }
+
+  initInProgress = true;
+
   // Check network connectivity first
   const hasConnectivity = await checkNetworkConnectivity();
   if (!hasConnectivity && retryCount < maxRetries) {
@@ -122,14 +138,17 @@ const initializeFirebaseWithRetry = async (retryCount = 0): Promise<void> => {
     setTimeout(() => initializeFirebaseWithRetry(retryCount + 1), (retryCount + 1) * 2000);
     return;
   }
-  
+
   try {
     initializeFirebase();
+    initInProgress = false;
     console.log("🔥 Firebase initialized successfully with network check");
   } catch (error) {
     console.error("🔥 Firebase initialization failed:", error);
     if (retryCount < maxRetries) {
       setTimeout(() => initializeFirebaseWithRetry(retryCount + 1), (retryCount + 1) * 2000);
+    } else {
+      initInProgress = false;
     }
   }
 };
@@ -161,8 +180,9 @@ const initializeFirebase = () => {
     // Don't initialize auth unless explicitly needed - saves ~55KB
     // auth = getAuth(app)
     
-    // Add connection monitoring for WebSocket issues
-    if (database) {
+    // Add connection monitoring for WebSocket issues (register only once)
+    if (database && !connectionListenerRegistered) {
+      connectionListenerRegistered = true
       const connectedRef = ref(database, '.info/connected')
       onValue(connectedRef, (snapshot) => {
         const connected = snapshot.val()
@@ -203,8 +223,9 @@ const initializeFirebase = () => {
       }
     }
 
-    // Initialize connection monitoring for WebSocket issues
-    if (typeof window !== "undefined" && database) {
+    // Initialize connection monitoring for WebSocket issues (register only once)
+    if (typeof window !== "undefined" && database && !connectionMonitorRegistered) {
+      connectionMonitorRegistered = true
       try {
         initializeConnectionMonitor(database)
         console.log("🔍 Firebase connection monitoring initialized")
@@ -348,6 +369,43 @@ export const firebaseHelpers = {
     }
   },
 
+  // Atomic stock adjustment — uses server-side increment to avoid lost updates
+  // from concurrent read-modify-write (dashboard + scanner + multiple tabs).
+  // Optionally records a transaction in the SAME atomic multi-path update so
+  // stock and ledger can never diverge. Pass delta (negative for stock out).
+  adjustStock: async (
+    itemId: string,
+    delta: number,
+    transactionData?: Record<string, any>,
+  ) => {
+    if (!database || !dbRefs) {
+      console.error("Firebase not available for adjustStock");
+      throw new Error("Firebase not available - operation failed");
+    }
+    try {
+      const updates: Record<string, any> = {
+        [`inventory/${itemId}/quantity`]: increment(delta),
+        [`inventory/${itemId}/lastUpdated`]: Date.now(),
+        [`inventory/${itemId}/updatedAt`]: serverTimestamp(),
+      };
+
+      if (transactionData) {
+        const newTxRef = push(dbRefs.transactions);
+        updates[`transactions/${newTxRef.key}`] = {
+          ...transactionData,
+          id: newTxRef.key,
+          timestamp: serverTimestamp(),
+        };
+      }
+
+      // Single atomic multi-path update at the root
+      await update(ref(database), updates);
+    } catch (error) {
+      console.error("Error adjusting stock:", error);
+      throw error;
+    }
+  },
+
   // Add scan record (matching ESP32 .ino structure exactly)
   addScanRecord: async (scanData: any) => {
     if (!database || !dbRefs || !dbRefs.scans) {
@@ -387,10 +445,12 @@ export const firebaseHelpers = {
 
     try {
       const deviceRef = ref(database, `devices/${deviceId}`);
-      await set(deviceRef, {
+      // Use update() not set() — set() replaces the entire node and would wipe
+      // fields written concurrently by the ESP32 (scanCount, batteryLevel, rssi).
+      await update(deviceRef, {
         ...status,
         lastSeen: serverTimestamp(),
-      }); // Firebase Realtime Database set() only accepts 2 arguments
+      });
     } catch (error) {
       console.error("Error updating device status:", error);
       throw error;

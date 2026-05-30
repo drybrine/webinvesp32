@@ -93,6 +93,7 @@ export function useFirebaseInventory() {
 
   useEffect(() => {
     let unsubscribe: Unsubscribe | undefined;
+    let cancelled = false;
 
     if (typeof window === "undefined") {
       setLoading(false);
@@ -102,7 +103,9 @@ export function useFirebaseInventory() {
     const initializeInventory = async () => {
       // Wait for Firebase to be ready before proceeding
       const firebaseReady = await waitForFirebaseReady(5000);
-      
+
+      if (cancelled) return;
+
       if (!firebaseReady || !isFirebaseConfigured() || !database) {
         console.log("Firebase not available, using local storage for inventory");
         const storedItems = getFromStorage(STORAGE_KEYS.INVENTORY);
@@ -137,6 +140,12 @@ export function useFirebaseInventory() {
           }
         );
 
+        // If the effect was cleaned up while we awaited, unsubscribe immediately
+        if (cancelled && unsubscribe) {
+          unsubscribe();
+          return;
+        }
+
         // Register listener for global cleanup
         if (unsubscribe) {
           firebaseCleanup.addListener(unsubscribe);
@@ -151,6 +160,7 @@ export function useFirebaseInventory() {
     initializeInventory();
 
     return () => {
+      cancelled = true;
       if (unsubscribe) {
         unsubscribe();
       }
@@ -238,7 +248,8 @@ export function useFirebaseScans() {
 
   useEffect(() => {
     let unsubscribe: Unsubscribe | undefined;
-    
+    let cancelled = false;
+
     if (typeof window === "undefined") {
       setLoading(false);
       return;
@@ -247,6 +258,8 @@ export function useFirebaseScans() {
     const initializeScans = async () => {
       // Wait for Firebase to be ready before proceeding
       const firebaseReady = await waitForFirebaseReady(5000);
+
+      if (cancelled) return;
       
       if (!firebaseReady || !isFirebaseConfigured() || !database) {
         console.log("Firebase not available, using local storage for scans");
@@ -312,6 +325,12 @@ export function useFirebaseScans() {
           }
         );
 
+        // If the effect was cleaned up while we awaited, unsubscribe immediately
+        if (cancelled && unsubscribe) {
+          unsubscribe();
+          return;
+        }
+
         // Register listener for global cleanup
         if (unsubscribe) {
           firebaseCleanup.addListener(unsubscribe);
@@ -326,6 +345,7 @@ export function useFirebaseScans() {
     initializeScans();
 
     return () => {
+      cancelled = true;
       if (unsubscribe) {
         unsubscribe();
       }

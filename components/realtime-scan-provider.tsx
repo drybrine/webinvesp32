@@ -299,7 +299,13 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
 
     // Call the async setup function
     let cleanup: (() => void) | undefined
+    let cancelled = false
     setupFirebaseListener().then((unsubscribe) => {
+      // If the effect was cleaned up while setup was awaiting, unsubscribe now
+      if (cancelled) {
+        if (unsubscribe) unsubscribe()
+        return
+      }
       cleanup = unsubscribe
     }).catch((error) => {
       console.error('🔥 Failed to setup Firebase listener:', error)
@@ -307,6 +313,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
 
     // Cleanup function
     return () => {
+      cancelled = true
       if (cleanup) {
         cleanup()
       }

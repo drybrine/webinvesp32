@@ -58,6 +58,7 @@ export default function DashboardPage() {
 
   const [isAddItemOpen, setIsAddItemOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
+  const editBaselineQtyRef = useRef<number>(0)
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null)
   const [stockAdjustment, setStockAdjustment] = useState<StockAdjustment | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
@@ -343,27 +344,27 @@ export default function DashboardPage() {
   const updateInventoryItem = async () => {
     if (!editingItem) return
     try {
-      const original = inventory.find((i) => i.id === editingItem.id)
-      const qtyDiff = original ? editingItem.quantity - original.quantity : 0
+      // Write only metadata — never the absolute quantity, to avoid clobbering
+      // concurrent stock changes (scanner/other tabs) that happened while the
+      // dialog was open.
+      const { quantity, id, ...metadata } = editingItem
+      await updateItem(id, metadata as Partial<InventoryItem>)
 
-      await updateItem(editingItem.id, editingItem)
-
-      if (qtyDiff !== 0 && original) {
-        try {
-          await firebaseHelpers.addTransaction({
-            type: qtyDiff > 0 ? "in" : "out",
-            productName: editingItem.name,
-            productBarcode: editingItem.barcode ?? "",
-            quantity: Math.abs(qtyDiff),
-            unitPrice: editingItem.price ?? 0,
-            totalAmount: (editingItem.price ?? 0) * Math.abs(qtyDiff),
-            reason: "Penyesuaian via edit item",
-            operator: "Dashboard",
-            notes: `Stok ${original.quantity} → ${editingItem.quantity}`,
-          })
-        } catch (txErr) {
-          console.error("Gagal mencatat transaksi:", txErr)
-        }
+      // If the user changed quantity in the dialog, apply it as an atomic delta
+      // relative to what they saw when the dialog opened (not the live value).
+      const qtyDiff = quantity - editBaselineQtyRef.current
+      if (qtyDiff !== 0) {
+        await firebaseHelpers.adjustStock(id, qtyDiff, {
+          type: qtyDiff > 0 ? "in" : "out",
+          productName: editingItem.name,
+          productBarcode: editingItem.barcode ?? "",
+          quantity: Math.abs(qtyDiff),
+          unitPrice: editingItem.price ?? 0,
+          totalAmount: (editingItem.price ?? 0) * Math.abs(qtyDiff),
+          reason: "Penyesuaian via edit item",
+          operator: "Dashboard",
+          notes: `Penyesuaian via edit item`,
+        })
       }
 
       setEditingItem(null)
@@ -392,24 +393,21 @@ export default function DashboardPage() {
       return
     }
     try {
-      await updateItem(itemId, { quantity: newQuantity } as Partial<InventoryItem>)
-
       const adjustedItem = inventory.find((i) => i.id === itemId)
-      try {
-        await firebaseHelpers.addTransaction({
-          type: type === "add" ? "in" : "out",
-          productName: itemName,
-          productBarcode: adjustedItem?.barcode ?? "",
-          quantity: amount,
-          unitPrice: adjustedItem?.price ?? 0,
-          totalAmount: (adjustedItem?.price ?? 0) * amount,
-          reason: type === "add" ? "Penambahan stok manual" : "Pengurangan stok manual",
-          operator: "Dashboard",
-          notes: `Stok ${currentQuantity} → ${newQuantity}`,
-        })
-      } catch (txErr) {
-        console.error("Gagal mencatat transaksi:", txErr)
-      }
+      const delta = type === "add" ? amount : -amount
+
+      // Atomic: server-side increment + transaction in one multi-path update
+      await firebaseHelpers.adjustStock(itemId, delta, {
+        type: type === "add" ? "in" : "out",
+        productName: itemName,
+        productBarcode: adjustedItem?.barcode ?? "",
+        quantity: amount,
+        unitPrice: adjustedItem?.price ?? 0,
+        totalAmount: (adjustedItem?.price ?? 0) * amount,
+        reason: type === "add" ? "Penambahan stok manual" : "Pengurangan stok manual",
+        operator: "Dashboard",
+        notes: `Penyesuaian stok manual`,
+      })
 
       setStockAdjustment(null)
       toast({ title: "Berhasil", description: `Stok ${itemName} ${type === "add" ? "ditambah" : "dikurangi"} sebanyak ${amount}` })
@@ -448,7 +446,10 @@ export default function DashboardPage() {
   };
 
   const handleView = (item: InventoryItem) => setViewingItem({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })
-  const handleEdit = (item: InventoryItem) => setEditingItem({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })
+  const handleEdit = (item: InventoryItem) => {
+    editBaselineQtyRef.current = item.quantity
+    setEditingItem({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })
+  }
   const handleStockAdj = (item: InventoryItem, type: "add" | "subtract") => {
     setStockAdjustment({ itemId: item.id, itemName: item.name, currentQuantity: item.quantity, type, amount: type === "add" && item.quantity <= item.minStock ? Math.max(item.minStock * 2 - item.quantity, 5) : 1 })
   }

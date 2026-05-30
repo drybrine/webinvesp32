@@ -33,7 +33,7 @@ interface InventoryItem {
 }
 
 export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQuickActionPopupProps) {
-  const { items, updateItem, addItem } = useFirebaseInventory()
+  const { items, addItem } = useFirebaseInventory()
   const { toast } = useToast()
   const [product, setProduct] = useState<InventoryItem | null>(null)
   const [quickActionAmount, setQuickActionAmount] = useState(1)
@@ -119,13 +119,9 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
 
     setIsLoading(true)
     try {
-      const newQuantity = product.quantity + quickActionAmount
-      await updateItem(product.id, { quantity: newQuantity })
-
-      // Record transaction
       const unitPrice = Number(product.price) || 0
       const totalAmount = unitPrice * quickActionAmount
-      
+
       const transactionData = {
         type: "in" as "in" | "out" | "adjustment",
         productName: product.name,
@@ -135,18 +131,18 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         totalAmount: totalAmount,
         reason: "Stock In via Quick Action",
         operator: "ESP32 Scanner",
-        timestamp: Date.now(),
         notes: `Stock in via ESP32 scanner - ${isMobile ? 'Mobile' : 'Desktop'}`,
       }
 
-      await firebaseHelpers.addTransaction(transactionData)
+      // Atomic: server-side increment + transaction in one multi-path update
+      await firebaseHelpers.adjustStock(product.id, quickActionAmount, transactionData)
 
       toast({
         title: "✅ Stock In Berhasil",
-        description: `${product.name} +${quickActionAmount} unit. Stok sekarang: ${newQuantity}`,
+        description: `${product.name} +${quickActionAmount} unit.`,
         duration: 3000,
       })
-      
+
       onClose()
     } catch (error) {
       console.error("Error stock in:", error)
@@ -165,13 +161,9 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
 
     setIsLoading(true)
     try {
-      const newQuantity = product.quantity - quickActionAmount
-      await updateItem(product.id, { quantity: newQuantity })
-
-      // Record transaction
       const unitPrice = Number(product.price) || 0
       const totalAmount = unitPrice * quickActionAmount
-      
+
       const transactionData = {
         type: "out" as "in" | "out" | "adjustment",
         productName: product.name,
@@ -181,18 +173,18 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         totalAmount: totalAmount,
         reason: "Stock Out via Quick Action",
         operator: "ESP32 Scanner",
-        timestamp: Date.now(),
         notes: `Stock out via ESP32 scanner - ${isMobile ? 'Mobile' : 'Desktop'}`,
       }
 
-      await firebaseHelpers.addTransaction(transactionData)
+      // Atomic: server-side decrement + transaction in one multi-path update
+      await firebaseHelpers.adjustStock(product.id, -quickActionAmount, transactionData)
 
       toast({
         title: "✅ Stock Out Berhasil",
-        description: `${product.name} -${quickActionAmount} unit. Stok sekarang: ${newQuantity}`,
+        description: `${product.name} -${quickActionAmount} unit.`,
         duration: 3000,
       })
-      
+
       onClose()
     } catch (error) {
       console.error("Error stock out:", error)
