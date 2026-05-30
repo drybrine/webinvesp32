@@ -1,17 +1,19 @@
 # DESIGN.md — StokManager
 
-Dokumen desain teknis sistem manajemen inventaris real-time berbasis IoT + Web.
+Dokumen desain teknis sistem manajemen inventory real-time berbasis IoT + Web.
 
 ---
 
 ## 1. Gambaran Sistem
 
-StokManager adalah sistem manajemen inventaris untuk AHASS (Honda Authorized Service Station) yang menggabungkan:
+StokManager adalah sistem manajemen inventory untuk AHASS (Honda Authorized Service Station) yang menggabungkan:
 
 - **Hardware**: ESP32 + GM67 Barcode Scanner + OLED SSD1306 + baterai Li-Po
 - **Backend**: Firebase Realtime Database (sumber kebenaran tunggal)
 - **Frontend**: Next.js 16 (App Router, Turbopack) di Vercel
 - **ML**: Multi Linear Regression + EMA Smoothing untuk prediksi stockout
+- **Anomaly Detection**: IQR + gap detection untuk pola transaksi tidak normal
+- **Barcode**: PDF417 (2D) di-render via bwip-js, dapat di-scan GM67
 
 ---
 
@@ -199,7 +201,22 @@ GM67 scan barcode
 
 ### Realtime Strategy
 
-Semua data di-subscribe via `onValue` listener (bukan polling). Device online/offline dideteksi client-side: threshold 15 detik, re-evaluasi tiap 3 detik. Transaksi di-fetch dengan `limitToLast(5000)` untuk performa.
+Semua data di-subscribe via `onValue` listener (bukan polling). Device online/offline dideteksi client-side: threshold 15 detik, re-evaluasi tiap 3 detik. Transaksi di-fetch dengan `limitToLast(5000)` untuk performa (dashboard pakai 500 untuk prediksi batch).
+
+### Atomic Stock Update (anti race condition)
+
+Semua perubahan stok memakai **server-side `increment(delta)`** dalam satu **multi-path `update()`** yang menulis `inventory/{id}/quantity` dan `transactions/{id}` sekaligus:
+
+```
+firebaseHelpers.adjustStock(itemId, delta, transactionData)
+  → update(ref(database), {
+      'inventory/{id}/quantity': increment(delta),   // atomic server-side
+      'inventory/{id}/lastUpdated': Date.now(),
+      'transactions/{newKey}': { ...transactionData },
+    })
+```
+
+Pendekatan ini menghilangkan race condition read-modify-write: scanner, dashboard, dan multi-tab yang mengubah stok barang sama secara bersamaan tidak saling menimpa (lost update), dan stok + ledger transaksi tidak bisa diverge karena ditulis dalam satu operasi atomik.
 
 ---
 
@@ -209,22 +226,23 @@ Semua data di-subscribe via `onValue` listener (bukan polling). Device online/of
 
 | Route | File | Fungsi |
 |-------|------|--------|
-| `/` | `app/page.tsx` | Dashboard: inventaris, stock ±, prediksi ringkas (server-side batch), device status |
+| `/` | `app/page.tsx` | Dashboard: inventory, stock ±, search/filter/sort, prediksi ringkas (server-side batch), device status |
 | `/transaksi` | `app/transaksi/page.tsx` | History transaksi, filter, export CSV, pagination 50/halaman |
-| `/prediksi` | `app/prediksi/page.tsx` | MLR chart (30 hari historis + forecast), metrics, badge model |
-| `/scan` | `app/scan/page.tsx` | Manual barcode input |
+| `/prediksi` | `app/prediksi/page.tsx` | MLR chart (30 hari historis + forecast), metrics, anomali, badge model |
+| `/scan` | `app/scan/page.tsx` | Manual barcode input, riwayat scan, export CSV |
 
 ### Komponen Utama
 
 | Komponen | Fungsi |
 |----------|--------|
-| `components/navigation.tsx` | Navbar responsif |
+| `components/navigation.tsx` | Navbar responsif (Modern Minimal) |
 | `components/realtime-scan-provider.tsx` | Context provider untuk scan realtime dari ESP32 |
-| `components/unified-quick-action-popup.tsx` | Popup Stock In/Out saat ESP32 scan barcode |
+| `components/unified-quick-action-popup.tsx` | Popup Stock In/Out saat ESP32 scan barcode (atomic adjustStock) |
 | `components/device-status.tsx` | Indikator online/offline + battery level |
-| `components/prediction-chart.tsx` | SVG chart forecast stok |
+| `components/prediction-chart.tsx` | SVG chart forecast stok + marker anomali |
+| `components/pdf417-barcode.tsx` | Render barcode PDF417 (2D) ke canvas via bwip-js |
 | `components/dashboard/stats-cards.tsx` | Kartu statistik (total item, low stock, device) |
-| `components/dashboard/inventory-table.tsx` | Tabel inventaris dengan CRUD |
+| `components/dashboard/inventory-table.tsx` | Tabel inventory dengan CRUD |
 
 ### Hooks
 
@@ -296,7 +314,7 @@ Training pada **level stok** menyebabkan model belajar pola restock → forecast
 POST /api/predict
 Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
 Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
-Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, source: 'mlr-py' }
+Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, anomalies, source: 'mlr-py' }
 ```
 
 ### Performa (dataset uji: 20 suku cadang Honda, 365 hari)
@@ -319,13 +337,76 @@ Dashboard memanggil `/api/predict` dengan `mode: 'batch'` untuk mendapatkan top-
 
 ---
 
-## 9. Service Worker
+## 9. Anomaly Detection
+
+### Metode
+
+Deteksi pola tidak normal pada data historis transaksi, dikembalikan di field `anomalies` dari endpoint `/api/predict`.
+
+### IQR-based Spike Detection
+
+```
+1. Hitung Q1, Q3, IQR dari daily consumption/restock series
+2. Upper fence = Q3 + 1.5 × IQR
+3. Hari dengan nilai > upper fence → anomali spike
+4. Severity:
+   - high   → nilai > 3× mean
+   - medium → nilai > 2× mean
+   - low    → nilai > upper fence tapi ≤ 2× mean
+```
+
+**Tipe spike:**
+- `spike_consumption` — lonjakan konsumsi tidak wajar (mungkin salah input atau penjualan besar)
+- `spike_restock` — restock tidak wajar (mungkin koreksi stok atau salah input)
+
+### Gap Detection
+
+```
+Iterasi semua hari dalam series:
+  jika gap antar transaksi > 14 hari → anomali gap
+  Severity: high (scanner mungkin mati, data tidak lengkap)
+```
+
+### Output Format
+
+```json
+{
+  "anomalies": [
+    {
+      "timestamp": "2025-03-15",
+      "type": "spike_consumption",
+      "value": 25,
+      "expected": 5.2,
+      "severity": "high",
+      "description": "Consumption 25 significantly above expected 5.2"
+    },
+    {
+      "timestamp": "2025-04-01",
+      "type": "gap",
+      "value": 18,
+      "expected": 14,
+      "severity": "high",
+      "description": "No transactions for 18 days (threshold: 14)"
+    }
+  ]
+}
+```
+
+### Visualisasi
+
+Di halaman `/prediksi`, anomali ditampilkan sebagai:
+- **Titik merah di chart** — warna sesuai severity (red/orange/yellow)
+- **Tabel anomali** — deskripsi, tipe, nilai, severity
+
+---
+
+## 10. Service Worker
 
 `public/sw.js` cache static assets. Firebase RTDB (`firebasedatabase.app`, `firebaseio.com`) di-exclude dari cache agar `onValue` listeners tetap realtime.
 
 ---
 
-## 10. Deployment
+## 11. Deployment
 
 | Layer | Platform |
 |-------|----------|
@@ -349,7 +430,7 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 
 ---
 
-## 11. Tech Stack
+## 12. Tech Stack
 
 | Layer | Stack |
 |-------|-------|
@@ -357,9 +438,11 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 | Styling | Tailwind CSS 3.4, shadcn/ui, Radix UI |
 | Backend | Firebase Realtime Database, Next.js API Routes |
 | ML | Pure Python (OLS + EMA + StandardScaler), TypeScript fallback |
+| Anomaly | IQR spike detection + gap detection (Python) |
+| Barcode | bwip-js (PDF417 2D render ke canvas) |
 | Hardware | ESP32 + GM67 + OLED SSD1306 + TP4056 + Li-Po LP902040 |
 | Deploy | Vercel |
 
 ---
 
-*Updated: 2026-05-26*
+*Updated: 2026-05-31*

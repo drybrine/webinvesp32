@@ -1,8 +1,8 @@
 # StokManager
 
-Sistem Manajemen Inventaris Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner dan prediksi stok menggunakan Multi Linear Regression.
+Sistem Manajemen Inventory Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner dan prediksi stok menggunakan Multi Linear Regression.
 
-Updated: 2026-05-26
+Updated: 2026-05-31
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.1.0-blue)](https://reactjs.org/)
@@ -27,11 +27,14 @@ Buka http://localhost:3000
 
 ## Fitur Utama
 
-### Manajemen Inventaris
+### Manajemen Inventory
 - Real-time barcode scanning dengan ESP32 GM67
 - CRUD produk + stock adjustment (tambah/kurangi) via dashboard
+- **Atomic stock update** — server-side `increment()` + transaksi dalam satu multi-path update, anti race condition (scanner + dashboard + multi-tab tidak saling menimpa)
 - Transaksi otomatis tercatat saat stock in/out (manual maupun scanner)
+- Search, filter kategori, dan sorting inventory di dashboard
 - Filter transaksi berdasarkan sumber: Manual (Dashboard) / Scanner ESP32
+- **Barcode PDF417 (2D)** — render via bwip-js, dapat di-scan GM67
 - Export data ke CSV
 - Pagination 50 transaksi per halaman
 
@@ -44,7 +47,14 @@ Buka http://localhost:3000
 - Avg R² = 0.65, 50% item R² > 0.7 (dataset 20 suku cadang Honda, 365 hari)
 - Kartu ringkas di dashboard: top-3 barang paling berisiko stockout (server-side batch)
 - Notifikasi otomatis saat prediksi habis ≤ 7 hari
-- Badge sumber prediksi: "MLR + StandardScaler (server)" atau "client-side"
+- Badge sumber prediksi: "MLR + StandardScaler (server)"
+
+### Anomaly Detection
+- Deteksi pola tidak normal pada data historis transaksi (halaman `/prediksi`)
+- **IQR-based spike detection** — lonjakan konsumsi & restock tidak wajar
+- **Gap detection** — periode tanpa transaksi > 14 hari (mungkin scanner mati)
+- Titik merah di chart dengan severity color (high/medium/low)
+- Tabel anomali dengan deskripsi dan tingkat severity
 
 ### Device Management (ESP32)
 - Monitoring realtime via Firebase `onValue` listener (bukan polling)
@@ -60,6 +70,7 @@ Buka http://localhost:3000
 |-------|-------|
 | Frontend | Next.js 16 (Turbopack), React 19, TypeScript, Tailwind, shadcn/ui |
 | Backend | Firebase Realtime Database, Next.js API Routes, Python Serverless (pure Python OLS) |
+| Barcode | bwip-js (PDF417 2D render) |
 | Hardware | ESP32 + GM67 Barcode Scanner + OLED SSD1306 + TP4056 + Li-Po LP902040 |
 | Deploy | Vercel (auto-deploy dari branch `555`) |
 
@@ -92,9 +103,9 @@ Next.js Website (Vercel)
 
 ### Data Flow
 1. ESP32 scan barcode → POST ke `/scans` → popup muncul di website
-2. User pilih Stock In/Out di popup → update `/inventory` + create `/transactions`
+2. User pilih Stock In/Out di popup → atomic update: `increment()` ke `/inventory` + create `/transactions` dalam satu multi-path write
 3. Website subscribe semua path via `onValue` → UI update realtime tanpa refresh
-4. Prediksi: website POST ke `/api/predict` (Python) → fallback ke client-side TypeScript
+4. Prediksi: website POST ke `/api/predict` (Python) → forecast + metrics + anomalies
 
 ## Environment Variables
 
@@ -183,8 +194,14 @@ Training pada level stok menyebabkan model belajar pola restock → forecast zig
 POST /api/predict
 Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
 Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
-Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, source: 'mlr-py' }
+Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, anomalies, source: 'mlr-py' }
 ```
+
+### Anomaly Detection
+Deteksi pola tidak normal pada data historis (dikembalikan di field `anomalies`):
+- **IQR spike** — konsumsi/restock di atas Q3 + 1.5·IQR
+- **Gap** — tidak ada transaksi > 14 hari
+- Setiap anomali punya: `timestamp`, `type`, `value`, `expected`, `severity`, `description`
 
 ### Notebook Testing
 ```bash
