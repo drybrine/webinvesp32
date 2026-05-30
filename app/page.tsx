@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-const BarcodeComponent = dynamic(() => import("react-barcode"), {
+const BarcodeComponent = dynamic(() => import("@/components/pdf417-barcode"), {
   ssr: false,
   loading: () => <div className="h-[60px] w-48 bg-muted rounded" />,
 })
@@ -658,9 +658,12 @@ export default function DashboardPage() {
             </DialogHeader>
             {viewingItem && (
               <div className="space-y-4 py-4">
-                <div className="flex justify-center py-4">
+                <div className="flex flex-col items-center py-4 gap-2">
                   {viewingItem.barcode ? (
-                    <BarcodeComponent value={viewingItem.barcode} height={50} displayValue={false} />
+                    <>
+                      <BarcodeComponent value={viewingItem.barcode} height={60} />
+                      <span className="font-mono text-sm tracking-wider">{viewingItem.barcode}</span>
+                    </>
                   ) : (
                     <p className="text-muted-foreground">Tidak ada barcode</p>
                   )}
