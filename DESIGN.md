@@ -11,7 +11,7 @@ StokManager adalah sistem manajemen inventory untuk AHASS (Honda Authorized Serv
 - **Hardware**: ESP32 + GM67 Barcode Scanner + OLED SSD1306 + baterai Li-Po
 - **Backend**: Firebase Realtime Database (sumber kebenaran tunggal)
 - **Frontend**: Next.js 16 (App Router, Turbopack) di Vercel
-- **ML**: Multi Linear Regression + EMA Smoothing untuk prediksi stockout
+- **ML**: Simple Linear Regression + EMA Smoothing untuk prediksi stockout
 - **Anomaly Detection**: IQR + gap detection untuk pola transaksi tidak normal
 - **Barcode**: PDF417 (2D) di-render via bwip-js, dapat di-scan GM67
 
@@ -43,7 +43,7 @@ StokManager adalah sistem manajemen inventory untuk AHASS (Honda Authorized Serv
 │              Next.js 16 Website (Vercel)                 │
 │  Dashboard   → inventaris, stock ±, prediksi ringkas    │
 │  /transaksi  → history, filter, export CSV, pagination  │
-│  /prediksi   → MLR chart + forecast + metrics           │
+│  /prediksi   → Linear Regression chart + forecast       │
 │  /scan       → manual barcode input                     │
 │  /api/*      → Next.js API Routes + Python serverless   │
 └─────────────────────────────────────────────────────────┘
@@ -228,7 +228,7 @@ Pendekatan ini menghilangkan race condition read-modify-write: scanner, dashboar
 |-------|------|--------|
 | `/` | `app/page.tsx` | Dashboard: inventory, stock ±, search/filter/sort, prediksi ringkas (server-side batch), device status |
 | `/transaksi` | `app/transaksi/page.tsx` | History transaksi, filter, export CSV, pagination 50/halaman |
-| `/prediksi` | `app/prediksi/page.tsx` | MLR chart (30 hari historis + forecast), metrics, anomali, badge model |
+| `/prediksi` | `app/prediksi/page.tsx` | Linear Regression chart (30 hari historis + forecast), metrics, anomali, badge model |
 | `/scan` | `app/scan/page.tsx` | Manual barcode input, riwayat scan, export CSV |
 
 ### Komponen Utama
@@ -258,7 +258,7 @@ Pendekatan ini menghilangkan race condition read-modify-write: scanner, dashboar
 | File | Fungsi |
 |------|--------|
 | `lib/firebase.ts` | Firebase init + helper functions |
-| `lib/stock-prediction.ts` | MLR client-side fallback (TypeScript, pure math) |
+| `lib/stock-prediction.ts` | Simple Linear Regression client-side fallback (TypeScript, pure math) |
 | `lib/critical-css.ts` | Inline critical CSS untuk performa |
 
 ---
@@ -267,7 +267,7 @@ Pendekatan ini menghilangkan race condition read-modify-write: scanner, dashboar
 
 | Method | Path | Fungsi |
 |--------|------|--------|
-| POST | `/api/predict` | Python MLR prediction — single item atau batch (`mode: 'batch'`) |
+| POST | `/api/predict` | Python Simple Linear Regression prediction — single item atau batch (`mode: 'batch'`) |
 | POST | `/api/barcode-scan` | Process barcode scan dari ESP32 |
 | GET | `/api/devices-status` | Status semua device |
 | GET | `/api/heartbeat` | Health check |
@@ -278,11 +278,14 @@ Pendekatan ini menghilangkan race condition read-modify-write: scanner, dashboar
 
 ---
 
-## 8. Prediksi Stok (Multi Linear Regression)
+## 8. Prediksi Stok (Simple Linear Regression)
 
 ### Model
 
-Pure Python (no numpy) — OLS via Gauss-Jordan elimination + Tikhonov ridge regularization (λ=1.0). Tidak pakai numpy agar fit dalam Vercel 250MB serverless limit.
+Pure Python (no numpy) — OLS regresi linear sederhana dengan persamaan `Y = a + bX`. Model memprediksi konsumsi harian, bukan langsung level stok:
+
+- `X` = konsumsi hari sebelumnya
+- `Y` = konsumsi hari ini
 
 ### Pipeline
 
@@ -290,23 +293,20 @@ Pure Python (no numpy) — OLS via Gauss-Jordan elimination + Tikhonov ridge reg
 1. Build daily stock series dari transaksi
 2. Konversi level → raw consumption (clip restock ke 0)
 3. EMA smoothing (alpha=0.05) → smoothed consumption
-4. Feature engineering: [consumption_lag1, day_of_week, is_weekend]
-5. StandardScaler (mean=0, std=1)
-6. OLS fit (train 85%)
-7. Iterative forecast: predict consumption → kurangi dari current_stock
+4. OLS fit: `consumption_today = a + b * consumption_yesterday`
+5. Iterative forecast: predict consumption → kurangi dari current_stock
 ```
 
-### Features
+### Variabel Regresi
 
-| Feature | Deskripsi |
+| Variabel | Deskripsi |
 |---------|-----------|
-| `consumption_lag1` | Konsumsi smoothed kemarin |
-| `day_of_week` | Hari dalam minggu (0=Mon..6=Sun) |
-| `is_weekend` | Flag akhir pekan (Sabtu/Minggu) |
+| `X` | Konsumsi hari sebelumnya |
+| `Y` | Konsumsi hari ini |
 
 ### Kenapa EMA + Consumption (bukan level stok)?
 
-Training pada **level stok** menyebabkan model belajar pola restock → forecast zigzag naik-turun. Training pada **konsumsi smoothed** menghasilkan forecast monoton turun yang realistis.
+Training langsung pada **level stok** membuat forecast simple linear regression menjadi garis lurus dan rentan terdistraksi event restock. Training pada **konsumsi smoothed** menjaga metode tetap regresi linear sederhana, sementara stok diforecast iteratif sehingga grafik tidak dipaksa menjadi garis lurus.
 
 ### Endpoint
 
@@ -314,17 +314,17 @@ Training pada **level stok** menyebabkan model belajar pola restock → forecast
 POST /api/predict
 Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
 Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
-Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, anomalies, source: 'mlr-py' }
+Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, anomalies, source }
+Source: `lr-consumption-py` atau `lr-consumption-batch`
 ```
 
 ### Performa (dataset uji: 20 suku cadang Honda, 365 hari)
 
 | Metric | Nilai |
 |--------|-------|
-| Avg R² | 0.65 |
-| Items R² > 0.7 | 10/20 (50%) |
-| Items R² > 0.5 | 15/20 (75%) |
-| Zigzag forecast | 0/20 |
+| Avg R² | 0.8962 |
+| Items R² > 0 | 20/20 (100%) |
+| Metode | Simple Linear Regression lag-1 consumption |
 | Train ratio | 85/15 |
 
 ### Fallback
@@ -437,7 +437,7 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 | Frontend | Next.js 16 (Turbopack), React 19, TypeScript 5.8 |
 | Styling | Tailwind CSS 3.4, shadcn/ui, Radix UI |
 | Backend | Firebase Realtime Database, Next.js API Routes |
-| ML | Pure Python (OLS + EMA + StandardScaler), TypeScript fallback |
+| ML | Pure Python Simple Linear Regression + EMA, TypeScript fallback |
 | Anomaly | IQR spike detection + gap detection (Python) |
 | Barcode | bwip-js (PDF417 2D render ke canvas) |
 | Hardware | ESP32 + GM67 + OLED SSD1306 + TP4056 + Li-Po LP902040 |

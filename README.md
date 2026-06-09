@@ -1,8 +1,8 @@
 # StokManager
 
-Sistem Manajemen Inventory Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner dan prediksi stok menggunakan Multi Linear Regression.
+Sistem Manajemen Inventory Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner dan prediksi stok menggunakan Simple Linear Regression.
 
-Updated: 2026-05-31
+Updated: 2026-06-09
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.1.0-blue)](https://reactjs.org/)
@@ -38,16 +38,17 @@ Buka http://localhost:3000
 - Export data ke CSV
 - Pagination 50 transaksi per halaman
 
-### Prediksi Stok (Multi Linear Regression)
+### Prediksi Stok (Simple Linear Regression)
 - Halaman `/prediksi` — pilih item, atur horizon 1-90 hari
-- Model: EMA-smoothed consumption + OLS (pure Python, no numpy)
-- Pipeline: level → consumption → EMA(α=0.05) → MLR(lag1, dow, is_weekend)
-- Iterative forecast (stok turun smooth, tidak zigzag)
-- Train ratio 85/15 (optimal dari TSCV tuning)
-- Avg R² = 0.65, 50% item R² > 0.7 (dataset 20 suku cadang Honda, 365 hari)
+- Model: regresi linear sederhana `Y = a + bX` (pure Python, no numpy)
+- Target model: `Y = konsumsi hari ini`, `X = konsumsi hari sebelumnya`
+- Pipeline: level stok → raw consumption → EMA(α=0.05) → OLS lag-1 consumption
+- Iterative forecast: prediksi konsumsi harian → kurangi stok saat ini
+- Train ratio 85/15 untuk split kronologis
+- Avg R² = 0.8962, 20/20 item R² positif (dataset dummy 20 suku cadang Honda, 365 hari)
 - Kartu ringkas di dashboard: top-3 barang paling berisiko stockout (server-side batch)
 - Notifikasi otomatis saat prediksi habis ≤ 7 hari
-- Badge sumber prediksi: "MLR + StandardScaler (server)"
+- Badge sumber prediksi: "Linear Regression (server/client)"
 
 ### Anomaly Detection
 - Deteksi pola tidak normal pada data historis transaksi (halaman `/prediksi`)
@@ -96,9 +97,9 @@ Firebase Realtime Database
 Next.js Website (Vercel)
     ├── Dashboard             (inventaris, stock +/-, prediksi ringkas, device status)
     ├── /transaksi            (history, filter jenis/sumber/periode, export CSV, pagination)
-    ├── /prediksi             (MLR chart, forecast tabel, metrics)
+    ├── /prediksi             (Linear Regression chart, forecast tabel, metrics)
     ├── /scan                 (manual barcode input)
-    └── /api/predict          (Python serverless, pure Python OLS + EMA)
+    └── /api/predict          (Python serverless, Simple Linear Regression)
 ```
 
 ### Data Flow
@@ -168,34 +169,39 @@ GND           ←    GND                GND          ← GND
 ## Prediksi Stok
 
 ### Model
-Multi Linear Regression (OLS) via Gauss-Jordan elimination + Tikhonov ridge (λ=1.0). Pure Python — tidak pakai numpy agar fit dalam Vercel 250MB serverless limit.
+Simple Linear Regression (OLS) dengan persamaan `Y = a + bX`. Model memprediksi konsumsi harian, bukan langsung level stok:
+
+- `X` = konsumsi hari sebelumnya
+- `Y` = konsumsi hari ini
+
+Implementasi pure Python — tidak pakai numpy agar fit dalam Vercel 250MB serverless limit.
 
 ### Pipeline
 ```
 1. Transaksi → daily stock series
 2. Level → raw consumption (clip restock ke 0)
 3. EMA smoothing (alpha=0.05) → smoothed consumption
-4. Features: [consumption_lag1, day_of_week, is_weekend]
-5. StandardScaler (mean=0, std=1)
-6. OLS fit (train 85%)
-7. Iterative forecast: predict consumption → kurangi dari current_stock
+4. Linear Regression: `consumption_today = a + b * consumption_yesterday`
+5. Iterative forecast: predict consumption → kurangi dari current_stock
 ```
 
 ### Kenapa EMA + Consumption?
-Training pada level stok menyebabkan model belajar pola restock → forecast zigzag. Training pada konsumsi smoothed menghasilkan forecast monoton turun yang realistis.
+Training langsung pada level stok membuat forecast regresi linear menjadi garis lurus dan mudah terdistraksi event restock. Training pada konsumsi smoothed menjaga metodologi tetap Simple Linear Regression, tetapi forecast stok dihitung iteratif sehingga grafik tidak dipaksa menjadi garis lurus.
 
 ### Performa (dataset uji)
 - 20 suku cadang Honda AHASS, 365 hari, 6736 transaksi
-- Avg R² = 0.65, R² > 0.7: 10/20 item, Zigzag: 0/20
-- Tuning notebook: `scripts/honda_tune_model.ipynb`
+- Avg R² = 0.8962, R² > 0: 20/20 item
+- Test command: `npx tsx scripts/generate-honda-dummy.ts --test`
 
 ### Endpoint
 ```
 POST /api/predict
 Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
 Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
-Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, anomalies, source: 'mlr-py' }
+Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, anomalies, source }
 ```
+
+Source response: `lr-consumption-py` atau `lr-consumption-batch`.
 
 ### Anomaly Detection
 Deteksi pola tidak normal pada data historis (dikembalikan di field `anomalies`):
@@ -240,7 +246,7 @@ Set environment variables di Vercel Dashboard → Project Settings → Environme
 
 | Method | Path | Fungsi |
 |--------|------|--------|
-| POST | `/api/predict` | Python MLR prediction — single item atau batch (`mode: 'batch'`) |
+| POST | `/api/predict` | Python Simple Linear Regression prediction — single item atau batch (`mode: 'batch'`) |
 | POST | `/api/check-device-status` | Cek status device (legacy) |
 | POST | `/api/barcode-scan` | Process barcode scan |
 | GET | `/api/devices-status` | Get all device status |

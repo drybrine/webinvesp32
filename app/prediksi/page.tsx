@@ -24,6 +24,7 @@ import { AlertTriangle, TrendingDown, TrendingUp, Activity, ArrowLeft } from "lu
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase"
 import {
   buildDailySeriesFromTransactions,
+  predictStock,
   type StockDataPoint,
   type PredictionResult,
 } from "@/lib/stock-prediction"
@@ -56,7 +57,7 @@ export default function PrediksiPage() {
     [activeInventory, selectedId],
   )
 
-  const [predictionSource, setPredictionSource] = useState<"server" | null>(null)
+  const [predictionSource, setPredictionSource] = useState<"server" | "client" | null>(null)
   const [predictionError, setPredictionError] = useState<string | null>(null)
 
   const history: StockDataPoint[] = useMemo(() => {
@@ -119,6 +120,9 @@ export default function PrediksiPage() {
             n: data.model.n,
             avgDailyConsumption: data.model.avgDailyConsumption,
             dowConsumption: data.model.dowConsumption,
+            consumptionSlope: data.model.consumptionSlope,
+            consumptionIntercept: data.model.consumptionIntercept,
+            lastConsumption: data.model.lastConsumption,
           },
           metrics: { mae: data.metrics.mae, rmse: data.metrics.rmse, r2: data.metrics.r2 },
           forecast: data.forecast,
@@ -128,9 +132,18 @@ export default function PrediksiPage() {
         setPredictionSource("server")
       } catch (err) {
         if ((err as Error).name === "AbortError") return
-        setPrediction(null)
-        setPredictionSource(null)
-        setPredictionError((err as Error).message || "Gagal menghubungi server prediksi.")
+
+        try {
+          const fallback = predictStock(history, { horizonDays, trainRatio })
+          setPrediction(fallback)
+          setAnomalies([])
+          setPredictionSource("client")
+          setPredictionError(null)
+        } catch (fallbackErr) {
+          setPrediction(null)
+          setPredictionSource(null)
+          setPredictionError((fallbackErr as Error).message || "Gagal menghitung prediksi.")
+        }
       }
     }
 
@@ -177,7 +190,7 @@ export default function PrediksiPage() {
             </p>
             {predictionSource && (
               <Badge variant="default" className="text-[10px]">
-                MLR + StandardScaler (server)
+                {predictionSource === "server" ? "Linear Regression (server)" : "Linear Regression (client)"}
               </Badge>
             )}
           </div>
@@ -382,7 +395,7 @@ export default function PrediksiPage() {
             <CardHeader>
               <CardTitle className="text-base">Testing Model</CardTitle>
               <CardDescription>
-                Detail parameter fit dan metrik evaluasi (train/test split kronologis)
+                Detail regresi linear konsumsi harian dan metrik evaluasi (train/test split kronologis)
               </CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">

@@ -1,24 +1,23 @@
 """
-Stock prediction API — Multi Linear Regression + StandardScaler.
+Stock prediction API - Simple Linear Regression.
 
-Pure Python implementation (no numpy) to fit Vercel 250MB serverless limit.
-Math: OLS via Gauss-Jordan elimination, StandardScaler manual.
+Model sesuai regresi linear sederhana:
+  Y = a + bX
+
+Di sini X = konsumsi hari sebelumnya dan Y = konsumsi hari ini. Forecast stok
+dihitung iteratif dari prediksi konsumsi harian, sehingga grafik stok tidak
+dipaksa menjadi satu garis lurus walaupun modelnya tetap Linear Regression satu
+variabel.
 """
 
 from http.server import BaseHTTPRequestHandler
 import json
 import math
-import random
 from datetime import datetime, timedelta
 
 
 MS_PER_DAY = 86400000
-
-FEATURE_NAMES = [
-    'consumption_lag1',     # konsumsi smoothed kemarin
-    'day_of_week',          # hari (0=Mon..6=Sun)
-    'is_weekend',           # binary weekend flag
-]
+CONSUMPTION_EMA_ALPHA = 0.05
 
 
 class handler(BaseHTTPRequestHandler):
@@ -38,19 +37,19 @@ class handler(BaseHTTPRequestHandler):
             train_ratio = data.get('trainRatio', 0.85)
 
             if len(transactions) < 2:
-                self._send_json(400, {'error': 'Minimal 2 transaksi diperlukan', 'source': 'mlr-py'})
+                self._send_json(400, {'error': 'Minimal 2 transaksi diperlukan', 'source': 'lr-consumption-py'})
                 return
 
             series = build_daily_series(transactions, current_quantity)
-            if len(series) < 10:
-                self._send_json(400, {'error': 'Data harian < 10 titik (perlu untuk MLR)', 'source': 'mlr-py'})
+            if len(series) < 2:
+                self._send_json(400, {'error': 'Data harian < 2 titik', 'source': 'lr-consumption-py'})
                 return
 
             result = predict_stock(series, horizon_days, train_ratio)
             self._send_json(200, result)
 
         except Exception as e:
-            self._send_json(500, {'error': str(e), 'source': 'mlr-py'})
+            self._send_json(500, {'error': str(e), 'source': 'lr-consumption-py'})
 
     def _handle_batch(self, data):
         items = data.get('items', [])
@@ -61,7 +60,7 @@ class handler(BaseHTTPRequestHandler):
         recent_days = data.get('recentDays', 90)
 
         if not items:
-            self._send_json(400, {'error': 'No items provided', 'source': 'mlr-batch'})
+            self._send_json(400, {'error': 'No items provided', 'source': 'lr-consumption-batch'})
             return
 
         cutoff = (datetime.now().timestamp() * 1000) - recent_days * MS_PER_DAY
@@ -69,9 +68,9 @@ class handler(BaseHTTPRequestHandler):
 
         tx_by_barcode = {}
         for tx in recent_tx:
-            bc = tx.get('productBarcode')
-            if bc:
-                tx_by_barcode.setdefault(bc, []).append(tx)
+            barcode = tx.get('productBarcode')
+            if barcode:
+                tx_by_barcode.setdefault(barcode, []).append(tx)
 
         risks = []
         for item in items:
@@ -80,9 +79,8 @@ class handler(BaseHTTPRequestHandler):
 
             item_tx = tx_by_barcode.get(item['barcode'], [])
             current_qty = int(item.get('quantity', 0))
-
             series = build_daily_series(item_tx, current_qty)
-            if len(series) < 10:
+            if len(series) < 2:
                 continue
 
             try:
@@ -96,8 +94,8 @@ class handler(BaseHTTPRequestHandler):
 
                 predicted_lowest = min(f['predictedQuantity'] for f in forecast)
                 days_to_stockout = None
-                for i, f in enumerate(forecast):
-                    if f['predictedQuantity'] <= 0:
+                for i, point in enumerate(forecast):
+                    if point['predictedQuantity'] <= 0:
                         days_to_stockout = i + 1
                         break
 
@@ -124,14 +122,14 @@ class handler(BaseHTTPRequestHandler):
             except Exception:
                 continue
 
-        def sort_key(r):
-            if r['daysToStockout'] is not None:
-                return (0, r['daysToStockout'])
-            return (1, r['predictedLowest'])
+        def sort_key(risk):
+            if risk['daysToStockout'] is not None:
+                return (0, risk['daysToStockout'])
+            return (1, risk['predictedLowest'])
 
         risks.sort(key=sort_key)
         self._send_json(200, {
-            'source': 'mlr-batch',
+            'source': 'lr-consumption-batch',
             'totalAnalyzed': len(risks),
             'risks': risks[:top_n],
         })
@@ -151,18 +149,9 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(data).encode())
 
 
-# =============================================================================
-#  Helpers (pure Python)
-# =============================================================================
+def mean(values):
+    return sum(values) / len(values) if values else 0.0
 
-def mean(xs):
-    if not xs: return 0.0
-    return sum(xs) / len(xs)
-
-def std(xs):
-    if not xs: return 0.0
-    m = mean(xs)
-    return math.sqrt(sum((x - m) ** 2 for x in xs) / len(xs))
 
 def build_daily_series(transactions, current_quantity):
     daily_delta = {}
@@ -187,298 +176,249 @@ def build_daily_series(transactions, current_quantity):
     return series
 
 
-def build_features(quantities, timestamps):
-    """Train on heavily-smoothed consumption + day-of-week.
+def build_consumption_series(series):
+    series = sorted(series, key=lambda point: point['timestamp'])
+    consumption = []
 
-    Optimized config (tested on 20 Honda spareparts):
-    - EMA alpha=0.05 → strong smoothing, noise removed
-    - Features: lag1, day_of_week, is_weekend → simple but effective
-    - Result: R² 0.65 avg, 10/20 items > 0.7, no zigzag, no overfit blowup
+    for i in range(1, len(series)):
+        gap_days = (series[i]['timestamp'] - series[i - 1]['timestamp']) / MS_PER_DAY
+        if gap_days <= 0:
+            continue
 
-    Pipeline:
-      1. level → raw consumption (clip restock to 0)
-      2. EMA alpha=0.05 (very smooth, focus pada underlying demand rate)
-      3. Predict: smoothed_lag1 + dow features → next smoothed consumption
-    """
-    n = len(quantities)
-    raw = []
-    for i in range(1, n):
-        delta = quantities[i - 1] - quantities[i]
-        raw.append(max(0, delta))
+        stock_delta = series[i - 1]['quantity'] - series[i]['quantity']
+        daily_consumption = max(0.0, stock_delta / gap_days)
+        consumption.append({
+            'timestamp': series[i]['timestamp'],
+            'consumption': daily_consumption,
+        })
 
-    if len(raw) < 10:
-        return [], []
-
-    alpha = 0.05  # tuned for max R² without zigzag
-    smoothed = [raw[0]]
-    for i in range(1, len(raw)):
-        smoothed.append(alpha * raw[i] + (1 - alpha) * smoothed[-1])
-
-    X, y = [], []
-    for i in range(1, len(smoothed) - 1):
-        # timestamps[i+1] = hari yang akan diprediksi konsumsinya
-        # timestamps index: i=0 → quantities[1] (hari ke-2), karena consumption[i] = qty[i] - qty[i+1]
-        target_ts = timestamps[i + 1] if i + 1 < len(timestamps) else timestamps[-1]
-        dow = datetime.fromtimestamp(target_ts / 1000).weekday()
-        X.append([
-            smoothed[i - 1],                # smoothed_lag1
-            float(dow),                     # day_of_week
-            1.0 if dow >= 5 else 0.0,       # is_weekend
-        ])
-        y.append(smoothed[i])
-    return X, y
+    return consumption
 
 
-def fit_scaler(X):
-    """StandardScaler. X: list of feature rows."""
-    if not X: return [], []
-    k = len(X[0])
-    means = [0.0] * k
-    for row in X:
-        for j in range(k):
-            means[j] += row[j]
-    n = len(X)
-    means = [m / n for m in means]
+def smooth_consumption_series(series):
+    if not series:
+        return []
 
-    stds = [0.0] * k
-    for row in X:
-        for j in range(k):
-            stds[j] += (row[j] - means[j]) ** 2
-    stds = [math.sqrt(s / n) for s in stds]
-    stds = [s if s != 0 else 1.0 for s in stds]
-    return means, stds
+    smoothed = series[0]['consumption']
+    result = []
+    for i, point in enumerate(series):
+        if i > 0:
+            smoothed = CONSUMPTION_EMA_ALPHA * point['consumption'] + (1 - CONSUMPTION_EMA_ALPHA) * smoothed
+        result.append({
+            'timestamp': point['timestamp'],
+            'consumption': smoothed,
+        })
+    return result
 
 
-def transform_scaler(X, means, stds):
-    return [[(row[j] - means[j]) / stds[j] for j in range(len(means))] for row in X]
-
-
-def ols_fit(X, y, ridge=1.0):
-    """OLS via Gauss-Jordan with Tikhonov ridge regularization for stability.
-
-    Ridge=1.0 controls overfitting on small training sets. With heavy EMA
-    smoothing the model is already stable; ridge keeps the gap manageable.
-    Returns (intercept, [coefficients]).
-    """
-    n = len(X)
+def linear_regression(x, y):
+    n = len(x)
     if n == 0:
-        return 0.0, []
-    k = len(X[0])
+        return 0.0, 0.0
+    if n == 1:
+        return y[0], 0.0
 
-    # Add intercept column
-    Xb = [[1.0] + list(row) for row in X]
-
-    # XtX: (k+1) x (k+1)
-    size = k + 1
-    XtX = [[0.0] * size for _ in range(size)]
-    Xty = [0.0] * size
+    mx = mean(x)
+    my = mean(y)
+    numerator = 0.0
+    denominator = 0.0
 
     for i in range(n):
-        for a in range(size):
-            Xty[a] += Xb[i][a] * y[i]
-            for b in range(size):
-                XtX[a][b] += Xb[i][a] * Xb[i][b]
+        dx = x[i] - mx
+        numerator += dx * (y[i] - my)
+        denominator += dx * dx
 
-    # Ridge regularization (skip intercept column at index 0)
-    for i in range(1, size):
-        XtX[i][i] += ridge
+    if denominator == 0:
+        return my, 0.0
 
-    # Solve via Gaussian elimination with partial pivoting
-    M = [row[:] + [Xty[i]] for i, row in enumerate(XtX)]
-    for col in range(size):
-        # Pivot
-        pivot = col
-        for row in range(col + 1, size):
-            if abs(M[row][col]) > abs(M[pivot][col]):
-                pivot = row
-        M[col], M[pivot] = M[pivot], M[col]
-
-        if abs(M[col][col]) < 1e-15:
-            # Truly singular even with ridge — set coef=0, but do NOT skip elimination
-            # to keep subsequent rows consistent
-            continue
-        for row in range(col + 1, size):
-            factor = M[row][col] / M[col][col]
-            for j in range(col, size + 1):
-                M[row][j] -= factor * M[col][j]
-
-    # Back substitution
-    beta = [0.0] * size
-    for row in range(size - 1, -1, -1):
-        if abs(M[row][row]) < 1e-15:
-            continue
-        s = M[row][size]
-        for j in range(row + 1, size):
-            s -= M[row][j] * beta[j]
-        beta[row] = s / M[row][row]
-
-    return beta[0], beta[1:]
+    slope = numerator / denominator
+    intercept = my - slope * mx
+    return intercept, slope
 
 
-def predict_next_consumption(consumption_history, model, ts):
-    """Predict konsumsi smoothed hari berikutnya (≥0)."""
-    coefs = model.get('coefficients')
-    sm_mean = model.get('scaler_mean')
-    sm_std = model.get('scaler_std')
-    intercept = model.get('intercept', 0.0)
+def fit_consumption_regression(series):
+    series = sorted(series, key=lambda point: point['timestamp'])
+    base_ts = series[0]['timestamp']
+    raw_consumption_series = build_consumption_series(series)
+    consumption_series = smooth_consumption_series(raw_consumption_series)
+    x = []
+    y = []
+    for i in range(1, len(consumption_series)):
+        x.append(consumption_series[i - 1]['consumption'])
+        y.append(consumption_series[i]['consumption'])
 
-    if consumption_history and coefs and sm_mean:
-        dow = datetime.fromtimestamp(ts / 1000).weekday()
-        features = [
-            consumption_history[-1],
-            float(dow),
-            1.0 if dow >= 5 else 0.0,
-        ]
-        scaled = [(features[j] - sm_mean[j]) / sm_std[j] for j in range(len(features))]
-        pred = intercept + sum(scaled[j] * coefs[j] for j in range(len(coefs)))
-        return max(0, pred)
+    fallback_consumption = raw_consumption_series[-1]['consumption'] if raw_consumption_series else 0.0
+    if y:
+        intercept, consumption_slope = linear_regression(x, y)
+    else:
+        intercept, consumption_slope = fallback_consumption, 0.0
+    avg_daily = mean([point['consumption'] for point in raw_consumption_series])
 
-    avg = model.get('avgDailyConsumption', 1.0)
-    return max(0, avg)
+    dow_deltas = [[] for _ in range(7)]
+    for point in raw_consumption_series:
+        dow = datetime.fromtimestamp(point['timestamp'] / 1000).weekday()
+        dow_deltas[dow].append(point['consumption'])
+    dow_consumption = [mean(items) if items else avg_daily for items in dow_deltas]
+
+    return {
+        'baseTimestamp': base_ts,
+        'intercept': intercept,
+        'consumptionSlope': consumption_slope,
+        'consumptionIntercept': intercept,
+        'avgDailyConsumption': avg_daily,
+        'dowConsumption': dow_consumption,
+        'n': max(1, len(consumption_series)),
+        'lastConsumption': consumption_series[-1]['consumption'] if consumption_series else fallback_consumption,
+    }
+
+
+def predict_next_consumption(model, previous_consumption):
+    predicted = model['consumptionIntercept'] + model['consumptionSlope'] * previous_consumption
+    return max(0.0, predicted)
+
+
+def calculate_metrics(actual, predicted):
+    if not actual or not predicted:
+        return {'mae': 0.0, 'rmse': 0.0, 'r2': 0.0}
+
+    errors = [actual[i] - predicted[i] for i in range(len(actual))]
+    mae = mean([abs(error) for error in errors])
+    rmse = math.sqrt(mean([error ** 2 for error in errors]))
+    avg_actual = mean(actual)
+    ss_res = sum(error ** 2 for error in errors)
+    ss_tot = sum((value - avg_actual) ** 2 for value in actual)
+    r2 = 1.0 if ss_tot == 0 and ss_res == 0 else 0.0 if ss_tot == 0 else 1 - ss_res / ss_tot
+    return {'mae': mae, 'rmse': rmse, 'r2': r2}
+
+
+def evaluate_stock_forecast(model, history_before_test, test_data):
+    if not history_before_test or not test_data:
+        return {'mae': 0.0, 'rmse': 0.0, 'r2': 0.0}
+
+    history_before_test = sorted(history_before_test, key=lambda point: point['timestamp'])
+    test_data = sorted(test_data, key=lambda point: point['timestamp'])
+    previous_ts = history_before_test[-1]['timestamp']
+    predicted_qty = history_before_test[-1]['quantity']
+
+    actual = []
+    predicted = []
+
+    for point in test_data:
+        gap_days = max(1, round((point['timestamp'] - previous_ts) / MS_PER_DAY))
+        for step in range(1, gap_days + 1):
+            predicted_qty = max(0.0, predicted_qty - model['avgDailyConsumption'])
+
+        actual.append(point['quantity'])
+        predicted.append(predicted_qty)
+        previous_ts = point['timestamp']
+
+    return calculate_metrics(actual, predicted)
+
+
+def evaluate_consumption(model, series):
+    consumption_series = smooth_consumption_series(build_consumption_series(series))
+    if not consumption_series:
+        return {'mae': 0.0, 'rmse': 0.0, 'r2': 0.0}
+
+    actual = []
+    predicted = []
+    for i in range(1, len(consumption_series)):
+        actual.append(consumption_series[i]['consumption'])
+        predicted.append(predict_next_consumption(model, consumption_series[i - 1]['consumption']))
+    return calculate_metrics(actual, predicted)
+
+
+def estimate_stockout_date(model, current_quantity):
+    if current_quantity <= 0:
+        return datetime.now().strftime('%Y-%m-%d')
+
+    quantity = float(current_quantity)
+    now = datetime.now()
+    previous_consumption = model.get('lastConsumption', model['avgDailyConsumption'])
+
+    for day in range(1, 3651):
+        consumption = predict_next_consumption(model, previous_consumption)
+        if consumption <= 0 and model['avgDailyConsumption'] <= 0:
+            return None
+
+        quantity = max(0.0, quantity - consumption)
+        previous_consumption = consumption
+        if quantity <= 0:
+            return (now + timedelta(days=day)).strftime('%Y-%m-%d')
+
+    return None
 
 
 def predict_stock(series, horizon_days=14, train_ratio=0.85):
-    series = sorted(series, key=lambda x: x['timestamp'])
-    timestamps = [s['timestamp'] for s in series]
-    quantities = [s['quantity'] for s in series]
-    n = len(series)
+    series = sorted(series, key=lambda point: point['timestamp'])
+    if len(series) < 2:
+        return {'error': 'Not enough data'}
 
-    # Hitung dow consumption
-    daily_deltas = []
-    dow_deltas = [[] for _ in range(7)]
-    for i in range(1, n):
-        gap_days = (timestamps[i] - timestamps[i - 1]) / MS_PER_DAY
-        if 0 < gap_days <= 2:
-            delta = quantities[i - 1] - quantities[i]
-            if delta > 0:
-                consumption = delta / gap_days
-                daily_deltas.append(consumption)
-                dow = datetime.fromtimestamp(timestamps[i] / 1000).weekday()
-                dow_deltas[dow].append(consumption)
+    split_idx = min(len(series), max(2, int(len(series) * train_ratio)))
+    train = series[:split_idx]
+    test = series[split_idx:]
 
-    avg_daily = mean(daily_deltas) if daily_deltas else 1.0
-    dow_consumption = [mean(d) if d else avg_daily for d in dow_deltas]
+    model = fit_consumption_regression(train)
+    metrics = evaluate_consumption(model, series)
 
-    X, y = build_features(quantities, timestamps)
-    if len(X) < 5:
-        return {'error': 'Not enough data after FE'}
-
-    split_idx = max(2, int(len(X) * train_ratio))
-    X_train, X_test = X[:split_idx], X[split_idx:]
-    y_train, y_test = y[:split_idx], y[split_idx:]
-
-    sm_mean, sm_std = fit_scaler(X_train)
-    X_train_s = transform_scaler(X_train, sm_mean, sm_std)
-    intercept, coefs = ols_fit(X_train_s, y_train)
-
-    # Eval on test
-    if X_test:
-        X_test_s = transform_scaler(X_test, sm_mean, sm_std)
-        y_pred = [intercept + sum(X_test_s[i][j] * coefs[j] for j in range(len(coefs))) for i in range(len(X_test_s))]
-        errs = [y_test[i] - y_pred[i] for i in range(len(y_test))]
-        mae = mean([abs(e) for e in errs])
-        rmse = math.sqrt(mean([e ** 2 for e in errs]))
-        my = mean(y_test)
-        ss_res = sum(e ** 2 for e in errs)
-        ss_tot = sum((y - my) ** 2 for y in y_test)
-        r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
-    else:
-        mae, rmse, r2 = 0.0, 0.0, 0.0
-
-    # Iterative forecast: predict konsumsi → kurangi dari current_stock
-    model_state = {
-        'intercept': intercept,
-        'coefficients': coefs,
-        'scaler_mean': sm_mean,
-        'scaler_std': sm_std,
-        'dowConsumption': dow_consumption,
-        'avgDailyConsumption': avg_daily,
-    }
-
-    # Build smoothed consumption history (EMA alpha=0.05)
-    raw_consumption = []
-    for i in range(1, n):
-        delta = quantities[i - 1] - quantities[i]
-        raw_consumption.append(max(0, delta))
-
-    alpha_smooth = 0.05
-    consumption_history = [raw_consumption[0]] if raw_consumption else []
-    for i in range(1, len(raw_consumption)):
-        consumption_history.append(alpha_smooth * raw_consumption[i] + (1 - alpha_smooth) * consumption_history[-1])
-
-    last_qty = quantities[-1]
-    last_ts = timestamps[-1]
-    current_qty = last_qty
+    last_qty = series[-1]['quantity']
+    last_ts = series[-1]['timestamp']
+    current_qty = float(last_qty)
+    previous_consumption = model.get('lastConsumption', model['avgDailyConsumption'])
     forecast = []
 
     for day in range(1, horizon_days + 1):
         ts = last_ts + day * MS_PER_DAY
-        predicted_consumption = predict_next_consumption(consumption_history, model_state, ts)
-        current_qty = max(0, current_qty - predicted_consumption)
+        predicted_consumption = predict_next_consumption(model, previous_consumption)
+        current_qty = max(0.0, current_qty - predicted_consumption)
+        previous_consumption = predicted_consumption
         forecast.append({
             'timestamp': int(ts),
             'predictedQuantity': round(current_qty, 1),
             'estimatedConsumption': round(predicted_consumption, 1),
         })
-        consumption_history.append(predicted_consumption)
-
-    stockout_date = None
-    if avg_daily > 0 and last_qty > 0:
-        days_left = last_qty / avg_daily
-        stockout_ts = datetime.now() + timedelta(days=days_left)
-        stockout_date = stockout_ts.strftime('%Y-%m-%d')
 
     anomalies = detect_anomalies(series)
 
     return {
-        'source': 'mlr-py',
+        'source': 'lr-consumption-py',
         'model': {
-            'type': 'Multi Linear Regression + StandardScaler',
-            'intercept': round(intercept, 4),
-            'slope': round(-avg_daily, 4),
-            'avgDailyConsumption': round(avg_daily, 2),
-            'dowConsumption': [round(d, 2) for d in dow_consumption],
-            'n': int(split_idx),
-            'coefficients': [round(c, 4) for c in coefs],
-            'featureNames': FEATURE_NAMES,
-            'scalerMean': [round(m, 4) for m in sm_mean],
-            'scalerStd': [round(s, 4) for s in sm_std],
+            'type': 'Simple Linear Regression (daily consumption)',
+            'intercept': round(model['intercept'], 4),
+            'slope': round(-model['avgDailyConsumption'], 4),
+            'avgDailyConsumption': round(model['avgDailyConsumption'], 2),
+            'dowConsumption': [round(value, 2) for value in model['dowConsumption']],
+            'n': int(model['n']),
+            'consumptionSlope': round(model['consumptionSlope'], 4),
+            'consumptionIntercept': round(model['consumptionIntercept'], 4),
+            'lastConsumption': round(model['lastConsumption'], 4),
         },
         'metrics': {
-            'mae': round(mae, 3),
-            'rmse': round(rmse, 3),
-            'r2': round(r2, 3),
-            'nTrain': len(X_train),
-            'nTest': len(X_test),
+            'mae': round(metrics['mae'], 3),
+            'rmse': round(metrics['rmse'], 3),
+            'r2': round(metrics['r2'], 3),
+            'nTrain': max(1, len(train) - 1),
+            'nTest': len(test),
         },
         'forecast': forecast,
-        'stockoutDate': stockout_date,
+        'stockoutDate': estimate_stockout_date(model, last_qty),
         'anomalies': anomalies,
     }
 
 
 def detect_anomalies(series):
-    """IQR-based spike detection + gap detection.
-
-    Returns list of anomaly dicts:
-      { timestamp, type, value, expected, severity, description }
-    Types: 'spike_consumption', 'spike_restock', 'gap'
-    Severity: 'low', 'medium', 'high'
-    """
+    """IQR-based spike detection + gap detection."""
     if len(series) < 5:
         return []
 
     series = sorted(series, key=lambda x: x['timestamp'])
     timestamps = [s['timestamp'] for s in series]
     quantities = [s['quantity'] for s in series]
-    n = len(series)
-
     anomalies = []
 
-    # --- 1. Spike detection via IQR ---
     consumptions = []
     restocks = []
-    for i in range(1, n):
+    for i in range(1, len(series)):
         delta = quantities[i - 1] - quantities[i]
         if delta > 0:
             consumptions.append((i, delta))
@@ -488,60 +428,58 @@ def detect_anomalies(series):
     def iqr_bounds(values):
         if len(values) < 4:
             return None, None
-        sorted_v = sorted(values)
-        q1 = sorted_v[len(sorted_v) // 4]
-        q3 = sorted_v[3 * len(sorted_v) // 4]
+        sorted_values = sorted(values)
+        q1 = sorted_values[len(sorted_values) // 4]
+        q3 = sorted_values[3 * len(sorted_values) // 4]
         iqr = q3 - q1
         if iqr == 0:
             return None, None
         return q1 - 1.5 * iqr, q3 + 1.5 * iqr
 
     if consumptions:
-        c_values = [v for _, v in consumptions]
-        c_mean = mean(c_values)
-        _, upper = iqr_bounds(c_values)
+        values = [value for _, value in consumptions]
+        avg = mean(values)
+        _, upper = iqr_bounds(values)
         if upper is not None:
-            for idx, val in consumptions:
-                if val > upper:
-                    excess = val / c_mean if c_mean > 0 else 1
+            for idx, value in consumptions:
+                if value > upper:
+                    excess = value / avg if avg > 0 else 1
                     severity = 'high' if excess > 3 else 'medium' if excess > 2 else 'low'
                     anomalies.append({
                         'timestamp': timestamps[idx],
                         'type': 'spike_consumption',
-                        'value': round(val, 1),
-                        'expected': round(c_mean, 1),
+                        'value': round(value, 1),
+                        'expected': round(avg, 1),
                         'severity': severity,
-                        'description': f'Konsumsi {round(val,1)} jauh di atas rata-rata {round(c_mean,1)}/hari',
+                        'description': f'Konsumsi {round(value,1)} jauh di atas rata-rata {round(avg,1)}/hari',
                     })
 
     if restocks:
-        r_values = [v for _, v in restocks]
-        r_mean = mean(r_values)
-        _, upper_r = iqr_bounds(r_values)
-        if upper_r is not None:
-            for idx, val in restocks:
-                if val > upper_r:
-                    severity = 'high' if val > r_mean * 3 else 'medium'
+        values = [value for _, value in restocks]
+        avg = mean(values)
+        _, upper = iqr_bounds(values)
+        if upper is not None:
+            for idx, value in restocks:
+                if value > upper:
+                    severity = 'high' if value > avg * 3 else 'medium'
                     anomalies.append({
                         'timestamp': timestamps[idx],
                         'type': 'spike_restock',
-                        'value': round(val, 1),
-                        'expected': round(r_mean, 1),
+                        'value': round(value, 1),
+                        'expected': round(avg, 1),
                         'severity': severity,
-                        'description': f'Restock {round(val,1)} unit tidak wajar (rata-rata {round(r_mean,1)})',
+                        'description': f'Restock {round(value,1)} unit tidak wajar (rata-rata {round(avg,1)})',
                     })
 
-    # --- 2. Gap detection (tidak ada transaksi > 14 hari) ---
-    GAP_THRESHOLD_DAYS = 14
-    for i in range(1, n):
-        gap_ms = timestamps[i] - timestamps[i - 1]
-        gap_days = gap_ms / MS_PER_DAY
-        if gap_days > GAP_THRESHOLD_DAYS:
+    gap_threshold_days = 14
+    for i in range(1, len(series)):
+        gap_days = (timestamps[i] - timestamps[i - 1]) / MS_PER_DAY
+        if gap_days > gap_threshold_days:
             anomalies.append({
                 'timestamp': timestamps[i - 1],
                 'type': 'gap',
                 'value': round(gap_days, 0),
-                'expected': GAP_THRESHOLD_DAYS,
+                'expected': gap_threshold_days,
                 'severity': 'high' if gap_days > 30 else 'medium',
                 'description': f'Tidak ada transaksi selama {round(gap_days,0):.0f} hari',
             })
