@@ -471,7 +471,7 @@ export function useFirebaseDevices() {
   }
 }
 
-export function useFirebaseTransactions(limit: number = 5000) {
+export function useFirebaseTransactions(limit: number | null = 5000) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -502,7 +502,10 @@ export function useFirebaseTransactions(limit: number = 5000) {
         return;
       }
 
-      const transactionsQuery = query(dbRefs.transactions, orderByChild('timestamp'), limitToLast(limit));
+      const transactionsQuery =
+        limit && limit > 0
+          ? query(dbRefs.transactions, orderByChild('timestamp'), limitToLast(limit))
+          : query(dbRefs.transactions, orderByChild('timestamp'));
       unsubscribe = onValue(
         transactionsQuery,
         (snapshot: DataSnapshot) => {

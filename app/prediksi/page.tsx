@@ -41,7 +41,7 @@ function fmt(ts: number): string {
 
 export default function PrediksiPage() {
   const { items: inventory, loading: inventoryLoading } = useFirebaseInventory()
-  const { transactions, loading: txLoading } = useFirebaseTransactions()
+  const { transactions, loading: txLoading } = useFirebaseTransactions(null)
 
   const [selectedId, setSelectedId] = useState<string>("")
   const [horizonDays, setHorizonDays] = useState<number>(14)
