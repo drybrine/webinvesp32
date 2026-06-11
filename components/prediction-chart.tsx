@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 
 export interface PredictionChartPoint {
   date: string
@@ -15,10 +15,24 @@ interface Props {
 }
 
 const WIDTH = 760
-const HEIGHT = 320
-const PADDING = { top: 16, right: 16, bottom: 36, left: 40 }
+const HEIGHT = 360
+const PADDING = { top: 24, right: 24, bottom: 48, left: 52 }
+
+function formatValue(value: number | null): string {
+  if (value === null || Number.isNaN(value)) return "-"
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
+function buildStatus(value: number | null, minStock: number): { label: string; color: string } {
+  if (value === null) return { label: "-", color: "#64748b" }
+  if (value <= 0) return { label: "Habis", color: "#dc2626" }
+  if (value < minStock) return { label: "Di bawah minimum", color: "#d97706" }
+  return { label: "Aman", color: "#16a34a" }
+}
 
 export default function PredictionChart({ data, minStock }: Props) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
+
   const geometry = useMemo(() => {
     if (data.length === 0) return null
 
@@ -33,6 +47,7 @@ export default function PredictionChart({ data, minStock }: Props) {
 
     const innerW = WIDTH - PADDING.left - PADDING.right
     const innerH = HEIGHT - PADDING.top - PADDING.bottom
+    const chartBottom = PADDING.top + innerH
 
     const xAt = (i: number) =>
       PADDING.left + (data.length <= 1 ? innerW / 2 : (i / (data.length - 1)) * innerW)
@@ -65,21 +80,42 @@ export default function PredictionChart({ data, minStock }: Props) {
       .map((d, i) => ({ i, label: d.date, x: xAt(i) }))
       .filter((_, i) => i % labelStep === 0 || i === data.length - 1)
 
+    const forecastStartIndex = data.findIndex((d) => d.predicted !== null && !Number.isNaN(d.predicted))
+    const forecastStartX = forecastStartIndex >= 0 ? xAt(forecastStartIndex) : null
+    const actualCount = data.filter((d) => d.actual !== null && !Number.isNaN(d.actual)).length
+    const forecastCount = data.filter((d) => d.predicted !== null && !Number.isNaN(d.predicted)).length
+    const minVisibleValue = Math.min(...values, minStock)
+    const maxVisibleValue = Math.max(...values, minStock)
+
+    const hitWidth = Math.max(14, innerW / Math.max(1, data.length))
     return {
       actualPath: buildPath("actual"),
       predictedPath: buildPath("predicted"),
       points: data.map((d, i) => ({
+        index: i,
         x: xAt(i),
         actualY: d.actual !== null ? yAt(d.actual) : null,
         predictedY: d.predicted !== null ? yAt(d.predicted) : null,
+        y: d.actual !== null ? yAt(d.actual) : d.predicted !== null ? yAt(d.predicted) : null,
         date: d.date,
+        timestamp: d.timestamp,
         actual: d.actual,
         predicted: d.predicted,
+        value: d.actual ?? d.predicted,
+        type: d.actual !== null ? "Historis" : "Prediksi",
       })),
       yTicks,
       xLabels,
       minStockY: yAt(minStock),
       innerH,
+      chartBottom,
+      forecastStartX,
+      forecastStartIndex,
+      actualCount,
+      forecastCount,
+      hitWidth,
+      minVisibleValue,
+      maxVisibleValue,
     }
   }, [data, minStock])
 
@@ -91,17 +127,87 @@ export default function PredictionChart({ data, minStock }: Props) {
     )
   }
 
-  const { actualPath, predictedPath, points, yTicks, xLabels, minStockY } = geometry
+  const {
+    actualPath,
+    predictedPath,
+    points,
+    yTicks,
+    xLabels,
+    minStockY,
+    chartBottom,
+    forecastStartX,
+    forecastStartIndex,
+    actualCount,
+    forecastCount,
+    hitWidth,
+    minVisibleValue,
+    maxVisibleValue,
+  } = geometry
+  const activePoint = activeIndex !== null ? points[activeIndex] : null
+  const activeY = activePoint?.y ?? null
+  const activeValue = activePoint?.value ?? null
+  const activeStatus = buildStatus(activeValue, minStock)
+  const tooltipW = 156
+  const tooltipH = 78
+  const tooltipX = activePoint
+    ? activePoint.x + tooltipW + 12 > WIDTH - PADDING.right
+      ? activePoint.x - tooltipW - 12
+      : activePoint.x + 12
+    : 0
+  const tooltipY = activeY === null
+    ? 0
+    : Math.max(PADDING.top, Math.min(chartBottom - tooltipH, activeY - tooltipH / 2))
 
   return (
     <div className="w-full overflow-x-auto">
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="w-full h-[320px]"
+        className="w-full h-[360px]"
         preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label="Grafik prediksi stok"
+        onPointerLeave={() => setActiveIndex(null)}
       >
+        <rect
+          x={PADDING.left}
+          y={minStockY}
+          width={WIDTH - PADDING.left - PADDING.right}
+          height={Math.max(0, chartBottom - minStockY)}
+          fill="#f59e0b"
+          opacity={0.07}
+        />
+
+        {forecastStartX !== null && (
+          <>
+            <rect
+              x={forecastStartX}
+              y={PADDING.top}
+              width={WIDTH - PADDING.right - forecastStartX}
+              height={chartBottom - PADDING.top}
+              fill="#16a34a"
+              opacity={0.05}
+            />
+            <line
+              x1={forecastStartX}
+              x2={forecastStartX}
+              y1={PADDING.top}
+              y2={chartBottom}
+              stroke="#16a34a"
+              strokeDasharray="4 4"
+              strokeWidth={1}
+              opacity={0.8}
+            />
+            <text
+              x={Math.min(WIDTH - PADDING.right - 4, forecastStartX + 6)}
+              y={PADDING.top + 13}
+              fontSize="10"
+              fill="#16a34a"
+            >
+              Forecast
+            </text>
+          </>
+        )}
+
         {yTicks.map((t, i) => (
           <g key={`y-${i}`}>
             <line
@@ -124,6 +230,23 @@ export default function PredictionChart({ data, minStock }: Props) {
             </text>
           </g>
         ))}
+
+        <line
+          x1={PADDING.left}
+          x2={WIDTH - PADDING.right}
+          y1={chartBottom}
+          y2={chartBottom}
+          stroke="currentColor"
+          className="text-border"
+        />
+        <line
+          x1={PADDING.left}
+          x2={PADDING.left}
+          y1={PADDING.top}
+          y2={chartBottom}
+          stroke="currentColor"
+          className="text-border"
+        />
 
         <line
           x1={PADDING.left}
@@ -157,6 +280,25 @@ export default function PredictionChart({ data, minStock }: Props) {
           </text>
         ))}
 
+        <text
+          x={PADDING.left}
+          y={HEIGHT - 8}
+          textAnchor="start"
+          className="fill-muted-foreground"
+          fontSize="10"
+        >
+          Tanggal
+        </text>
+        <text
+          x={12}
+          y={PADDING.top + 4}
+          textAnchor="start"
+          className="fill-muted-foreground"
+          fontSize="10"
+        >
+          Stok
+        </text>
+
         {actualPath && (
           <path
             d={actualPath}
@@ -182,17 +324,78 @@ export default function PredictionChart({ data, minStock }: Props) {
         {points.map((p, i) => (
           <g key={`pt-${i}`}>
             {p.actualY !== null && (
-              <circle cx={p.x} cy={p.actualY} r={3} fill="#2563eb">
+              <circle cx={p.x} cy={p.actualY} r={3.2} fill="#2563eb">
                 <title>{`${p.date} · historis: ${p.actual}`}</title>
               </circle>
             )}
             {p.predictedY !== null && (
-              <circle cx={p.x} cy={p.predictedY} r={2.5} fill="#16a34a">
+              <circle cx={p.x} cy={p.predictedY} r={3} fill="#16a34a">
                 <title>{`${p.date} · prediksi: ${p.predicted?.toFixed(2)}`}</title>
               </circle>
             )}
           </g>
         ))}
+
+        {points.map((p) => (
+          <rect
+            key={`hit-${p.index}`}
+            x={p.x - hitWidth / 2}
+            y={PADDING.top}
+            width={hitWidth}
+            height={chartBottom - PADDING.top}
+            fill="transparent"
+            onPointerEnter={() => setActiveIndex(p.index)}
+            onPointerMove={() => setActiveIndex(p.index)}
+            tabIndex={0}
+            role="button"
+            aria-label={`${p.date} ${p.type} ${formatValue(p.value)}`}
+            onFocus={() => setActiveIndex(p.index)}
+            onBlur={() => setActiveIndex(null)}
+          />
+        ))}
+
+        {activePoint && activeY !== null && (
+          <g pointerEvents="none">
+            <line
+              x1={activePoint.x}
+              x2={activePoint.x}
+              y1={PADDING.top}
+              y2={chartBottom}
+              stroke="#64748b"
+              strokeDasharray="3 3"
+              opacity={0.8}
+            />
+            <circle
+              cx={activePoint.x}
+              cy={activeY}
+              r={5}
+              fill={activePoint.actual !== null ? "#2563eb" : "#16a34a"}
+              stroke="white"
+              strokeWidth={2}
+            />
+            <g transform={`translate(${tooltipX}, ${tooltipY})`}>
+              <rect
+                width={tooltipW}
+                height={tooltipH}
+                rx={8}
+                className="fill-card stroke-border"
+                strokeWidth={1}
+              />
+              <text x={10} y={18} className="fill-foreground" fontSize="11" fontWeight={600}>
+                {activePoint.date}
+              </text>
+              <text x={10} y={36} className="fill-muted-foreground" fontSize="10">
+                {activePoint.type}: {formatValue(activeValue)}
+              </text>
+              <text x={10} y={52} className="fill-muted-foreground" fontSize="10">
+                Min stok: {formatValue(minStock)}
+              </text>
+              <text x={10} y={68} fill={activeStatus.color} fontSize="10" fontWeight={600}>
+                Status: {activeStatus.label}
+              </text>
+            </g>
+          </g>
+        )}
 
       </svg>
 
@@ -206,6 +409,32 @@ export default function PredictionChart({ data, minStock }: Props) {
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block w-4 border-t border-dashed border-[#f59e0b]" /> Min Stok
         </span>
+        {forecastStartIndex >= 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded-sm bg-[#16a34a]/10 border border-[#16a34a]/20" /> Area Forecast
+          </span>
+        )}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <div className="rounded-md border bg-muted/20 px-3 py-2">
+          <div className="text-muted-foreground">Titik historis</div>
+          <div className="font-semibold text-foreground">{actualCount}</div>
+        </div>
+        <div className="rounded-md border bg-muted/20 px-3 py-2">
+          <div className="text-muted-foreground">Titik forecast</div>
+          <div className="font-semibold text-foreground">{forecastCount}</div>
+        </div>
+        <div className="rounded-md border bg-muted/20 px-3 py-2">
+          <div className="text-muted-foreground">Rentang stok</div>
+          <div className="font-semibold text-foreground">
+            {formatValue(minVisibleValue)} - {formatValue(maxVisibleValue)}
+          </div>
+        </div>
+        <div className="rounded-md border bg-muted/20 px-3 py-2">
+          <div className="text-muted-foreground">Batas minimum</div>
+          <div className="font-semibold text-foreground">{formatValue(minStock)}</div>
+        </div>
       </div>
     </div>
   )

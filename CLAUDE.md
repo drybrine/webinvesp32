@@ -19,6 +19,8 @@ npx tsc --noEmit       # type-check only (strict mode)
 python3 api/predict.py # test Python predict serverless locally (requires requests library for HTTP mode)
 ```
 
+Notebook seminar/model website: `scripts/model_prediksi_stok_linear_regression.ipynb` reads `barcodescanesp32-default-rtdb-export.json`, mirrors the Python prediction pipeline, and reports MAE/RMSE/MAPE/R².
+
 No test runner is wired up. Type-check + build is the verification loop. If `/prediksi` or dashboard changes touch hook order, run a full `rm -rf .next && npm run build` — minified React #310 (hook order) only shows in production builds.
 
 Port 3000 is hard-coded in several places; `kill <pid>` the existing `next-server` process before restarting.
@@ -46,7 +48,7 @@ Attendance was fully removed from both web and firmware. Do not reintroduce atte
 
 - `app/page.tsx` — dashboard: inventory table, stock adjustment dialogs, prediction summary card (top-3 risk items via server-side batch `/api/predict?mode=batch`), stockout toast notifier (session-scoped, one notification per item per day), device status card. All hooks must be declared before any conditional early-return — see the #310 incident in git history.
 - `app/transaksi/page.tsx` — transaction feed, filters by type/period/**source** (Manual = operator is Dashboard/Manual/empty; Scanner = anything else). Pagination 50/halaman. Export CSV.
-- `app/prediksi/page.tsx` — Simple Linear Regression prediction per item via Python serverless, SVG chart in `components/prediction-chart.tsx`, model metrics (R², MAE, RMSE), forecast table, testing model panel, badge sumber model. Do not display anomaly detection in this page; it is outside the thesis scope.
+- `app/prediksi/page.tsx` — Simple Linear Regression prediction per item via Python serverless, detailed SVG chart in `components/prediction-chart.tsx`, model metrics (R², MAE, RMSE), forecast table, testing model panel, badge sumber model. Do not display anomaly detection in this page; it is outside the thesis scope.
 - `app/scan/page.tsx` — manual barcode input, PDF417 barcode render via bwip-js (`components/pdf417-barcode.tsx`), scan history.
 - `/api/predict` — **not a Next.js route**. `vercel.json` maps `api/predict.py` (Vercel Python function, `@vercel/python@4.3.1`, maxDuration 30s) to handle `/api/predict` directly. The frontend `fetch("/api/predict", …)` calls hit the Python handler. Supports single item and batch mode (`mode: 'batch'` for dashboard top-N risk items). There is no `app/api/predict/route.ts`.
 - `app/api/current-page/route.ts`, `/api/firebase-*`, `/api/heartbeat`, `/api/devices-status`, `/api/barcode-scan`, `/api/check-device-status` — Next.js helper endpoints for ESP32 and diagnostics (all under `app/api/**/*.ts`, maxDuration 30s).
@@ -67,6 +69,8 @@ Performance (dataset: 20 suku cadang Honda, 365 hari, 6736 tx): avg R²=0.8962, 
 **Client-side fallback** in `lib/stock-prediction.ts` (TypeScript, same OLS math) — used if Python serverless fails or `/api/predict` is unavailable in local `next start`. Badge shows "Linear Regression (server)" or "Linear Regression (client)".
 
 The `/prediksi` page calls single-item prediction and displays only the regression/forecast outputs needed for the thesis: model parameters, chart, metrics, forecast table, and testing model details. The dashboard calls batch mode (`mode: 'batch'`) to get top-N risk items. Standalone test: `scripts/test-stock-prediction.ts`. Minimum 2 points to fit — callers must guard.
+
+The prediction chart is hand-built SVG with no chart library dependency. It shows the last 30 days of history, forecast area, minimum-stock zone, hover/focus tooltip, safe/low/stockout status, and summary counts. Keep this SVG approach unless production build testing proves a new chart library works with the custom splitChunks config.
 
 ### Webpack config landmines
 

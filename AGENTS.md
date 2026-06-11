@@ -18,6 +18,8 @@ npx tsx scripts/test-stock-prediction.ts --export barcodescanesp32-default-rtdb-
 npx tsc --noEmit       # type-check only (strict mode)
 ```
 
+Notebook seminar/model website: `scripts/model_prediksi_stok_linear_regression.ipynb` reads `barcodescanesp32-default-rtdb-export.json`, mirrors the Python prediction pipeline, and reports MAE/RMSE/MAPE/R².
+
 No test runner is wired up. Type-check + build is the verification loop. If `/prediksi` or dashboard changes touch hook order, run a full `rm -rf .next && npm run build` — minified React #310 (hook order) only shows in production builds.
 
 Port 3000 is hard-coded in several places; `kill <pid>` the existing `next-server` process before restarting.
@@ -45,7 +47,7 @@ Attendance was fully removed from both web and firmware. Do not reintroduce atte
 
 - `app/page.tsx` — dashboard: inventory table, stock adjustment dialogs, prediction summary card (top-3 risk items via server-side batch `/api/predict`), stockout toast notifier (session-scoped, one notification per item per day), device status card. All hooks must be declared before any conditional early-return — see the #310 incident in git history.
 - `app/transaksi/page.tsx` — transaction feed, filters by type/period/**source** (Manual = operator is Dashboard/Manual/empty; Scanner = anything else). Pagination 50/halaman. Export CSV.
-- `app/prediksi/page.tsx` — Simple Linear Regression prediction per item via Python serverless, SVG-native chart in `components/prediction-chart.tsx`, model metrics (R², MAE, RMSE), forecast table, testing model panel, badge sumber model. Do not display anomaly detection in this page; it is outside the thesis scope.
+- `app/prediksi/page.tsx` — Simple Linear Regression prediction per item via Python serverless, detailed SVG-native chart in `components/prediction-chart.tsx`, model metrics (R², MAE, RMSE), forecast table, testing model panel, badge sumber model. Do not display anomaly detection in this page; it is outside the thesis scope.
 - `app/scan/page.tsx` — manual barcode input, PDF417 barcode render via bwip-js (`components/pdf417-barcode.tsx`), scan history.
 - `/api/predict` — Vercel Python function at `api/predict.py`, not an `app/api/**/route.ts` file. Frontend `fetch("/api/predict", ...)` calls hit the Python handler. Supports single item and batch mode (`mode: 'batch'`) for dashboard top-N risk items.
 - `app/api/current-page/route.ts`, `/api/firebase-*`, `/api/heartbeat`, `/api/devices-status`, `/api/barcode-scan`, `/api/check-device-status` — helper endpoints for ESP32 and diagnostics.
@@ -53,6 +55,8 @@ Attendance was fully removed from both web and firmware. Do not reintroduce atte
 ### Prediction pipeline
 
 Primary prediction runs on the Python serverless function `api/predict.py`, with `lib/stock-prediction.ts` as the TypeScript fallback for local/failed API calls. The model is **simple linear regression** (`Y = a + bX`) on EMA-smoothed daily consumption: `X = konsumsi hari sebelumnya`, `Y = konsumsi hari ini`. Forecast stock is computed iteratively by subtracting predicted daily consumption from the current quantity, so the forecast curve is not forced to be a straight stock-level line. Because Firebase stores only current `quantity` + transaction history, `buildDailySeriesFromTransactions` reconstructs daily stock levels by walking backwards from current quantity through daily signed deltas. The `/prediksi` page displays only regression/forecast outputs needed for the thesis; if the API returns anomaly metadata, frontend code should ignore it unless the thesis scope changes. Minimum 2 points to fit — callers must guard.
+
+The prediction chart is hand-built SVG with no chart library dependency. It shows the last 30 days of history, forecast area, minimum-stock zone, hover/focus tooltip, safe/low/stockout status, and summary counts. Keep this SVG approach unless production build testing proves a new chart library works with the custom splitChunks config.
 
 ### Webpack config landmines
 

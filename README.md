@@ -46,10 +46,12 @@ Buka http://localhost:3000
 - Iterative forecast: prediksi konsumsi harian → kurangi stok saat ini
 - Train ratio 85/15 untuk split kronologis
 - Avg R² = 0.8962, 20/20 item R² positif (dataset dummy 20 suku cadang Honda, 365 hari)
-- UI `/prediksi` menampilkan parameter model, grafik historis + forecast, tabel forecast, dan testing model
+- UI `/prediksi` menampilkan parameter model, grafik SVG historis + forecast, tabel forecast, dan testing model
+- Grafik prediksi detail: zona forecast, zona stok minimum, tooltip titik data, status aman/rendah/habis, ringkasan titik historis/forecast
 - Kartu ringkas di dashboard: top-3 barang paling berisiko stockout (server-side batch)
 - Notifikasi otomatis saat prediksi habis ≤ 7 hari
 - Badge sumber prediksi: "Linear Regression (server/client)"
+- Notebook seminar: replikasi model website dengan validasi MAE, RMSE, MAPE, dan R²
 
 ### Device Management (ESP32)
 - Monitoring realtime via Firebase `onValue` listener (bukan polling)
@@ -91,7 +93,7 @@ Firebase Realtime Database
 Next.js Website (Vercel)
     ├── Dashboard             (inventaris, stock +/-, prediksi ringkas, device status)
     ├── /transaksi            (history, filter jenis/sumber/periode, export CSV, pagination)
-    ├── /prediksi             (Linear Regression chart, forecast tabel, metrics)
+    ├── /prediksi             (detailed SVG Linear Regression chart, forecast tabel, metrics)
     ├── /scan                 (manual barcode input)
     └── /api/predict          (Python serverless, Simple Linear Regression)
 ```
@@ -182,6 +184,9 @@ Implementasi pure Python — tidak pakai numpy agar fit dalam Vercel 250MB serve
 ### Kenapa EMA + Consumption?
 Training langsung pada level stok membuat forecast regresi linear menjadi garis lurus dan mudah terdistraksi event restock. Training pada konsumsi smoothed menjaga metodologi tetap Simple Linear Regression, tetapi forecast stok dihitung iteratif sehingga grafik tidak dipaksa menjadi garis lurus.
 
+### Grafik Website
+`components/prediction-chart.tsx` memakai SVG native, bukan Recharts. Grafik menampilkan 30 hari historis terakhir, forecast sesuai horizon, zona stok minimum, area forecast, tooltip hover/focus, status titik data, dan ringkasan jumlah titik historis/forecast.
+
 ### Performa (dataset uji)
 - 20 suku cadang Honda AHASS, 365 hari, 6736 transaksi
 - Avg R² = 0.8962, R² > 0: 20/20 item
@@ -200,9 +205,13 @@ Source response: `lr-consumption-py` atau `lr-consumption-batch`.
 ### Notebook Testing
 ```bash
 # Google Colab (upload langsung)
+scripts/model_prediksi_stok_linear_regression.ipynb  # model website + Firebase export + MAE/RMSE/MAPE/R²
 scripts/honda_tune_model.ipynb      # model tuning (TSCV, alpha, features)
 scripts/honda_test_model.ipynb      # model testing (4 model comparison)
 scripts/stock_forecast_colab.ipynb  # original notebook
+
+# Jalankan script CLI model website
+npx tsx scripts/test-stock-prediction.ts --export barcodescanesp32-default-rtdb-export.json
 
 # Generate dummy data
 npx tsx scripts/generate-honda-dummy.ts --test
