@@ -328,12 +328,12 @@ def evaluate_consumption(model, series):
     return calculate_metrics(actual, predicted)
 
 
-def estimate_stockout_date(model, current_quantity):
+def estimate_stockout_date(model, current_quantity, base_timestamp):
+    base_date = datetime.fromtimestamp(base_timestamp / 1000)
     if current_quantity <= 0:
-        return datetime.now().strftime('%Y-%m-%d')
+        return base_date.strftime('%Y-%m-%d')
 
     quantity = float(current_quantity)
-    now = datetime.now()
     previous_consumption = model.get('lastConsumption', model['avgDailyConsumption'])
 
     for day in range(1, 3651):
@@ -344,7 +344,7 @@ def estimate_stockout_date(model, current_quantity):
         quantity = max(0.0, quantity - consumption)
         previous_consumption = consumption
         if quantity <= 0:
-            return (now + timedelta(days=day)).strftime('%Y-%m-%d')
+            return (base_date + timedelta(days=day)).strftime('%Y-%m-%d')
 
     return None
 
@@ -401,7 +401,7 @@ def predict_stock(series, horizon_days=14, train_ratio=0.85):
             'nTest': len(test),
         },
         'forecast': forecast,
-        'stockoutDate': estimate_stockout_date(model, last_qty),
+        'stockoutDate': estimate_stockout_date(model, last_qty, last_ts),
         'anomalies': anomalies,
     }
 

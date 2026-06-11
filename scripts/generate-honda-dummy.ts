@@ -211,13 +211,14 @@ function testPrediction(part: SparePart, txs: Transaction[]) {
   try {
     const prediction = predictStock(series, { horizonDays: 14, trainRatio: 0.8 })
     const lowest = Math.min(...prediction.forecast.map(f => f.predictedQuantity))
+    const lastHistoryTs = series[series.length - 1].timestamp
     const stockoutDay = prediction.stockoutDate
-      ? Math.round((prediction.stockoutDate.getTime() - Date.now()) / MS_PER_DAY)
+      ? Math.round((prediction.stockoutDate.getTime() - lastHistoryTs) / MS_PER_DAY)
       : null
 
     const status = lowest < part.minStock ? "🔴 RISK" : lowest < part.minStock * 2 ? "🟡 WATCH" : "🟢 OK"
     console.log(
-      `  ${status} ${part.name.padEnd(50)} stok=${finalStock.toString().padStart(3)} | konsumsi=${prediction.model.avgDailyConsumption.toFixed(2).padStart(5)}/hari | R²=${prediction.metrics.r2.toFixed(3)} | habis=${stockoutDay !== null ? stockoutDay + ' hari' : '—'}`,
+      `  ${status} ${part.name.padEnd(50)} stok=${finalStock.toString().padStart(3)} | konsumsi=${prediction.model.avgDailyConsumption.toFixed(2).padStart(5)}/hari | R²=${prediction.metrics.r2.toFixed(3)} | habis=${stockoutDay !== null ? 'hari ke-' + stockoutDay : '—'}`,
     )
   } catch (e) {
     console.log(`  ⚠ Error untuk ${part.name}: ${(e as Error).message}`)

@@ -111,8 +111,9 @@ function runTest(dataset: { name: string; history: StockDataPoint[] }): void {
   }
 
   if (result.stockoutDate) {
-    const days = Math.round((result.stockoutDate.getTime() - Date.now()) / MS_PER_DAY)
-    console.log(`\n  ⚠ Stockout diperkirakan : ${fmtDate(result.stockoutDate)} (±${days} hari lagi)`)
+    const lastHistoryTs = dataset.history.at(-1)!.timestamp
+    const days = Math.round((result.stockoutDate.getTime() - lastHistoryTs) / MS_PER_DAY)
+    console.log(`\n  ⚠ Stockout diperkirakan : ${fmtDate(result.stockoutDate)} (hari ke-${days} dari histori terakhir)`)
   } else {
     console.log("\n  ✓ Tren tidak menurun — stockout tidak diprediksi")
   }

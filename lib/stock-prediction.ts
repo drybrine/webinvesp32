@@ -263,12 +263,15 @@ export function trainTestSplit(
   return { train: sorted.slice(0, cut), test: sorted.slice(cut) }
 }
 
-/** Perkirakan tanggal stok habis dengan simulasi konsumsi harian. */
-export function estimateStockoutDate(model: RegressionModel, currentQty?: number): Date | null {
+/** Perkirakan tanggal stok habis dari timestamp histori terakhir. */
+export function estimateStockoutDate(
+  model: RegressionModel,
+  currentQty?: number,
+  baseTimestamp = Date.now(),
+): Date | null {
   let quantity = currentQty ?? 0
-  if (quantity <= 0) return new Date()
+  if (quantity <= 0) return new Date(baseTimestamp)
 
-  const now = Date.now()
   let previousConsumption = model.lastConsumption ?? model.avgDailyConsumption
   for (let day = 1; day <= 3650; day++) {
     const consumption = predictNextConsumption(model, previousConsumption)
@@ -276,7 +279,7 @@ export function estimateStockoutDate(model: RegressionModel, currentQty?: number
 
     quantity = Math.max(0, quantity - consumption)
     previousConsumption = consumption
-    if (quantity <= 0) return new Date(now + day * MS_PER_DAY)
+    if (quantity <= 0) return new Date(baseTimestamp + day * MS_PER_DAY)
   }
 
   return null
@@ -319,7 +322,7 @@ export function predictStock(
     model,
     metrics,
     forecast,
-    stockoutDate: estimateStockoutDate(model, lastQuantity),
+    stockoutDate: estimateStockoutDate(model, lastQuantity, lastTimestamp),
   }
 }
 

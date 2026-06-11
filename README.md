@@ -191,7 +191,7 @@ Training langsung pada level stok membuat forecast regresi linear menjadi garis 
 ### Grafik Website
 `components/prediction-chart.tsx` memakai SVG native, bukan Recharts. Grafik menampilkan 30 hari historis terakhir, forecast sesuai horizon, zona stok minimum, area forecast, tooltip hover/focus, status titik data, dan ringkasan jumlah titik historis/forecast.
 
-Card `Perkiraan Habis` pada `/prediksi` harus mengikuti forecast yang tampil di grafik/tabel: cari titik pertama pada `prediction.forecast` dengan `predictedQuantity <= 0`. Jangan memakai `stockoutDate` API untuk card ini karena nilai tersebut dihitung relatif ke waktu server, sedangkan grafik memakai timestamp forecast dari histori terakhir.
+Card `Perkiraan Habis` pada `/prediksi` mengikuti forecast yang tampil di grafik/tabel: cari titik pertama pada `prediction.forecast` dengan `predictedQuantity <= 0`. API `stockoutDate` juga dihitung dari timestamp histori terakhir agar konsisten dengan forecast.
 
 ### Performa (dataset uji)
 - 20 suku cadang Honda AHASS, 365 hari, 6736 transaksi
@@ -213,7 +213,6 @@ Source response: `lr-consumption-py` atau `lr-consumption-batch`.
 # Google Colab (upload langsung)
 scripts/model_prediksi_stok_linear_regression.ipynb  # model website + Firebase export + MAE/RMSE/MAPE/R²
 scripts/honda_tune_model.ipynb      # model tuning (TSCV, alpha, features)
-scripts/honda_test_model.ipynb      # model testing (4 model comparison)
 scripts/stock_forecast_colab.ipynb  # original notebook
 
 # Jalankan script CLI model website

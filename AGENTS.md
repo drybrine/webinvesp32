@@ -59,7 +59,7 @@ Primary prediction runs on the Python serverless function `api/predict.py`, with
 
 The prediction chart is hand-built SVG with no chart library dependency. It shows the last 30 days of history, forecast area, minimum-stock zone, hover/focus tooltip, safe/low/stockout status, and summary counts. Keep this SVG approach unless production build testing proves a new chart library works with the custom splitChunks config.
 
-The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/table by deriving its date from the first `prediction.forecast` point whose `predictedQuantity <= 0`. Do not use API `stockoutDate` for this card because that date is relative to server/current time, while the chart uses forecast timestamps based on the last reconstructed history point.
+The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/table by deriving its date from the first `prediction.forecast` point whose `predictedQuantity <= 0`. API `stockoutDate` is also based on the last reconstructed history timestamp, so backend and forecast dates stay aligned.
 
 ### Webpack config landmines
 
