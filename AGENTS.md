@@ -83,4 +83,5 @@ Battery monitoring uses `esp_adc_cal` eFuse Vref calibration, EMA smoothing (alp
 - Indonesian is the user-facing language in pages, toasts, and labels. Keep new UI copy in Indonesian to match.
 - Prediction/forecast code uses `Math.max(0, …)` to clamp forecasts and assumes timestamps in ms.
 - All stock mutations go through `firebaseHelpers.adjustStock()` (atomic multi-path `update()` with `increment()`). Never do read-modify-write on quantity.
+- Dashboard edit item dialog can update product metadata including `minStock`. Quantity edits from that dialog must still be applied as an atomic delta through `firebaseHelpers.adjustStock()`, not by writing absolute quantity.
 - Barcode rendering uses bwip-js for PDF417 (2D). Component: `components/pdf417-barcode.tsx`.
