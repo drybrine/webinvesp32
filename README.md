@@ -2,7 +2,7 @@
 
 Sistem Manajemen Inventory Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner dan prediksi stok menggunakan Simple Linear Regression.
 
-Updated: 2026-06-09
+Updated: 2026-06-11
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.1.0-blue)](https://reactjs.org/)
@@ -46,16 +46,10 @@ Buka http://localhost:3000
 - Iterative forecast: prediksi konsumsi harian → kurangi stok saat ini
 - Train ratio 85/15 untuk split kronologis
 - Avg R² = 0.8962, 20/20 item R² positif (dataset dummy 20 suku cadang Honda, 365 hari)
+- UI `/prediksi` menampilkan parameter model, grafik historis + forecast, tabel forecast, dan testing model
 - Kartu ringkas di dashboard: top-3 barang paling berisiko stockout (server-side batch)
 - Notifikasi otomatis saat prediksi habis ≤ 7 hari
 - Badge sumber prediksi: "Linear Regression (server/client)"
-
-### Anomaly Detection
-- Deteksi pola tidak normal pada data historis transaksi (halaman `/prediksi`)
-- **IQR-based spike detection** — lonjakan konsumsi & restock tidak wajar
-- **Gap detection** — periode tanpa transaksi > 14 hari (mungkin scanner mati)
-- Titik merah di chart dengan severity color (high/medium/low)
-- Tabel anomali dengan deskripsi dan tingkat severity
 
 ### Device Management (ESP32)
 - Monitoring realtime via Firebase `onValue` listener (bukan polling)
@@ -106,7 +100,7 @@ Next.js Website (Vercel)
 1. ESP32 scan barcode → POST ke `/scans` → popup muncul di website
 2. User pilih Stock In/Out di popup → atomic update: `increment()` ke `/inventory` + create `/transactions` dalam satu multi-path write
 3. Website subscribe semua path via `onValue` → UI update realtime tanpa refresh
-4. Prediksi: website POST ke `/api/predict` (Python) → forecast + metrics + anomalies
+4. Prediksi: website POST ke `/api/predict` (Python) → forecast + metrics
 
 ## Environment Variables
 
@@ -198,16 +192,10 @@ Training langsung pada level stok membuat forecast regresi linear menjadi garis 
 POST /api/predict
 Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
 Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
-Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, anomalies, source }
+Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, source }
 ```
 
 Source response: `lr-consumption-py` atau `lr-consumption-batch`.
-
-### Anomaly Detection
-Deteksi pola tidak normal pada data historis (dikembalikan di field `anomalies`):
-- **IQR spike** — konsumsi/restock di atas Q3 + 1.5·IQR
-- **Gap** — tidak ada transaksi > 14 hari
-- Setiap anomali punya: `timestamp`, `type`, `value`, `expected`, `severity`, `description`
 
 ### Notebook Testing
 ```bash

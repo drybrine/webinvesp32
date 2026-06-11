@@ -9,32 +9,16 @@ export interface PredictionChartPoint {
   predicted: number | null
 }
 
-export interface AnomalyPoint {
-  timestamp: number
-  type: string
-  value: number
-  expected: number
-  severity: "low" | "medium" | "high"
-  description: string
-}
-
 interface Props {
   data: PredictionChartPoint[]
   minStock: number
-  anomalies?: AnomalyPoint[]
 }
 
 const WIDTH = 760
 const HEIGHT = 320
 const PADDING = { top: 16, right: 16, bottom: 36, left: 40 }
 
-const SEVERITY_COLOR: Record<string, string> = {
-  high: "#ef4444",
-  medium: "#f97316",
-  low: "#eab308",
-}
-
-export default function PredictionChart({ data, minStock, anomalies = [] }: Props) {
+export default function PredictionChart({ data, minStock }: Props) {
   const geometry = useMemo(() => {
     if (data.length === 0) return null
 
@@ -81,23 +65,6 @@ export default function PredictionChart({ data, minStock, anomalies = [] }: Prop
       .map((d, i) => ({ i, label: d.date, x: xAt(i) }))
       .filter((_, i) => i % labelStep === 0 || i === data.length - 1)
 
-    const anomalyMarkers = anomalies
-      .map((a) => {
-        const idx = data.findIndex((d) => Math.abs(d.timestamp - a.timestamp) < 86400000 * 1.5)
-        if (idx === -1) return null
-        const d = data[idx]
-        const val = d.actual ?? d.predicted
-        if (val === null) return null
-        return {
-          x: xAt(idx),
-          y: yAt(val),
-          color: SEVERITY_COLOR[a.severity] ?? "#ef4444",
-          description: a.description,
-          date: d.date,
-        }
-      })
-      .filter((m): m is NonNullable<typeof m> => m !== null)
-
     return {
       actualPath: buildPath("actual"),
       predictedPath: buildPath("predicted"),
@@ -113,9 +80,8 @@ export default function PredictionChart({ data, minStock, anomalies = [] }: Prop
       xLabels,
       minStockY: yAt(minStock),
       innerH,
-      anomalyMarkers,
     }
-  }, [data, minStock, anomalies])
+  }, [data, minStock])
 
   if (!geometry) {
     return (
@@ -125,7 +91,7 @@ export default function PredictionChart({ data, minStock, anomalies = [] }: Prop
     )
   }
 
-  const { actualPath, predictedPath, points, yTicks, xLabels, minStockY, anomalyMarkers } = geometry
+  const { actualPath, predictedPath, points, yTicks, xLabels, minStockY } = geometry
 
   return (
     <div className="w-full overflow-x-auto">
@@ -228,14 +194,6 @@ export default function PredictionChart({ data, minStock, anomalies = [] }: Prop
           </g>
         ))}
 
-        {anomalyMarkers.map((m, i) => (
-          <g key={`anomaly-${i}`}>
-            <circle cx={m.x} cy={m.y} r={7} fill={m.color} opacity={0.2} />
-            <circle cx={m.x} cy={m.y} r={4} fill={m.color}>
-              <title>{`${m.date} · ${m.description}`}</title>
-            </circle>
-          </g>
-        ))}
       </svg>
 
       <div className="flex items-center gap-4 justify-center text-xs text-muted-foreground mt-2 flex-wrap">
@@ -248,11 +206,6 @@ export default function PredictionChart({ data, minStock, anomalies = [] }: Prop
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block w-4 border-t border-dashed border-[#f59e0b]" /> Min Stok
         </span>
-        {anomalyMarkers.length > 0 && (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> Anomali
-          </span>
-        )}
       </div>
     </div>
   )
