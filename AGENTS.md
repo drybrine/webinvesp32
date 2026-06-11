@@ -37,6 +37,7 @@ This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sk
 - **ESP32 → Firebase**: firmware PUTs directly to `/devices/{deviceId}` (heartbeat every ~8s, includes batteryLevel/rssi) and pushes scans to `/scans/{id}`. Firmware also reads `/inventory` to display product info on its OLED.
 - **Firebase → web**: every `hooks/use-firebase.ts` hook subscribes via `onValue` — inventory, scans, devices, transactions are all reactive. No polling.
 - **Web → Firebase**: all stock changes (dashboard + ESP32 scan popup) use atomic `firebaseHelpers.adjustStock()` — a single multi-path `update()` that writes `inventory/{id}/quantity` via server-side `increment(delta)` and creates `transactions/{id}` in one atomic operation. Operator = `"Dashboard"` for manual and `"Scanner"` for ESP32.
+- **Unknown barcode quick add**: `components/unified-quick-action-popup.tsx` handles ESP32 scans whose barcode is not yet in `/inventory`. Keep the "Tambah Produk Baru" form aligned with the inventory schema used by Firebase/dashboard: `barcode`, `name`, `category`, `quantity`, `minStock`, `price`, optional `location`/`description`/`supplier`, and `lastUpdated`. `id`, `createdAt`, and `updatedAt` are handled by `firebaseHelpers.addInventoryItem`; record the initial stock transaction separately.
 - **Device liveness**: `hooks/use-realtime-device-status.ts` subscribes to `/devices` via `onValue`, then re-evaluates online/offline client-side every 3 seconds based on the age of `lastHeartbeat`/`lastSeen`. Threshold: 15s. There is an older `/api/check-device-status` route still present but no longer called from any hook — kept as a cron/fallback helper.
 
 ### Inventory mode is the only mode
@@ -84,4 +85,5 @@ Battery monitoring uses `esp_adc_cal` eFuse Vref calibration, EMA smoothing (alp
 - Prediction/forecast code uses `Math.max(0, …)` to clamp forecasts and assumes timestamps in ms.
 - All stock mutations go through `firebaseHelpers.adjustStock()` (atomic multi-path `update()` with `increment()`). Never do read-modify-write on quantity.
 - Dashboard edit item dialog can update product metadata including `minStock`. Quantity edits from that dialog must still be applied as an atomic delta through `firebaseHelpers.adjustStock()`, not by writing absolute quantity.
+- ESP32 unknown-barcode quick add should reuse `useFirebaseInventory.addItem()` and sanitize numeric fields before writing (`quantity`, `minStock`, `price` must be non-negative numbers).
 - Barcode rendering uses bwip-js for PDF417 (2D). Component: `components/pdf417-barcode.tsx`.

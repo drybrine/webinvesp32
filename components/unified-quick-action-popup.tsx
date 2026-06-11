@@ -5,9 +5,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { useFirebaseInventory } from "@/hooks/use-firebase"
+import { useFirebaseInventory, type InventoryItem } from "@/hooks/use-firebase"
 import { firebaseHelpers } from "@/lib/firebase"
 import { Package, Plus, Minus, Zap, AlertTriangle, PackageOpen, X } from "lucide-react"
 
@@ -17,19 +18,19 @@ interface UnifiedQuickActionPopupProps {
   onClose: () => void
 }
 
-interface InventoryItem {
-  id: string
-  name: string
-  category: string
-  quantity: number
-  minStock: number
-  price: number
-  description: string
-  location: string
-  barcode?: string
-  supplier?: string
-  createdAt?: any
-  updatedAt?: any
+type NewProductDraft = Omit<InventoryItem, "id" | "barcode" | "createdAt" | "updatedAt" | "lastUpdated" | "deleted">
+
+function createNewProductDraft(barcode?: string | null): NewProductDraft {
+  return {
+    name: barcode ? `Produk ${barcode}` : "",
+    category: "Umum",
+    quantity: 1,
+    minStock: 5,
+    price: 0,
+    description: "",
+    location: "",
+    supplier: "",
+  }
 }
 
 export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQuickActionPopupProps) {
@@ -40,15 +41,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
   const [isLoading, setIsLoading] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
 
-  const [newProduct, setNewProduct] = useState({
-    name: "",
-    category: "Umum",
-    quantity: 1,
-    minStock: 5,
-    price: 0,
-    description: "",
-    location: "",
-  })
+  const [newProduct, setNewProduct] = useState<NewProductDraft>(createNewProductDraft())
 
   // Detect mobile device
   useEffect(() => {
@@ -80,9 +73,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
       setQuickActionAmount(1)
       setIsLoading(false)
       
-      if (!foundProduct) {
-        setNewProduct(prev => ({ ...prev, name: `Product ${barcode}` }))
-      }
+      if (!foundProduct) setNewProduct(createNewProductDraft(barcode))
     }
   }, [barcode, items, isOpen])
 
@@ -204,24 +195,29 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
     setIsLoading(true)
     try {
       const productData = {
-        ...newProduct,
+        name: newProduct.name.trim(),
+        category: newProduct.category.trim() || "Umum",
+        quantity: Math.max(0, Number(newProduct.quantity) || 0),
+        minStock: Math.max(0, Number(newProduct.minStock) || 0),
+        price: Math.max(0, Number(newProduct.price) || 0),
+        description: newProduct.description.trim(),
+        location: newProduct.location.trim(),
+        supplier: newProduct.supplier?.trim() || "",
         barcode: barcode || "",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
         lastUpdated: Date.now(),
       }
 
       await addItem(productData)
 
       // Record transaction for initial stock
-      if (newProduct.quantity > 0) {
+      if (productData.quantity > 0) {
         const transactionData = {
           type: "in" as "in" | "out" | "adjustment",
-          productName: newProduct.name,
-          productBarcode: barcode || "",
-          quantity: newProduct.quantity,
-          unitPrice: newProduct.price || 0,
-          totalAmount: (newProduct.price || 0) * newProduct.quantity,
+          productName: productData.name,
+          productBarcode: productData.barcode,
+          quantity: productData.quantity,
+          unitPrice: productData.price,
+          totalAmount: productData.price * productData.quantity,
           reason: "Initial Stock - New Product",
           operator: "ESP32 Scanner",
           timestamp: Date.now(),
@@ -233,7 +229,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
 
       toast({
         title: "✅ Produk Ditambahkan",
-        description: `${newProduct.name} berhasil ditambahkan dengan stok ${newProduct.quantity}`,
+        description: `${productData.name} berhasil ditambahkan dengan stok ${productData.quantity}`,
         duration: 3000,
       })
       
@@ -388,7 +384,17 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         </div>
 
         <div>
-          <Label className="text-sm font-medium">Nama Produk</Label>
+          <Label className="text-sm font-medium">Barcode</Label>
+          <Input
+            value={barcode || ""}
+            className="h-10 text-sm font-mono"
+            disabled
+            readOnly
+          />
+        </div>
+
+        <div>
+          <Label className="text-sm font-medium">Nama Produk *</Label>
           <Input
             value={newProduct.name}
             onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
@@ -427,20 +433,60 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
 
         <div>
           <Label className="text-sm font-medium">Kategori</Label>
-          <select
+          <Input
             value={newProduct.category}
             onChange={(e) => setNewProduct(prev => ({ ...prev, category: e.target.value }))}
-            className="w-full h-10 px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Contoh: Oli & Pelumas"
+            className="h-10 text-sm"
             disabled={isLoading}
-          >
-            <option value="Umum">Umum</option>
-            <option value="Elektronik">Elektronik</option>
-            <option value="Makanan">Makanan</option>
-            <option value="Minuman">Minuman</option>
-            <option value="Pakaian">Pakaian</option>
-            <option value="Alat Tulis">Alat Tulis</option>
-            <option value="Lainnya">Lainnya</option>
-          </select>
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-sm font-medium">Stok Minimum</Label>
+            <Input
+              type="number"
+              value={newProduct.minStock}
+              onChange={(e) => setNewProduct(prev => ({ ...prev, minStock: Math.max(0, parseInt(e.target.value) || 0) }))}
+              placeholder="0"
+              className="h-10 text-sm"
+              min="0"
+              disabled={isLoading}
+            />
+          </div>
+          <div>
+            <Label className="text-sm font-medium">Lokasi</Label>
+            <Input
+              value={newProduct.location}
+              onChange={(e) => setNewProduct(prev => ({ ...prev, location: e.target.value }))}
+              placeholder="Contoh: Rak A1"
+              className="h-10 text-sm"
+              disabled={isLoading}
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-sm font-medium">Supplier</Label>
+          <Input
+            value={newProduct.supplier || ""}
+            onChange={(e) => setNewProduct(prev => ({ ...prev, supplier: e.target.value }))}
+            placeholder="Nama pemasok"
+            className="h-10 text-sm"
+            disabled={isLoading}
+          />
+        </div>
+
+        <div>
+          <Label className="text-sm font-medium">Deskripsi</Label>
+          <Textarea
+            value={newProduct.description}
+            onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
+            placeholder="Detail produk"
+            className="min-h-20 text-sm"
+            disabled={isLoading}
+          />
         </div>
       </div>
 

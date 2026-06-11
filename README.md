@@ -31,6 +31,7 @@ Buka http://localhost:3000
 - Real-time barcode scanning dengan ESP32 GM67
 - CRUD produk + stock adjustment (tambah/kurangi) via dashboard
 - Edit item di dashboard dapat mengubah metadata produk termasuk `minStock` / stok minimum
+- Popup ESP32 untuk barcode belum terdaftar dapat langsung tambah produk baru dengan field inventory utama: `barcode`, `name`, `category`, `quantity`, `minStock`, `price`, dan `location`
 - **Atomic stock update** — server-side `increment()` + transaksi dalam satu multi-path update, anti race condition (scanner + dashboard + multi-tab tidak saling menimpa)
 - Transaksi otomatis tercatat saat stock in/out (manual maupun scanner)
 - Search, filter kategori, dan sorting inventory di dashboard
@@ -85,7 +86,7 @@ ESP32 GM67 Scanner
     ▼
 Firebase Realtime Database
     │
-    ├── /inventory/{id}       (produk: name, qty, price, barcode, minStock)
+    ├── /inventory/{id}       (produk: barcode, name, category, quantity, minStock, price, location, timestamps)
     ├── /devices/{id}         (status, lastSeen, batteryLevel, rssi, ip)
     ├── /scans/{id}           (barcode, deviceId, timestamp, processed)
     ├── /transactions/{id}    (type, qty, operator, reason, timestamp)
@@ -102,9 +103,10 @@ Next.js Website (Vercel)
 
 ### Data Flow
 1. ESP32 scan barcode → POST ke `/scans` → popup muncul di website
-2. User pilih Stock In/Out di popup → atomic update: `increment()` ke `/inventory` + create `/transactions` dalam satu multi-path write
-3. Website subscribe semua path via `onValue` → UI update realtime tanpa refresh
-4. Prediksi: website POST ke `/api/predict` (Python) → forecast + metrics
+2. Jika barcode belum terdaftar, popup dapat membuat `/inventory/{id}` baru dengan schema inventory utama + transaksi stok awal
+3. User pilih Stock In/Out di popup → atomic update: `increment()` ke `/inventory` + create `/transactions` dalam satu multi-path write
+4. Website subscribe semua path via `onValue` → UI update realtime tanpa refresh
+5. Prediksi: website POST ke `/api/predict` (Python) → forecast + metrics
 
 ## Environment Variables
 
