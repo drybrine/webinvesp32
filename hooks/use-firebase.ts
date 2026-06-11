@@ -478,49 +478,69 @@ export function useFirebaseTransactions(limit: number = 5000) {
 
   useEffect(() => {
     let unsubscribe: Unsubscribe | undefined;
+    let cancelled = false;
+
     if (typeof window === "undefined") {
       setLoading(false);
       return;
     }
 
-    if (!isFirebaseConfigured() || !database || !dbRefs || !dbRefs.transactions) {
-      console.warn("Firebase not configured or transactions ref not available for useFirebaseTransactions.");
-      const storedTransactions = getFromStorage(STORAGE_KEYS.TRANSACTIONS);
-      if (storedTransactions && storedTransactions.length > 0) {
-        setTransactions(storedTransactions.map((t: any) => ({ ...t, timestamp: t.timestamp || Date.now() })));
-      } else {
-        setTransactions([]);
-      }
-      setLoading(false);
-      return;
-    }
+    const initializeTransactions = async () => {
+      const firebaseReady = await waitForFirebaseReady(5000);
 
-    const transactionsQuery = query(dbRefs.transactions, orderByChild('timestamp'), limitToLast(limit));
-    unsubscribe = onValue(
-      transactionsQuery,
-      (snapshot: DataSnapshot) => {
-        const data = snapshot.val();
-        const loadedTransactions: Transaction[] = data
-          ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
-          : [];
-        // Reverse sort to show newest first, or sort as needed
-        setTransactions(loadedTransactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
-        setError(null);
+      if (cancelled) return;
+
+      if (!firebaseReady || !isFirebaseConfigured() || !database || !dbRefs || !dbRefs.transactions) {
+        console.warn("Firebase not configured or transactions ref not available for useFirebaseTransactions.");
+        const storedTransactions = getFromStorage(STORAGE_KEYS.TRANSACTIONS);
+        if (storedTransactions && storedTransactions.length > 0) {
+          setTransactions(storedTransactions.map((t: any) => ({ ...t, timestamp: t.timestamp || Date.now() })));
+        } else {
+          setTransactions([]);
+        }
         setLoading(false);
-      },
-      (errorObject: Error) => {
-        console.error("Firebase transactions error:", errorObject);
-        setError(errorObject.message);
-        setLoading(false);
+        return;
       }
-    );
+
+      const transactionsQuery = query(dbRefs.transactions, orderByChild('timestamp'), limitToLast(limit));
+      unsubscribe = onValue(
+        transactionsQuery,
+        (snapshot: DataSnapshot) => {
+          const data = snapshot.val();
+          const loadedTransactions: Transaction[] = data
+            ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
+            : [];
+          // Reverse sort to show newest first, or sort as needed
+          setTransactions(loadedTransactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+          setError(null);
+          setLoading(false);
+        },
+        (errorObject: Error) => {
+          console.error("Firebase transactions error:", errorObject);
+          setError(errorObject.message);
+          setLoading(false);
+        }
+      );
+
+      if (cancelled && unsubscribe) {
+        unsubscribe();
+        return;
+      }
+
+      if (unsubscribe) {
+        firebaseCleanup.addListener(unsubscribe);
+      }
+    };
+
+    initializeTransactions();
 
     return () => {
+      cancelled = true;
       if (unsubscribe) {
         unsubscribe();
       }
     };
-  }, [limit]); // dbRefs might be a dependency if it can change, but typically it's stable after init.
+  }, [limit]);
 
   // addTransaction is usually done via firebaseHelpers, not part of this read-hook.
 
@@ -531,4 +551,3 @@ export function useFirebaseTransactions(limit: number = 5000) {
     isConfigured: isFirebaseConfigured(),
   };
 }
-

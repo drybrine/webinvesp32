@@ -156,12 +156,21 @@ export default function DashboardPage() {
     predictedLowest: number
     daysToStockout: number | null
   }>>([])
+  const [stockRisksLoading, setStockRisksLoading] = useState(false)
 
   useEffect(() => {
-    if (inventoryLoading || transactionsLoading) return
-    if (inventory.length === 0 || transactions.length === 0) return
+    if (inventoryLoading || transactionsLoading) {
+      setStockRisksLoading(true)
+      return
+    }
+    if (inventory.length === 0 || transactions.length === 0) {
+      setStockRisks([])
+      setStockRisksLoading(false)
+      return
+    }
 
     const controller = new AbortController()
+    setStockRisksLoading(true)
 
     const fetchRisks = async () => {
       try {
@@ -226,6 +235,10 @@ export default function DashboardPage() {
         // Silently fall back to empty (server error or unavailable)
         console.warn("[stockRisks] batch predict failed:", err)
         setStockRisks([])
+      } finally {
+        if (!controller.signal.aborted) {
+          setStockRisksLoading(false)
+        }
       }
     }
 
@@ -508,7 +521,11 @@ export default function DashboardPage() {
             </Button>
           </div>
 
-          {stockRisks.length === 0 ? (
+          {transactionsLoading || stockRisksLoading ? (
+            <div className="text-sm text-muted-foreground py-3">
+              Memuat ringkasan prediksi...
+            </div>
+          ) : stockRisks.length === 0 ? (
             <div className="text-sm text-muted-foreground py-3">
               Belum cukup data transaksi untuk menghitung prediksi. Minimal 2 transaksi per barang.
             </div>

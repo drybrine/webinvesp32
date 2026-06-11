@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { ref, onValue, DataSnapshot, Unsubscribe } from "firebase/database"
-import { database, isFirebaseConfigured } from "@/lib/firebase"
+import { database, isFirebaseConfigured, waitForFirebaseReady } from "@/lib/firebase"
 import { toast } from "@/hooks/use-toast"
 
 export interface DeviceStatus {
@@ -22,6 +22,7 @@ export interface DeviceStatus {
 const OFFLINE_THRESHOLD_MS = 15000
 // Interval re-evaluasi status client-side (ms) — makin kecil makin responsif
 const STATUS_RECHECK_INTERVAL_MS = 3000
+const DEFAULT_OFFLINE_SCANNER_ID = "ESP32-GM67"
 
 interface RawDevice {
   status?: string
@@ -43,6 +44,18 @@ function computeStatus(raw: RawDevice, now: number): "online" | "offline" {
   return now - latest <= OFFLINE_THRESHOLD_MS ? "online" : "offline"
 }
 
+function createDefaultOfflineScanner(): DeviceStatus {
+  return {
+    deviceId: DEFAULT_OFFLINE_SCANNER_ID,
+    status: "offline",
+    ipAddress: "",
+    lastSeen: null,
+    lastHeartbeat: null,
+    scanCount: 0,
+    name: "Scanner ESP32 GM67",
+  }
+}
+
 export function useRealtimeDeviceStatus() {
   const [rawDevices, setRawDevices] = useState<Record<string, RawDevice>>({})
   const [devices, setDevices] = useState<DeviceStatus[]>([])
@@ -55,21 +68,24 @@ export function useRealtimeDeviceStatus() {
 
   const recomputeDevices = useCallback((raw: Record<string, RawDevice>) => {
     const now = Date.now()
-    const list: DeviceStatus[] = Object.keys(raw).map((deviceId) => {
-      const d = raw[deviceId] || {}
-      return {
-        deviceId,
-        status: computeStatus(d, now),
-        ipAddress: d.ipAddress || "",
-        lastSeen: d.lastSeen,
-        lastHeartbeat: d.lastHeartbeat,
-        scanCount: Number(d.scanCount) || 0,
-        freeHeap: d.freeHeap,
-        version: d.version,
-        name: d.name || deviceId,
-        batteryLevel: d.batteryLevel,
-      }
-    })
+    const list: DeviceStatus[] =
+      Object.keys(raw).length === 0
+        ? [createDefaultOfflineScanner()]
+        : Object.keys(raw).map((deviceId) => {
+            const d = raw[deviceId] || {}
+            return {
+              deviceId,
+              status: computeStatus(d, now),
+              ipAddress: d.ipAddress || "",
+              lastSeen: d.lastSeen,
+              lastHeartbeat: d.lastHeartbeat,
+              scanCount: Number(d.scanCount) || 0,
+              freeHeap: d.freeHeap,
+              version: d.version,
+              name: d.name || deviceId,
+              batteryLevel: d.batteryLevel,
+            }
+          })
 
     const changes: { deviceId: string; previousStatus: string; newStatus: string }[] = []
     list.forEach((device) => {
@@ -95,36 +111,50 @@ export function useRealtimeDeviceStatus() {
 
   useEffect(() => {
     let unsubscribe: Unsubscribe | undefined
+    let cancelled = false
 
-    if (!isFirebaseConfigured() || !database) {
-      setConnectionStatus("disconnected")
-      setLoading(false)
-      return
-    }
+    const initializeDevices = async () => {
+      setConnectionStatus("connecting")
+      const firebaseReady = await waitForFirebaseReady(5000)
 
-    setConnectionStatus("connecting")
-    const devicesRef = ref(database, "devices")
+      if (cancelled) return
 
-    unsubscribe = onValue(
-      devicesRef,
-      (snapshot: DataSnapshot) => {
-        const data = snapshot.val() as Record<string, RawDevice> | null
-        const raw = data || {}
-        setRawDevices(raw)
-        recomputeDevices(raw)
-        setConnectionStatus("connected")
-        setError(null)
-        setLoading(false)
-      },
-      (err) => {
-        console.error("Firebase devices listener error:", err)
-        setError(err.message)
+      if (!firebaseReady || !isFirebaseConfigured() || !database) {
+        setRawDevices({})
+        recomputeDevices({})
         setConnectionStatus("disconnected")
         setLoading(false)
-      },
-    )
+        return
+      }
+
+      const devicesRef = ref(database, "devices")
+
+      unsubscribe = onValue(
+        devicesRef,
+        (snapshot: DataSnapshot) => {
+          const data = snapshot.val() as Record<string, RawDevice> | null
+          const raw = data || {}
+          setRawDevices(raw)
+          recomputeDevices(raw)
+          setConnectionStatus("connected")
+          setError(null)
+          setLoading(false)
+        },
+        (err) => {
+          console.error("Firebase devices listener error:", err)
+          setError(err.message)
+          setRawDevices({})
+          recomputeDevices({})
+          setConnectionStatus("disconnected")
+          setLoading(false)
+        },
+      )
+    }
+
+    initializeDevices()
 
     return () => {
+      cancelled = true
       if (unsubscribe) unsubscribe()
     }
   }, [recomputeDevices])
