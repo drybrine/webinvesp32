@@ -48,6 +48,7 @@ Buka http://localhost:3000
 - Avg R² = 0.8962, 20/20 item R² positif (dataset dummy 20 suku cadang Honda, 365 hari)
 - UI `/prediksi` menampilkan parameter model, grafik SVG historis + forecast, tabel forecast, dan testing model
 - Grafik prediksi detail: zona forecast, zona stok minimum, tooltip titik data, status aman/rendah/habis, ringkasan titik historis/forecast
+- Card `Perkiraan Habis` di `/prediksi` dihitung dari titik forecast pertama yang `predictedQuantity <= 0`, agar tanggalnya sama dengan grafik dan tabel forecast
 - Kartu ringkas di dashboard: top-3 barang paling berisiko stockout (server-side batch)
 - Notifikasi otomatis saat prediksi habis ≤ 7 hari
 - Badge sumber prediksi: "Linear Regression (server/client)"
@@ -186,6 +187,8 @@ Training langsung pada level stok membuat forecast regresi linear menjadi garis 
 
 ### Grafik Website
 `components/prediction-chart.tsx` memakai SVG native, bukan Recharts. Grafik menampilkan 30 hari historis terakhir, forecast sesuai horizon, zona stok minimum, area forecast, tooltip hover/focus, status titik data, dan ringkasan jumlah titik historis/forecast.
+
+Card `Perkiraan Habis` pada `/prediksi` harus mengikuti forecast yang tampil di grafik/tabel: cari titik pertama pada `prediction.forecast` dengan `predictedQuantity <= 0`. Jangan memakai `stockoutDate` API untuk card ini karena nilai tersebut dihitung relatif ke waktu server, sedangkan grafik memakai timestamp forecast dari histori terakhir.
 
 ### Performa (dataset uji)
 - 20 suku cadang Honda AHASS, 365 hari, 6736 transaksi

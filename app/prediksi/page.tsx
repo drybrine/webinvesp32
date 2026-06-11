@@ -168,6 +168,21 @@ export default function PrediksiPage() {
     return [...hist, ...fc]
   }, [history, prediction])
 
+  const forecastStockout = useMemo(() => {
+    if (!prediction) return null
+
+    const stockoutIndex = prediction.forecast.findIndex(
+      (point: { predictedQuantity: number }) => point.predictedQuantity <= 0,
+    )
+    if (stockoutIndex === -1) return null
+
+    const point = prediction.forecast[stockoutIndex]
+    return {
+      date: new Date(point.timestamp),
+      daysFromForecastStart: stockoutIndex + 1,
+    }
+  }, [prediction])
+
   const loading = inventoryLoading || txLoading
 
   return (
@@ -276,17 +291,17 @@ export default function PrediksiPage() {
               hint={`MAE ${prediction.metrics.mae.toFixed(2)} · RMSE ${prediction.metrics.rmse.toFixed(2)}`}
             />
             <MetricCard
-              icon={<AlertTriangle className={`w-4 h-4 ${prediction.stockoutDate ? "text-amber-500" : "text-muted-foreground"}`} />}
+              icon={<AlertTriangle className={`w-4 h-4 ${forecastStockout ? "text-amber-500" : "text-muted-foreground"}`} />}
               label="Perkiraan Habis"
               value={
-                prediction.stockoutDate
-                  ? prediction.stockoutDate.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+                forecastStockout
+                  ? forecastStockout.date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
                   : "—"
               }
               hint={
-                prediction.stockoutDate
-                  ? `${Math.round((prediction.stockoutDate.getTime() - Date.now()) / MS_PER_DAY)} hari lagi`
-                  : "Tren tidak menurun"
+                forecastStockout
+                  ? `Hari ke-${forecastStockout.daysFromForecastStart} pada forecast`
+                  : `Tidak habis dalam ${horizonDays} hari forecast`
               }
             />
           </div>
