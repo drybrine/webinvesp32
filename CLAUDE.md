@@ -47,7 +47,7 @@ Attendance was fully removed from both web and firmware. Do not reintroduce atte
 
 ### Pages and their responsibilities
 
-- `app/page.tsx` — dashboard: inventory table, stock adjustment dialogs, prediction summary card (top-3 risk items via server-side batch `/api/predict?mode=batch`), stockout toast notifier (session-scoped, one notification per item per day), device status card. All hooks must be declared before any conditional early-return — see the #310 incident in git history.
+- `app/page.tsx` — dashboard: inventory table, stock adjustment dialogs, prediction summary card (top-3 risk items via server-side batch `/api/predict?mode=batch`), stockout toast notifier (session-scoped, one notification per item per day), device status card with battery level (only shown when scanner is online). All hooks must be declared before any conditional early-return — see the #310 incident in git history.
 - `app/transaksi/page.tsx` — transaction feed, filters by type/period/**source** (Manual = operator is Dashboard/Manual/empty; Scanner = anything else). Pagination 50/halaman. Export CSV.
 - `app/prediksi/page.tsx` — Simple Linear Regression prediction per item via Python serverless, detailed SVG chart in `components/prediction-chart.tsx`, model metrics (R², MAE, RMSE), forecast table, testing model panel, badge sumber model. Do not display anomaly detection in this page; it is outside the thesis scope.
 - `app/scan/page.tsx` — manual barcode input, PDF417 barcode render via bwip-js (`components/pdf417-barcode.tsx`), scan history.
@@ -70,6 +70,8 @@ Performance (dataset: 20 suku cadang Honda, 365 hari, 6736 tx): avg R²=0.8962, 
 **Client-side fallback** in `lib/stock-prediction.ts` (TypeScript, same OLS math) — used if Python serverless fails or `/api/predict` is unavailable in local `next start`. Badge shows "Linear Regression (server)" or "Linear Regression (client)".
 
 The `/prediksi` page calls single-item prediction and displays only the regression/forecast outputs needed for the thesis: model parameters, chart, metrics, forecast table, and testing model details. The dashboard calls batch mode (`mode: 'batch'`) to get top-N risk items. Standalone test: `scripts/test-stock-prediction.ts`. Minimum 2 points to fit — callers must guard.
+
+**Important**: `useFirebaseTransactions()` now accepts `null` as limit to fetch ALL transactions (no `limitToLast`). For prediction accuracy, always pass `null` to get the full history rather than a subset.
 
 The prediction chart is hand-built SVG with no chart library dependency. It shows the last 30 days of history, forecast area, minimum-stock zone, hover/focus tooltip, safe/low/stockout status, and summary counts. Keep this SVG approach unless production build testing proves a new chart library works with the custom splitChunks config.
 

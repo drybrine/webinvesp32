@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents working with this repository.
 
 ## Commands
 
@@ -46,7 +46,7 @@ Attendance was fully removed from both web and firmware. Do not reintroduce atte
 
 ### Pages and their responsibilities
 
-- `app/page.tsx` — dashboard: inventory table, stock adjustment dialogs, prediction summary card (top-3 risk items via server-side batch `/api/predict`), stockout toast notifier (session-scoped, one notification per item per day), device status card. All hooks must be declared before any conditional early-return — see the #310 incident in git history.
+- `app/page.tsx` — dashboard: inventory table, stock adjustment dialogs, prediction summary card (top-3 risk items via server-side batch `/api/predict`), stockout toast notifier (session-scoped, one notification per item per day), device status card with battery level (only shown when scanner is online). All hooks must be declared before any conditional early-return — see the #310 incident in git history.
 - `app/transaksi/page.tsx` — transaction feed, filters by type/period/**source** (Manual = operator is Dashboard/Manual/empty; Scanner = anything else). Pagination 50/halaman. Export CSV.
 - `app/prediksi/page.tsx` — Simple Linear Regression prediction per item via Python serverless, detailed SVG-native chart in `components/prediction-chart.tsx`, model metrics (R², MAE, RMSE), forecast table, testing model panel, badge sumber model. Do not display anomaly detection in this page; it is outside the thesis scope.
 - `app/scan/page.tsx` — manual barcode input, PDF417 barcode render via bwip-js (`components/pdf417-barcode.tsx`), scan history.
@@ -57,13 +57,15 @@ Attendance was fully removed from both web and firmware. Do not reintroduce atte
 
 Primary prediction runs on the Python serverless function `api/predict.py`, with `lib/stock-prediction.ts` as the TypeScript fallback for local/failed API calls. The model is **simple linear regression** (`Y = a + bX`) on EMA-smoothed daily consumption: `X = konsumsi hari sebelumnya`, `Y = konsumsi hari ini`. Forecast stock is computed iteratively by subtracting predicted daily consumption from the current quantity, so the forecast curve is not forced to be a straight stock-level line. Because Firebase stores only current `quantity` + transaction history, `buildDailySeriesFromTransactions` reconstructs daily stock levels by walking backwards from current quantity through daily signed deltas. The `/prediksi` page displays only regression/forecast outputs needed for the thesis; if the API returns anomaly metadata, frontend code should ignore it unless the thesis scope changes. Minimum 2 points to fit — callers must guard.
 
+**Important**: `useFirebaseTransactions()` now accepts `null` as limit to fetch ALL transactions (no `limitToLast`). For prediction accuracy, always pass `null` to get the full history rather than a subset.
+
 The prediction chart is hand-built SVG with no chart library dependency. It shows the last 30 days of history, forecast area, minimum-stock zone, hover/focus tooltip, safe/low/stockout status, and summary counts. Keep this SVG approach unless production build testing proves a new chart library works with the custom splitChunks config.
 
 The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/table by deriving its date from the first `prediction.forecast` point whose `predictedQuantity <= 0`. API `stockoutDate` is also based on the last reconstructed history timestamp, so backend and forecast dates stay aligned.
 
 ### Webpack config landmines
 
-`next.config.mjs` has custom `splitChunks` with `maxSize: 50000` and `vendorSplit` that splits node_modules per-package. This previously shattered `recharts` across 7 chunks and broke cross-chunk references (`s(...) is not a function`). The fix was to render prediction charts as hand-built SVG (`components/prediction-chart.tsx`) instead of recharts. If you add a library with heavy internal cross-module references, test a production build, not just dev.
+`next.config.mjs` has custom `splitChunks` with `maxSize: 50000` and `vendorSplit` that splits node_modules per-package. This previously shattered `recharts` across 7 chunks and broke cross-chunk references (`s(...) is not a function`). The fix was to render prediction charts as hand-built SVG (`components/prediction-chart.tsx`) instead of recharts. Note: `recharts` is still in `package.json` and `components/ui/chart.tsx` (the shadcn recharts wrapper) still exists but is **not imported anywhere** — safe to ignore/remove. If you add a library with heavy internal cross-module references, test a production build, not just dev.
 
 ### Service worker
 
@@ -85,5 +87,6 @@ Battery monitoring uses `esp_adc_cal` eFuse Vref calibration, EMA smoothing (alp
 - Prediction/forecast code uses `Math.max(0, …)` to clamp forecasts and assumes timestamps in ms.
 - All stock mutations go through `firebaseHelpers.adjustStock()` (atomic multi-path `update()` with `increment()`). Never do read-modify-write on quantity.
 - Dashboard edit item dialog can update product metadata including `minStock`. Quantity edits from that dialog must still be applied as an atomic delta through `firebaseHelpers.adjustStock()`, not by writing absolute quantity.
+- ESP32 unknown-barcode quick add should reuse `useFirebaseInventory.addItem()` and sanitize numeric fields before writing (`quantity`, `minStock`, `price` must be non-negative numbers).
 - ESP32 unknown-barcode quick add should reuse `useFirebaseInventory.addItem()` and sanitize numeric fields before writing (`quantity`, `minStock`, `price` must be non-negative numbers).
 - Barcode rendering uses bwip-js for PDF417 (2D). Component: `components/pdf417-barcode.tsx`.

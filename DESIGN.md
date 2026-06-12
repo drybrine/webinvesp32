@@ -203,6 +203,8 @@ GM67 scan barcode
 
 Semua data di-subscribe via `onValue` listener (bukan polling). Device online/offline dideteksi client-side: threshold 15 detik, re-evaluasi tiap 3 detik. Transaksi di-fetch dengan `limitToLast(5000)` untuk performa (dashboard pakai 500 untuk prediksi batch).
 
+**Important**: `useFirebaseTransactions()` now accepts `null` as limit to fetch ALL transactions (no `limitToLast`). For prediction accuracy, always pass `null` to get the full history rather than a subset.
+
 ### Atomic Stock Update (anti race condition)
 
 Semua perubahan stok memakai **server-side `increment(delta)`** dalam satu **multi-path `update()`** yang menulis `inventory/{id}/quantity` dan `transactions/{id}` sekaligus:
@@ -226,9 +228,9 @@ Pendekatan ini menghilangkan race condition read-modify-write: scanner, dashboar
 
 | Route | File | Fungsi |
 |-------|------|--------|
-| `/` | `app/page.tsx` | Dashboard: inventory, stock ±, search/filter/sort, prediksi ringkas (server-side batch), device status |
+| `/` | `app/page.tsx` | Dashboard: inventory, stock ±, search/filter/sort, prediksi ringkas (server-side batch), device status dengan battery level (hanya tampil saat scanner online) |
 | `/transaksi` | `app/transaksi/page.tsx` | History transaksi, filter, export CSV, pagination 50/halaman |
-| `/prediksi` | `app/prediksi/page.tsx` | Linear Regression chart (30 hari historis + forecast), metrics, anomali, badge model |
+| `/prediksi` | `app/prediksi/page.tsx` | Linear Regression chart (30 hari historis + forecast), metrics, badge model. Anomaly detection tidak ditampilkan di UI (di luar scope skripsi) |
 | `/scan` | `app/scan/page.tsx` | Manual barcode input, riwayat scan, export CSV |
 
 ### Komponen Utama
@@ -239,7 +241,7 @@ Pendekatan ini menghilangkan race condition read-modify-write: scanner, dashboar
 | `components/realtime-scan-provider.tsx` | Context provider untuk scan realtime dari ESP32 |
 | `components/unified-quick-action-popup.tsx` | Popup Stock In/Out saat ESP32 scan barcode (atomic adjustStock) |
 | `components/device-status.tsx` | Indikator online/offline + battery level |
-| `components/prediction-chart.tsx` | SVG chart forecast stok + marker anomali |
+| `components/prediction-chart.tsx` | SVG chart forecast stok (no recharts dependency) |
 | `components/pdf417-barcode.tsx` | Render barcode PDF417 (2D) ke canvas via bwip-js |
 | `components/dashboard/stats-cards.tsx` | Kartu statistik (total item, low stock, device) |
 | `components/dashboard/inventory-table.tsx` | Tabel inventory dengan CRUD |
@@ -248,7 +250,7 @@ Pendekatan ini menghilangkan race condition read-modify-write: scanner, dashboar
 
 | Hook | Fungsi |
 |------|--------|
-| `hooks/use-firebase.ts` | CRUD inventaris + transaksi via Firebase (`limitToLast(5000)`) |
+| `hooks/use-firebase.ts` | CRUD inventaris + transaksi via Firebase (limit bisa null untuk fetch semua transaksi) |
 | `hooks/use-realtime-scan.ts` | Subscribe `/scans` via `onValue` |
 | `hooks/use-realtime-device-status.ts` | Subscribe `/devices`, hitung online/offline |
 | `hooks/use-mobile.tsx` | Deteksi mobile viewport |
@@ -445,4 +447,4 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 
 ---
 
-*Updated: 2026-05-31*
+*Updated: 2026-06-12*
