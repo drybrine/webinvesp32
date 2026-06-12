@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export function StatsCardSkeleton() {
   return (
-    <div className="glass-card shadow-medium" style={{ minHeight: '140px' }}>
+    <div className="border rounded-lg bg-card" style={{ minHeight: '140px' }}>
       <div className="p-4 sm:p-6">
         <div className="flex items-center justify-between mb-3">
           <Skeleton className="h-4 w-20" />
@@ -41,7 +41,7 @@ export function TableSkeleton() {
   return (
     <div className="space-y-3">
       {[...Array(5)].map((_, i) => (
-        <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
+        <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg bg-card">
           <Skeleton className="h-12 w-12 rounded" />
           <div className="flex-1 space-y-2">
             <Skeleton className="h-4 w-1/4" />

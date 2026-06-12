@@ -6,18 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { FileQuestion, Home, ArrowLeft } from 'lucide-react'
 
 export default function NotFound() {
-  const handleGoBack = () => {
-    window.history.back()
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-            <FileQuestion className="w-8 h-8 text-blue-600" />
+          <div className="mx-auto w-14 h-14 bg-muted rounded-full flex items-center justify-center mb-4">
+            <FileQuestion className="w-7 h-7 text-muted-foreground" />
           </div>
-          <CardTitle className="text-2xl text-gray-900">
+          <CardTitle className="text-xl text-foreground">
             Halaman Tidak Ditemukan
           </CardTitle>
           <CardDescription>
@@ -32,19 +28,13 @@ export default function NotFound() {
                 Kembali ke Beranda
               </Button>
             </Link>
-            
-            <Button 
-              onClick={handleGoBack}
-              variant="outline"
-              className="w-full"
-            >
+            <Button onClick={() => window.history.back()} variant="outline" className="w-full">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Halaman Sebelumnya
             </Button>
           </div>
-          
           <div className="text-center">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Jika masalah berlanjut, silakan hubungi administrator sistem.
             </p>
           </div>

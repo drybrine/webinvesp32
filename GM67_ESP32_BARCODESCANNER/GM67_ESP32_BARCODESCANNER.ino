@@ -162,6 +162,8 @@ int   cachedBatteryLevel  = -1; // pre-sampled before WiFi activity
 esp_adc_cal_characteristics_t adcCal;  // ADC calibration characteristics
 bool  adcCalibrated = false;
 
+// Menginisialisasi ADC baterai dengan resolusi 12-bit dan attenuasi yang sesuai.
+// Kalibrasi memakai eFuse Vref/Two Point bila tersedia agar pembacaan mV lebih akurat.
 void initBatteryADC() {
   adc1_config_width(ADC_WIDTH_BIT_12);
   adc1_config_channel_atten(BATTERY_ADC_CHANNEL, BATTERY_ADC_ATTEN);
@@ -177,7 +179,8 @@ void initBatteryADC() {
     "Default Vref", adcCal.vref);
 }
 
-// Sample battery ADC (call BEFORE any WiFi/HTTP to avoid voltage sag)
+// Mengambil sampel tegangan baterai dari ADC, menghitung persentase, lalu menyimpannya
+// ke cache. Fungsi ini dipanggil sebelum aktivitas WiFi/HTTP untuk mengurangi noise sag.
 void sampleBattery() {
   // Use esp_adc_cal multisampling for accurate mV reading
   uint32_t adcSum = 0;
@@ -208,7 +211,8 @@ void sampleBattery() {
                 voltageMv, batteryEma, percent, cachedBatteryLevel);
 }
 
-// Return cached battery level (safe to call during WiFi activity)
+// Mengembalikan level baterai terakhir dari cache.
+// Aman dipanggil saat WiFi aktif karena tidak langsung membaca ADC kecuali cache kosong.
 int readBatteryLevel() {
   if (cachedBatteryLevel < 0) sampleBattery(); // fallback if never sampled
   return cachedBatteryLevel;
@@ -218,6 +222,8 @@ int readBatteryLevel() {
 // =============================================================================
 //  CHECKSUM
 // =============================================================================
+// Menghitung checksum CRC32 sederhana untuk validasi data konfigurasi di EEPROM.
+// Checksum dibuat saat menyimpan dan diverifikasi saat konfigurasi dimuat kembali.
 uint32_t calculateChecksum(const void* data, size_t length) {
   uint32_t cs = 0xFFFFFFFF;
   const uint8_t* bytes = (const uint8_t*)data;
@@ -235,6 +241,8 @@ uint32_t calculateChecksum(const void* data, size_t length) {
 //    KUNING -> baris piksel y=0..15  (2 baris teks size 1: y=0 dan y=8)
 //    BIRU   -> baris piksel y=16..63 (6 baris teks size 1: y=16,24,32,40,48,56)
 // =============================================================================
+// Menginisialisasi komunikasi I2C dan modul OLED SSD1306.
+// Jika OLED tidak terdeteksi, flag oledAvailable dibuat false agar fungsi display dilewati.
 void initOLED() {
   Wire.begin(OLED_SDA, OLED_SCL);
   if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
@@ -248,7 +256,8 @@ void initOLED() {
   Serial.println("OLED SSD1306 Yellow-Blue OK");
 }
 
-// Boot screen
+// Menampilkan layar pembuka saat ESP32 baru menyala.
+// Informasi ini memberi tanda bahwa firmware dan OLED sudah mulai berjalan.
 void oledShowBoot() {
   if (!oledAvailable) return;
   display.clearDisplay();
@@ -268,7 +277,8 @@ void oledShowBoot() {
   display.display();
 }
 
-// Draw battery icon at (x, y), size 16x8 pixels
+// Menggambar ikon baterai berukuran kecil pada koordinat (x, y).
+// Jumlah bar di dalam ikon disesuaikan dengan persentase baterai.
 void drawBatteryIcon(int x, int y, int percent) {
   // Battery body outline (12x7)
   display.drawRect(x, y, 13, 7, SSD1306_WHITE);
@@ -281,7 +291,8 @@ void drawBatteryIcon(int x, int y, int percent) {
   }
 }
 
-// Draw WiFi signal icon at (x, y) — 4 bars vertical
+// Menggambar ikon sinyal WiFi pada koordinat (x, y).
+// Kekuatan sinyal dihitung dari RSSI dan ditampilkan sebagai 0 sampai 4 bar.
 void drawWifiIcon(int x, int y, int rssi) {
   // bars: bottom-to-top fill based on RSSI
   // -30 to -50 dBm = 4 bars, -50 to -60 = 3, -60 to -70 = 2, -70 to -80 = 1, < -80 = 0
@@ -298,7 +309,8 @@ void drawWifiIcon(int x, int y, int rssi) {
   }
 }
 
-// Status idle
+// Menampilkan status idle scanner di OLED: online/offline, baterai, WiFi, IP, dan jumlah scan.
+// Layar ini menjadi tampilan utama saat tidak ada barcode baru yang sedang ditahan.
 void oledShowStatus() {
   if (!oledAvailable) return;
   display.clearDisplay();
@@ -351,7 +363,8 @@ void oledShowStatus() {
   display.display();
 }
 
-// Tampil barcode hasil scan
+// Menampilkan hasil scan barcode pada OLED.
+// Parameter sent dipakai untuk menandai apakah data berhasil dikirim ke Firebase.
 void oledShowBarcode(String barcode, String itemName, bool sent) {
   if (!oledAvailable) return;
   display.clearDisplay();
@@ -396,7 +409,8 @@ void oledShowBarcode(String barcode, String itemName, bool sent) {
   lastBarcodeOnOled = millis();
 }
 
-// Tampil detail item ditemukan di inventory
+// Menampilkan ringkasan item inventory yang ditemukan berdasarkan barcode.
+// Jika stok kurang dari atau sama dengan minStock, OLED menampilkan peringatan stok menipis.
 void oledShowInventoryFound(String name, int qty, int minStock) {
   if (!oledAvailable) return;
   display.clearDisplay();
@@ -429,7 +443,8 @@ void oledShowInventoryFound(String name, int qty, int minStock) {
   delay(2000);
 }
 
-// Proses koneksi WiFi
+// Menampilkan layar proses koneksi WiFi.
+// SSID dipotong agar tetap muat pada layar OLED 128x64.
 void oledShowWiFiConnecting(String ssid) {
   if (!oledAvailable) return;
   display.clearDisplay();
@@ -452,7 +467,8 @@ void oledShowWiFiConnecting(String ssid) {
   display.display();
 }
 
-// WiFi berhasil terhubung
+// Menampilkan status WiFi berhasil terhubung, termasuk IP lokal dan mode scanner.
+// Fungsi ini juga memberi jeda singkat agar pesan sukses sempat terbaca.
 void oledShowWiFiConnected(String ip) {
   if (!oledAvailable) return;
   display.clearDisplay();
@@ -478,7 +494,8 @@ void oledShowWiFiConnected(String ip) {
   delay(2000);
 }
 
-// Tidak ada konfigurasi WiFi
+// Menampilkan instruksi konfigurasi saat belum ada WiFi tersimpan di EEPROM.
+// Pengguna diminta scan QR WiFi dengan format standar WIFI:S:...;T:...;P:...;;.
 void oledShowNoWiFi() {
   if (!oledAvailable) return;
   display.clearDisplay();
@@ -499,6 +516,8 @@ void oledShowNoWiFi() {
   display.display();
 }
 
+// Memperbarui tampilan idle OLED secara berkala.
+// Tampilan barcode terakhir ditahan beberapa detik agar hasil scan tidak langsung tertimpa.
 void oledUpdateIdle() {
   if (!oledAvailable) return;
   if (millis() - lastBarcodeOnOled < OLED_BARCODE_HOLD_MS) return;
@@ -511,6 +530,8 @@ void oledUpdateIdle() {
 // =============================================================================
 //  EEPROM FUNCTIONS
 // =============================================================================
+// Menyimpan konfigurasi WiFi ke EEPROM setelah checksum diperbarui.
+// Data ini dipakai saat boot berikutnya agar perangkat bisa reconnect otomatis.
 void saveWiFiConfig() {
   wifiConfig.checksum = 0;
   wifiConfig.checksum = calculateChecksum(&wifiConfig, sizeof(wifiConfig));
@@ -519,6 +540,8 @@ void saveWiFiConfig() {
   Serial.println("WiFi config saved");
 }
 
+// Memuat konfigurasi WiFi dari EEPROM dan memvalidasi checksum-nya.
+// Jika data tidak valid, konfigurasi WiFi direset agar tidak memakai SSID/password rusak.
 void loadWiFiConfig() {
   EEPROM.get(WIFI_CONFIG_ADDR, wifiConfig);
   uint32_t stored = wifiConfig.checksum;
@@ -534,6 +557,8 @@ void loadWiFiConfig() {
   }
 }
 
+// Menyimpan konfigurasi perangkat seperti deviceId, Firebase URL, dan server URL.
+// Checksum memastikan data EEPROM yang dibaca nanti masih utuh.
 void saveDeviceConfig() {
   deviceConfig.version      = 1;
   memset(deviceConfig.padding, 0, sizeof(deviceConfig.padding));
@@ -545,6 +570,8 @@ void saveDeviceConfig() {
   Serial.println(ok ? "Device config saved" : "EEPROM commit failed");
 }
 
+// Memuat konfigurasi perangkat dari EEPROM.
+// Jika belum valid, fungsi membuat konfigurasi default dan langsung menyimpannya.
 void loadDeviceConfig() {
   memset(&deviceConfig, 0, sizeof(deviceConfig));
   EEPROM.get(DEVICE_CONFIG_ADDR, deviceConfig);
@@ -577,6 +604,8 @@ void loadDeviceConfig() {
 // =============================================================================
 //  WIFI FUNCTIONS
 // =============================================================================
+// Membaca QR WiFi dengan format standar WIFI:S:<ssid>;T:<security>;P:<password>;...
+// Nilai SSID, password, dan security dikembalikan lewat parameter referensi.
 bool parseWiFiQR(String qrData, String &ssid, String &password, String &security) {
   if (!qrData.startsWith("WIFI:")) return false;
   qrData = qrData.substring(5);
@@ -589,6 +618,8 @@ bool parseWiFiQR(String qrData, String &ssid, String &password, String &security
   return true;
 }
 
+// Menghubungkan ESP32 ke jaringan WiFi yang tersimpan.
+// Jika berhasil, waktu NTP disetel dan status online/OLED diperbarui.
 bool connectToWiFi() {
   if (!wifiConfig.isValid || strlen(wifiConfig.ssid) == 0) return false;
   Serial.printf("Connecting WiFi: %s\n", wifiConfig.ssid);
@@ -610,6 +641,8 @@ bool connectToWiFi() {
   return false;
 }
 
+// Mengecek koneksi WiFi setiap 10 detik dan mencoba reconnect jika terputus.
+// Saat koneksi putus, perangkat juga ditandai offline di Firebase bila memungkinkan.
 void checkWiFiConnection() {
   if (millis() - lastWiFiCheck < 10000) return;
   lastWiFiCheck = millis();
@@ -640,7 +673,8 @@ void checkWiFiConnection() {
 //  FIREBASE FUNCTIONS
 // =============================================================================
 
-// 1. Kirim scan ke /scans
+// Mengirim hasil scan barcode ke node /scans di Firebase Realtime Database.
+// Record dibuat sebagai inventory_scan agar web dapat menampilkan popup scan dengan cepat.
 bool sendScanToFirebase(String barcode) {
   if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) {
     Serial.println("Tidak bisa kirim scan: no WiFi/URL");
@@ -677,7 +711,8 @@ bool sendScanToFirebase(String barcode) {
   return ok;
 }
 
-// 2. Lookup item di /inventory berdasarkan barcode
+// Mencari item inventory di Firebase berdasarkan barcode.
+// Fungsi mengembalikan InventoryItem dengan found=false jika barcode tidak ditemukan.
 InventoryItem lookupInventoryByBarcode(String barcode) {
   InventoryItem item;
   item.found = false;
@@ -725,7 +760,8 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
 
 // 4. Update /analytics
 
-// 5. Set device offline
+// Menandai perangkat offline pada /devices/{deviceId}/status.
+// Dipakai saat WiFi terputus agar dashboard tidak terus menganggap scanner online.
 void setDeviceOffline() {
   if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) return;
   HTTPClient http;
@@ -737,7 +773,8 @@ void setDeviceOffline() {
   http.end();
 }
 
-// 6. Heartbeat ke /devices/{deviceId}
+// Mengirim heartbeat berkala ke /devices/{deviceId}.
+// Payload berisi status koneksi, uptime, heap, baterai, RSSI, versi firmware, dan mode.
 bool sendHeartbeatToFirebase() {
   if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) {
     Serial.println("Heartbeat: no WiFi/URL");
@@ -779,6 +816,8 @@ bool sendHeartbeatToFirebase() {
 // =============================================================================
 //  BARCODE PROCESSING
 // =============================================================================
+// Memproses barcode inventory: kirim scan, simpan histori lokal, lookup item, dan tampilkan OLED.
+// Stok tidak diubah di firmware; perubahan stok ditangani oleh aplikasi web/Firebase helper.
 void processInventoryBarcode(String barcode) {
   Serial.println("Inventory barcode: " + barcode);
 
@@ -805,6 +844,8 @@ void processInventoryBarcode(String barcode) {
   }
 }
 
+// Menerima input dari scanner GM67 atau Serial Monitor.
+// Jika input adalah QR WiFi maka disimpan sebagai konfigurasi; selain itu diproses sebagai barcode inventory.
 void processBarcodeInput(String input) {
   input.trim();
   if (input.length() == 0) return;
@@ -832,6 +873,8 @@ void processBarcodeInput(String input) {
 // =============================================================================
 //  WEB SERVER
 // =============================================================================
+// Menjalankan web server lokal ESP32 pada port 80.
+// Endpoint dipakai untuk status, test scan, histori lokal, konfigurasi, dan CORS preflight.
 void startWebServer() {
   if (isServerStarted || !isWiFiConnected) return;
   server = new WebServer(80);
@@ -850,6 +893,8 @@ void startWebServer() {
   Serial.println("Web server started: http://" + WiFi.localIP().toString());
 }
 
+// Mengirim halaman web sederhana untuk memantau scanner dan mengubah konfigurasi Firebase.
+// HTML dibuat sebagai string raw literal agar bisa langsung disajikan oleh WebServer ESP32.
 void handleRoot() {
   if (!server) return;
   String html = R"rawliteral(
@@ -944,6 +989,8 @@ setInterval(function(){
   server->send(200,"text/html",html);
 }
 
+// Mengirim status perangkat dalam format JSON untuk dashboard atau debugging lokal.
+// Data mencakup identitas perangkat, koneksi, barcode terakhir, uptime, heap, dan heartbeat.
 void handleApiStatus() {
   if (!server) return;
   DynamicJsonDocument doc(1024);
@@ -966,6 +1013,8 @@ void handleApiStatus() {
   server->send(200,"application/json",res);
 }
 
+// Mengirim informasi scan terakhir dalam format JSON.
+// Jika query test diberikan, endpoint ini memproses barcode test sebelum membalas.
 void handleApiScan() {
   if (!server) return;
   if (server->hasArg("test")) processBarcodeInput(server->arg("test"));
@@ -980,6 +1029,8 @@ void handleApiScan() {
   server->send(200,"application/json",res);
 }
 
+// Mengirim histori scan lokal yang disimpan di RAM.
+// Histori ini dibatasi di processInventoryBarcode agar penggunaan memori tetap kecil.
 void handleApiHistory() {
   if (!server) return;
   DynamicJsonDocument doc(2048);
@@ -1001,6 +1052,8 @@ void handleApiHistory() {
   server->send(200,"application/json",res);
 }
 
+// Menerima pembaruan konfigurasi dari halaman web lokal.
+// Nilai Firebase URL, server URL, dan API key disimpan ke EEPROM lewat saveDeviceConfig().
 void handleApiConfig() {
   if (!server) return;
   server->sendHeader("Access-Control-Allow-Origin","*");
@@ -1017,6 +1070,8 @@ void handleApiConfig() {
   }
 }
 
+// Mereset konfigurasi WiFi dan perangkat dari EEPROM, lalu restart ESP32.
+// Endpoint ini dipakai saat perangkat perlu dikonfigurasi ulang dari awal.
 void handleReset() {
   if (!server) return;
   server->send(200,"text/plain","Resetting...");
@@ -1030,6 +1085,8 @@ void handleReset() {
   ESP.restart();
 }
 
+// Membalas request HTTP OPTIONS untuk kebutuhan CORS pada endpoint API lokal.
+// Browser memakai preflight ini sebelum POST konfigurasi dari halaman web ESP32.
 void handleOptions() {
   if (!server) return;
   server->sendHeader("Access-Control-Allow-Origin", "*");
@@ -1042,6 +1099,8 @@ void handleOptions() {
 // =============================================================================
 //  SETUP & LOOP
 // =============================================================================
+// Fungsi setup Arduino yang berjalan sekali saat perangkat boot.
+// Menginisialisasi serial, OLED, EEPROM, WiFi, web server, ADC baterai, dan state awal.
 void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
@@ -1086,6 +1145,8 @@ void setup() {
   Serial.println("Ready - Mode: INVENTORY");
 }
 
+// Fungsi loop utama Arduino yang berjalan terus-menerus.
+// Menangani web server, reconnect WiFi, input barcode, heartbeat Firebase, dan refresh OLED.
 void loop() {
   if (isServerStarted && server) server->handleClient();
 

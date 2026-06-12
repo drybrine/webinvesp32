@@ -105,7 +105,7 @@ export function ScanHistory({ scans, loading = false }: ScanHistoryProps) {
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex-1 w-full sm:max-w-md">
           <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Cari barcode atau produk..."
               value={searchTerm}
@@ -117,7 +117,7 @@ export function ScanHistory({ scans, loading = false }: ScanHistoryProps) {
 
         <div className="flex flex-wrap gap-2 items-center">
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-500" />
+            <Filter className="h-4 w-4 text-muted-foreground" />
             <Select value={filterDevice} onValueChange={setFilterDevice}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter Device" />
@@ -169,15 +169,15 @@ export function ScanHistory({ scans, loading = false }: ScanHistoryProps) {
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8">
                   <div className="flex flex-col items-center justify-center">
-                    <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin mb-2"></div>
-                    <p className="text-gray-500">Memuat data...</p>
+                    <div className="w-6 h-6 border-2 border-muted border-t-foreground rounded-full animate-spin mb-2"></div>
+                    <p className="text-muted-foreground">Memuat data...</p>
                   </div>
                 </TableCell>
               </TableRow>
             ) : filteredScans.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8">
-                  <p className="text-gray-500">Tidak ada data pemindaian</p>
+                  <p className="text-muted-foreground">Tidak ada data pemindaian</p>
                 </TableCell>
               </TableRow>
             ) : (
@@ -186,7 +186,7 @@ export function ScanHistory({ scans, loading = false }: ScanHistoryProps) {
                   <TableCell className="font-mono">{scan.barcode}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     <div className="flex items-center gap-1">
-                      <Clock className="w-4 h-4 text-gray-500" />
+                      <Clock className="w-4 h-4 text-muted-foreground" />
                       {formatDate(scan.timestamp)}
                     </div>
                   </TableCell>

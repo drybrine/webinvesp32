@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, DollarSign, FileText } from "lucide-react"
+import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, FileText } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase"
 import { firebaseHelpers } from "@/lib/firebase"
@@ -305,55 +305,50 @@ export default function TransaksiPage() {
     <div className="min-h-screen bg-muted/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3 animate-fade-in-up">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <DollarSign className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Riwayat Transaksi</h1>
-            <p className="text-sm text-muted-foreground">Kelola dan pantau semua transaksi stok</p>
-          </div>
+        <div className="animate-fade-in-up">
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">Riwayat Transaksi</h1>
+          <p className="text-sm text-muted-foreground mt-1">Kelola dan pantau semua transaksi stok</p>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up">
-          <Card>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
+          <Card className="card-hover">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Masuk</CardTitle>
+              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Masuk</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-xl sm:text-2xl font-bold text-emerald-600">{formatCurrency(totalIn)}</div>
-              <p className="text-xs text-muted-foreground flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Semua waktu</p>
+              <div className="text-2xl font-bold text-emerald-700 tabular-nums">{formatCurrency(totalIn)}</div>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5"><TrendingUp className="h-3 w-3" /> Semua waktu</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Keluar</CardTitle>
+              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Keluar</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-xl sm:text-2xl font-bold text-red-600">{formatCurrency(totalOut)}</div>
-              <p className="text-xs text-muted-foreground flex items-center gap-1"><TrendingDown className="h-3 w-3" /> Semua waktu</p>
+              <div className="text-2xl font-bold text-red-600 tabular-nums">{formatCurrency(totalOut)}</div>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5"><TrendingDown className="h-3 w-3" /> Semua waktu</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Penyesuaian</CardTitle>
+              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Penyesuaian</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-xl sm:text-2xl font-bold text-amber-600">{formatCurrency(totalAdjustment)}</div>
-              <p className="text-xs text-muted-foreground">Total penyesuaian</p>
+              <div className="text-2xl font-bold text-amber-600 tabular-nums">{formatCurrency(totalAdjustment)}</div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Total penyesuaian</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Hari Ini</CardTitle>
+              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Hari Ini</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-xl sm:text-2xl font-bold">{todayTransactionsCount}</div>
-              <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" /> Transaksi</p>
+              <div className="text-2xl font-bold tabular-nums">{todayTransactionsCount}</div>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5"><Calendar className="h-3 w-3" /> Transaksi</p>
             </CardContent>
           </Card>
         </div>

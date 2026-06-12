@@ -4,13 +4,23 @@ import { useState, useEffect, useMemo, useRef } from "react"
 import dynamic from "next/dynamic"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
-import { Wifi, WifiOff, AlertCircle, Plus, Download, TrendingDown } from "lucide-react"
+import { AlertCircle, TrendingDown } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, InventoryItem, useFirebaseTransactions } from "@/hooks/use-firebase"
 import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
-import { getFirebaseStatus, firebaseHelpers } from "@/lib/firebase"
+import { firebaseHelpers } from "@/lib/firebase"
 import StatsCards from "@/components/dashboard/stats-cards"
 import InventoryTable from "@/components/dashboard/inventory-table"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Dialog,
   DialogContent,
@@ -61,6 +71,7 @@ export default function DashboardPage() {
   const editBaselineQtyRef = useRef<number>(0)
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null)
   const [stockAdjustment, setStockAdjustment] = useState<StockAdjustment | null>(null)
+  const [deletingItem, setDeletingItem] = useState<{ id: string; name: string } | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [sortOrder, setSortOrder] = useState("name-asc")
@@ -128,7 +139,6 @@ export default function DashboardPage() {
     return result
   }, [inventory, searchTerm, filterCategory, sortOrder])
 
-  const firebaseStatus = getFirebaseStatus()
   const onlineDevices = realtimeOnlineDevices
 
   const prevOnlineDevicesRef = useRef<number | undefined>(undefined);
@@ -309,6 +319,26 @@ export default function DashboardPage() {
     batteryAlertedRef.current = true
   }, [devices, devicesLoading, toast])
 
+  // Keyboard shortcuts: / to focus search, N to add item
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable
+
+      if (e.key === "/" && !isInput) {
+        e.preventDefault()
+        const searchInput = document.querySelector<HTMLInputElement>('[placeholder="Cari item..."]')
+        searchInput?.focus()
+      }
+      if (e.key === "n" && !isInput) {
+        e.preventDefault()
+        setIsAddItemOpen(true)
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [])
+
   if (inventoryLoading || scansLoading || devicesLoading) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center">
@@ -388,12 +418,18 @@ export default function DashboardPage() {
   }
 
   const deleteInventoryItem = async (id: string, name: string) => {
-    if (!confirm(`Hapus "${name}"?`)) return
+    setDeletingItem({ id, name })
+  }
+
+  const confirmDelete = async () => {
+    if (!deletingItem) return
     try {
-      await deleteItem(id)
-      toast({ title: "Berhasil", description: "Item berhasil dihapus" })
+      await deleteItem(deletingItem.id)
+      toast({ title: "Berhasil", description: `"${deletingItem.name}" berhasil dihapus` })
     } catch {
       toast({ title: "Error", description: "Gagal menghapus item", variant: "destructive" })
+    } finally {
+      setDeletingItem(null)
     }
   }
 
@@ -473,26 +509,10 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in-up">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dashboard Inventory</h1>
-            <p className="text-sm text-muted-foreground mt-1">Kelola stok barang dengan mudah</p>
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">Dashboard Inventory</h1>
+            <p className="text-sm text-muted-foreground mt-1">Kelola stok barang dengan prediksi otomatis</p>
           </div>
-          <Button onClick={() => setIsAddItemOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Tambah Item
-          </Button>
         </div>
-
-        {/* Status Alert */}
-        <Alert variant={firebaseStatus.isConfigured ? "default" : "destructive"} className="animate-fade-in-up">
-          {firebaseStatus.isConfigured ? (
-            <Wifi className="h-4 w-4" />
-          ) : (
-            <WifiOff className="h-4 w-4" />
-          )}
-          <AlertDescription>
-            {firebaseStatus.isConfigured ? "Terhubung ke Firebase - Real-time sync aktif" : "Tidak terhubung ke Firebase"}
-          </AlertDescription>
-        </Alert>
 
         {/* Stats Cards */}
         <StatsCards
@@ -505,19 +525,19 @@ export default function DashboardPage() {
           devices={devices}
         />
 
-        <div className="bg-card border rounded-lg p-5 shadow-sm animate-fade-in-up">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <div className="bg-primary/[0.03] border border-primary/10 rounded-xl p-5 shadow-sm animate-fade-in-up">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
             <div>
               <div className="flex items-center gap-2">
-                <TrendingDown className="w-5 h-5 text-amber-500" />
-                <h2 className="text-lg font-semibold">Ringkasan Prediksi Stok</h2>
+                <TrendingDown className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-bold text-foreground tracking-tight">Prediksi Stok</h2>
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                Barang paling berisiko berdasarkan histori transaksi manual dan scanner.
+                Barang paling berisiko berdasarkan histori transaksi.
               </p>
             </div>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/prediksi">Buka Prediksi</Link>
+            <Button asChild variant="outline" size="sm" className="border-primary/20 text-primary hover:bg-primary/5">
+              <Link href="/prediksi">Detail Prediksi</Link>
             </Button>
           </div>
 
@@ -530,32 +550,32 @@ export default function DashboardPage() {
               Belum cukup data transaksi untuk menghitung prediksi. Minimal 2 transaksi per barang.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="stagger-children grid grid-cols-1 md:grid-cols-3 gap-3">
               {stockRisks.map(({ item, prediction, predictedLowest, daysToStockout }) => {
                 const belowMin = predictedLowest <= item.minStock
                 return (
-                  <div key={item.id} className="rounded-md border p-4 bg-background">
+                  <div key={item.id} className="rounded-lg border border-border/60 bg-card p-4 transition-all duration-200 hover:border-primary/20 hover:shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-medium line-clamp-1">{item.name}</div>
-                        <div className="text-xs text-muted-foreground">Stok sekarang: {item.quantity}</div>
+                        <div className="font-semibold text-foreground line-clamp-1 text-sm">{item.name}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">Stok: <span className="font-mono font-medium text-foreground">{item.quantity}</span></div>
                       </div>
-                      <span className={belowMin ? "text-xs px-2 py-1 rounded bg-destructive/10 text-destructive" : "text-xs px-2 py-1 rounded bg-green-500/10 text-green-600"}>
+                      <span className={belowMin ? "text-[11px] px-2 py-0.5 rounded-full bg-destructive/10 text-destructive font-semibold" : "text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 font-semibold"}>
                         {belowMin ? "Risiko" : "Aman"}
                       </span>
                     </div>
-                    <div className="mt-3 space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Tren</span>
-                        <span className="font-mono">{prediction.model.slope.toFixed(2)}/hari</span>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <div className="text-muted-foreground">Tren</div>
+                        <div className="font-mono font-semibold text-foreground">{prediction.model.slope.toFixed(2)}/hr</div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Terendah 14 hari</span>
-                        <span className="font-mono">{predictedLowest.toFixed(1)}</span>
+                      <div>
+                        <div className="text-muted-foreground">Terendah</div>
+                        <div className="font-mono font-semibold text-foreground">{predictedLowest.toFixed(0)}</div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Perkiraan habis</span>
-                        <span className="font-mono">{daysToStockout === null ? "—" : `${daysToStockout} hari`}</span>
+                      <div>
+                        <div className="text-muted-foreground">Habis</div>
+                        <div className="font-mono font-semibold text-foreground">{daysToStockout === null ? "—" : `${daysToStockout}h`}</div>
                       </div>
                     </div>
                   </div>
@@ -566,6 +586,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Inventory Table */}
+        <div className="animate-fade-in-up">
         <InventoryTable
           inventory={inventory}
           filteredInventory={filteredInventory}
@@ -584,6 +605,7 @@ export default function DashboardPage() {
           onStockAdjust={handleStockAdj}
           lowStockItems={lowStockItems}
         />
+        </div>
 
         {/* Add Item Dialog */}
         <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
@@ -734,6 +756,24 @@ export default function DashboardPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation AlertDialog */}
+        <AlertDialog open={!!deletingItem} onOpenChange={() => setDeletingItem(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Hapus item?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deletingItem && `"${deletingItem.name}" akan dihapus dari inventory. Tindakan ini tidak dapat dibatalkan.`}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Batal</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Hapus
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   )

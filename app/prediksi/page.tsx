@@ -190,18 +190,18 @@ export default function PrediksiPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <Link href="/" className="inline-flex items-center gap-1 hover:text-foreground">
+            <Link href="/" className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
               <ArrowLeft className="w-3 h-3" /> Kembali
             </Link>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Prediksi Stok</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Prediksi Stok</h1>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-sm text-muted-foreground">
-              Linear regression untuk memperkirakan level stok ke depan berdasarkan riwayat transaksi.
+              Linear regression untuk memperkirakan level stok ke depan.
             </p>
             {predictionSource && (
-              <Badge variant="default" className="text-[10px]">
-                {predictionSource === "server" ? "Linear Regression (server)" : "Linear Regression (client)"}
+              <Badge variant="secondary" className="text-[10px] font-semibold">
+                {predictionSource === "server" ? "Server" : "Client"}
               </Badge>
             )}
           </div>
@@ -306,9 +306,9 @@ export default function PrediksiPage() {
             />
           </div>
 
-          <Card>
+          <Card className="border-primary/10">
             <CardHeader>
-              <CardTitle className="text-base">Grafik Historis & Forecast</CardTitle>
+              <CardTitle className="text-base font-bold tracking-tight">Grafik Historis & Forecast</CardTitle>
               <CardDescription>
                 Garis padat = data 30 hari terakhir, garis putus = prediksi {horizonDays} hari
               </CardDescription>
@@ -365,16 +365,31 @@ export default function PrediksiPage() {
                 Detail regresi linear konsumsi harian dan metrik evaluasi (train/test split kronologis)
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <KV k="Slope" v={`${prediction.model.slope.toFixed(4)} /hari`} />
-              <KV k="Intercept" v={prediction.model.intercept.toFixed(4)} />
-              <KV k="Avg Konsumsi" v={`${prediction.model.avgDailyConsumption.toFixed(2)} /hari`} />
-              <KV k="n train" v={String(prediction.model.n)} />
-              <KV k="n test" v={String(Math.max(0, history.length - prediction.model.n))} />
-              <KV k="MAE" v={prediction.metrics.mae.toFixed(3)} />
-              <KV k="RMSE" v={prediction.metrics.rmse.toFixed(3)} />
-              <KV k="R²" v={prediction.metrics.r2.toFixed(3)} />
-              <KV k="Horizon" v={`${horizonDays} hari`} />
+            <CardContent className="space-y-4">
+              {/* Key metrics — visually prominent */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg border border-primary/10 bg-primary/[0.03] p-3 text-center">
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">R²</div>
+                  <div className="text-xl font-bold text-primary mt-1 tabular-nums">{prediction.metrics.r2.toFixed(3)}</div>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-3 text-center">
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">MAE</div>
+                  <div className="text-lg font-bold text-foreground mt-1 tabular-nums">{prediction.metrics.mae.toFixed(3)}</div>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-3 text-center">
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">RMSE</div>
+                  <div className="text-lg font-bold text-foreground mt-1 tabular-nums">{prediction.metrics.rmse.toFixed(3)}</div>
+                </div>
+              </div>
+              {/* Technical parameters — secondary */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3 text-sm pt-2 border-t border-border">
+                <KV k="Slope" v={`${prediction.model.slope.toFixed(4)} /hari`} />
+                <KV k="Intercept" v={prediction.model.intercept.toFixed(4)} />
+                <KV k="Avg Konsumsi" v={`${prediction.model.avgDailyConsumption.toFixed(2)} /hari`} />
+                <KV k="n train" v={String(prediction.model.n)} />
+                <KV k="n test" v={String(Math.max(0, history.length - prediction.model.n))} />
+                <KV k="Horizon" v={`${horizonDays} hari`} />
+              </div>
             </CardContent>
           </Card>
         </>
@@ -395,14 +410,14 @@ function MetricCard({
   hint?: string
 }) {
   return (
-    <Card>
+    <Card className="card-hover">
       <CardContent className="p-4">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
           {icon}
           <span>{label}</span>
         </div>
-        <div className="text-2xl font-bold mt-1">{value}</div>
-        {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
+        <div className="text-xl font-bold mt-1.5 tabular-nums">{value}</div>
+        {hint && <div className="text-[11px] text-muted-foreground mt-0.5">{hint}</div>}
       </CardContent>
     </Card>
   )
@@ -411,8 +426,8 @@ function MetricCard({
 function KV({ k, v }: { k: string; v: string }) {
   return (
     <div>
-      <div className="text-xs text-muted-foreground">{k}</div>
-      <div className="font-mono font-medium">{v}</div>
+      <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{k}</div>
+      <div className="font-mono font-semibold text-sm mt-0.5">{v}</div>
     </div>
   )
 }

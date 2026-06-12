@@ -129,7 +129,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
       await firebaseHelpers.adjustStock(product.id, quickActionAmount, transactionData)
 
       toast({
-        title: "✅ Stock In Berhasil",
+        title: "Stock in berhasil",
         description: `${product.name} +${quickActionAmount} unit.`,
         duration: 3000,
       })
@@ -138,7 +138,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
     } catch (error) {
       console.error("Error stock in:", error)
       toast({
-        title: "❌ Error",
+        title: "Error",
         description: "Gagal melakukan stock in",
         variant: "destructive",
       })
@@ -171,7 +171,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
       await firebaseHelpers.adjustStock(product.id, -quickActionAmount, transactionData)
 
       toast({
-        title: "✅ Stock Out Berhasil",
+        title: "Stock out berhasil",
         description: `${product.name} -${quickActionAmount} unit.`,
         duration: 3000,
       })
@@ -180,7 +180,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
     } catch (error) {
       console.error("Error stock out:", error)
       toast({
-        title: "❌ Error",
+        title: "Error",
         description: "Gagal melakukan stock out",
         variant: "destructive",
       })
@@ -228,7 +228,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
       }
 
       toast({
-        title: "✅ Produk Ditambahkan",
+        title: "Produk ditambahkan",
         description: `${productData.name} berhasil ditambahkan dengan stok ${productData.quantity}`,
         duration: 3000,
       })
@@ -237,7 +237,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
     } catch (error) {
       console.error("Error adding product:", error)
       toast({
-        title: "❌ Error",
+        title: "Error",
         description: "Gagal menambahkan produk",
         variant: "destructive",
       })
@@ -249,13 +249,13 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
   const renderExistingProduct = () => (
     <div className="space-y-4">
       {/* Product Header */}
-      <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-800/50 rounded-lg flex items-center justify-center">
-          <Package className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+      <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
+        <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+          <Package className="h-6 w-6 text-primary" />
         </div>
         <div className="flex-1">
           <h2 className="font-semibold text-sm">{product?.name}</h2>
-          <p className="text-xs text-gray-700 dark:text-gray-300">Barcode: {barcode}</p>
+          <p className="text-xs text-muted-foreground">Barcode: {barcode}</p>
           <div className="flex gap-2 mt-1">
             <Badge variant={product && product.quantity <= product.minStock ? "destructive" : "default"} className="text-xs">
               Stok: {product?.quantity} unit
@@ -305,16 +305,16 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
       </div>
 
       {/* Transaction Value Preview */}
-      <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-        <div className="text-xs text-gray-700 dark:text-gray-300 mb-1">Nilai Transaksi:</div>
-        <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+      <div className="p-3 bg-muted/50 rounded-lg">
+        <div className="text-xs text-muted-foreground mb-1">Nilai Transaksi:</div>
+        <div className="text-sm font-semibold text-foreground">
           {new Intl.NumberFormat("id-ID", {
             style: "currency",
             currency: "IDR",
             minimumFractionDigits: 0,
           }).format((Number(product?.price) || 0) * quickActionAmount)}
         </div>
-        <div className="text-xs text-gray-500 mt-1">
+        <div className="text-xs text-muted-foreground mt-1">
           {quickActionAmount} unit × {new Intl.NumberFormat("id-ID", {
             style: "currency",
             currency: "IDR",
@@ -328,7 +328,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         <Button 
           onClick={handleStockIn} 
           disabled={isLoading}
-          className="bg-green-600 hover:bg-green-700 text-white h-12 text-sm"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground h-12 text-sm"
         >
           {isLoading ? (
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -340,7 +340,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         <Button 
           onClick={handleStockOut} 
           disabled={isLoading || !!(product && product.quantity < quickActionAmount)}
-          className="bg-red-600 hover:bg-red-700 text-white h-12 text-sm"
+          className="bg-destructive hover:bg-destructive/90 text-destructive-foreground h-12 text-sm"
         >
           {isLoading ? (
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -353,8 +353,8 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
 
       {/* Stock Warning */}
       {product && product.quantity < quickActionAmount && (
-        <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-          <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
+        <div className="p-3 bg-amber-50/60 border border-amber-200/60 rounded-lg">
+          <div className="flex items-center gap-2 text-amber-800">
             <AlertTriangle className="h-4 w-4" />
             <span className="text-xs">Stok tidak mencukupi untuk stock out {quickActionAmount} unit</span>
           </div>
@@ -366,12 +366,12 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
   const renderAddNewProduct = () => (
     <div className="space-y-4">
       {/* Product Not Found Header */}
-      <div className="flex items-center justify-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+      <div className="flex items-center justify-center p-4 bg-amber-50/60 rounded-lg border border-amber-200/60">
         <div className="flex flex-col items-center text-center">
-          <AlertTriangle className="h-8 w-8 text-yellow-500 dark:text-yellow-400 mb-2" />
-          <h2 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Produk Tidak Ditemukan</h2>
-          <p className="text-xs text-yellow-600 dark:text-yellow-400/80 mt-1">
-            Barcode <span className="font-mono font-bold bg-yellow-100 dark:bg-yellow-800/30 px-1 py-0.5 rounded">{barcode}</span> belum terdaftar.
+          <AlertTriangle className="h-8 w-8 text-amber-500 mb-2" />
+          <h2 className="text-sm font-medium text-amber-800">Produk Tidak Ditemukan</h2>
+          <p className="text-xs text-amber-600 mt-1">
+            Barcode <span className="font-mono font-bold bg-amber-100 px-1 py-0.5 rounded">{barcode}</span> belum terdaftar.
           </p>
         </div>
       </div>
@@ -379,7 +379,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
       {/* Add New Product Form */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <PackageOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <PackageOpen className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-medium">Tambah Produk Baru</h2>
         </div>
 
@@ -494,7 +494,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
       <Button 
         onClick={handleAddNewProduct} 
         disabled={isLoading || !newProduct.name.trim()}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-sm"
+        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground h-12 text-sm"
       >
         {isLoading ? (
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -517,14 +517,14 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         <DialogHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-1 pr-2">
-              <Zap className="h-5 w-5 text-blue-600" />
+              <Zap className="h-5 w-5 text-primary" />
               <DialogTitle className="text-base">Aksi Cepat ESP32</DialogTitle>
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={onClose}
-              className="h-8 w-8 p-0 hover:bg-gray-100 flex-shrink-0"
+              className="h-8 w-8 p-0 hover:bg-accent flex-shrink-0"
               aria-label="Tutup popup aksi cepat"
             >
               <X className="h-4 w-4" />
@@ -542,9 +542,9 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         {product ? renderExistingProduct() : renderAddNewProduct()}
         
         {/* ESP32 Indicator */}
-        <div className="flex items-center justify-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-center gap-2 pt-2 border-t border-border">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span className="text-xs text-gray-500">ESP32 Scanner Aktif - {isMobile ? 'Mobile' : 'Desktop'}</span>
+          <span className="text-xs text-muted-foreground">ESP32 Scanner Aktif - {isMobile ? 'Mobile' : 'Desktop'}</span>
         </div>
       </DialogContent>
     </Dialog>

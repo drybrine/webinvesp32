@@ -111,7 +111,7 @@ export default function QRCodeGenerator({
 
   return (
     <div className="flex flex-col items-center space-y-2">
-      <canvas ref={canvasRef} className="border border-gray-200 rounded" style={{ maxWidth: "100%", height: "auto" }} />
+      <canvas ref={canvasRef} className="border border-border rounded" style={{ maxWidth: "100%", height: "auto" }} />
       <button onClick={downloadQR} className="text-xs text-blue-600 hover:text-blue-800 underline">
         Download QR Code
       </button>

@@ -71,24 +71,24 @@ const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceI
   const lastSeenDate = device.lastSeen ? new Date(device.lastSeen) : null
 
   return (
-    <Card className="bg-white/60 backdrop-blur-sm shadow-md hover:shadow-lg transition-shadow duration-300">
+    <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
         <div className="flex items-center space-x-4">
           <div className={cn(
-            "p-3 rounded-full",
-            isOnline ? "bg-emerald-100" : "bg-gray-200"
+            "p-3 rounded-lg",
+            isOnline ? "bg-emerald-100" : "bg-muted"
           )}>
             {isOnline ? (
-              <Wifi className="h-6 w-6 text-emerald-700 dark:text-emerald-400" />
+              <Wifi className="h-5 w-5 text-emerald-700" />
             ) : (
-              <WifiOff className="h-6 w-6 text-gray-500" />
+              <WifiOff className="h-5 w-5 text-muted-foreground" />
             )}
           </div>
           <div className="space-y-1">
-            <CardTitle className="text-lg font-bold text-gray-800">{device.name || device.deviceId}</CardTitle>
-            <p className="text-xs text-gray-500">ID: {device.deviceId}</p>
+            <CardTitle className="text-base font-bold text-foreground">{device.name || device.deviceId}</CardTitle>
+            <p className="text-xs text-muted-foreground font-mono">ID: {device.deviceId}</p>
             {lastSeenDate && (
-              <div className="flex items-center space-x-1.5 text-xs text-gray-500 pt-1">
+              <div className="flex items-center space-x-1.5 text-[11px] text-muted-foreground pt-0.5">
                 <Clock className="h-3 w-3" />
                 <span>
                   Terakhir aktif: {lastSeenDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}, {lastSeenDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
@@ -99,19 +99,19 @@ const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceI
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center pt-4 border-t border-gray-200/80">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center pt-4 border-t border-border">
           <div className="space-y-1">
-            <p className="text-xs font-medium text-gray-500">IP Address</p>
-            <p className="text-sm font-semibold text-gray-800">{device.ipAddress || "-"}</p>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">IP Address</p>
+            <p className="text-sm font-semibold text-foreground font-mono">{device.ipAddress || "-"}</p>
           </div>
           <div className="space-y-1">
-            <p className="text-xs font-medium text-gray-500">Status</p>
-            <Badge variant={isOnline ? "default" : "destructive"} className={cn(isOnline ? "bg-emerald-500" : "bg-red-500")}>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</p>
+            <Badge variant={isOnline ? "default" : "destructive"} className={cn(isOnline && "bg-emerald-600 hover:bg-emerald-700")}>
               {isOnline ? "Online" : "Offline"}
             </Badge>
           </div>
           <div className="space-y-1">
-            <p className="text-xs font-medium text-gray-500">Baterai</p>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Baterai</p>
             <p className="text-sm font-semibold flex items-center justify-center space-x-1">
               {device.batteryLevel != null ? (
                 <>
@@ -132,29 +132,28 @@ const DeviceCard = ({ device, onRestart }: { device: Device, onRestart: (deviceI
                   </span>
                 </>
               ) : (
-                <span className="text-gray-400">—</span>
+                <span className="text-muted-foreground">—</span>
               )}
             </p>
           </div>
           <div className="space-y-1">
-            <p className="text-xs font-medium text-gray-500">Total Scan</p>
-            <p className="text-sm font-semibold text-gray-800 flex items-center justify-center space-x-1">
-              <Database className="h-3 w-3 text-gray-600 dark:text-gray-300" />
-              <span>{device.scanCount || 0}</span>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Scan</p>
+            <p className="text-sm font-semibold text-foreground flex items-center justify-center space-x-1">
+              <Database className="h-3 w-3 text-muted-foreground" />
+              <span className="tabular-nums">{device.scanCount || 0}</span>
             </p>
           </div>
           <div className="space-y-1">
-            <p className="text-xs font-medium text-gray-500">Version</p>
-            <p className="text-sm font-semibold text-gray-800">{device.version || "-"}</p>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Version</p>
+            <p className="text-sm font-semibold text-foreground">{device.version || "-"}</p>
           </div>
         </div>
-        <div className="flex justify-end mt-4 pt-4 border-t border-gray-200/80">
+        <div className="flex justify-end mt-4 pt-4 border-t border-border">
           <Button 
             variant="outline"
             size="sm"
             onClick={handleRestartClick}
             disabled={!isOnline || isRestarting}
-            className="bg-white hover:bg-gray-50"
           >
             {isRestarting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -188,15 +187,15 @@ export function DeviceStatus() {
   }, [])
 
   return (
-    <Card className="bg-white/30 backdrop-blur-md shadow-lg">
+    <Card className="shadow-sm">
       <CardHeader>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center space-x-3">
-            <Smartphone className="h-6 w-6 text-gray-700" />
-            <CardTitle className="text-xl font-bold text-gray-800">Status Perangkat Scanner</CardTitle>
+            <Smartphone className="h-5 w-5 text-foreground" />
+            <CardTitle className="text-lg font-bold text-foreground tracking-tight">Status Perangkat Scanner</CardTitle>
           </div>
           <div className="flex items-center space-x-4 mt-3 sm:mt-0">
-            <p className="text-xs text-gray-500">
+            <p className="text-[11px] text-muted-foreground">
               Update otomatis setiap 5 detik
             </p>
             <Button 
@@ -204,7 +203,6 @@ export function DeviceStatus() {
               size="sm"
               onClick={() => refreshDeviceStatus()}
               disabled={loading}
-              className="bg-white hover:bg-gray-50"
             >
               {loading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -218,19 +216,19 @@ export function DeviceStatus() {
       </CardHeader>
       <CardContent className="space-y-4">
         {loading && totalDevices === 0 && (
-          <div className="flex items-center justify-center p-8 space-x-2 text-gray-500">
+          <div className="flex items-center justify-center p-8 space-x-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
             <span>Memuat perangkat...</span>
           </div>
         )}
         {error && (
-          <div className="flex items-center justify-center p-8 space-x-2 text-red-600 bg-red-50 rounded-lg">
+          <div className="flex items-center justify-center p-8 space-x-2 text-destructive bg-destructive/5 rounded-lg">
             <AlertTriangle className="h-5 w-5" />
             <span>Gagal memuat status: {error}</span>
           </div>
         )}
         {!loading && !error && devices.length === 0 && (
-          <div className="flex items-center justify-center p-8 space-x-2 text-gray-500 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-center p-8 space-x-2 text-muted-foreground bg-muted/30 rounded-lg">
             <Info className="h-5 w-5" />
             <span>Tidak ada perangkat scanner yang terdaftar.</span>
           </div>

@@ -78,19 +78,19 @@ export default function InventoryTable({
     <>
       <LowStockAlert lowStockItems={lowStockItems} />
       <Card className="shadow-sm">
-        <CardHeader className="border-b bg-muted/30">
+        <CardHeader className="border-b">
           <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
             <div>
-              <CardTitle className="text-xl font-bold text-foreground">
+              <CardTitle className="text-xl font-bold text-foreground tracking-tight">
                 Inventory ({filteredInventory.length})
               </CardTitle>
-              <CardDescription className="text-sm text-muted-foreground mt-1">
+              <CardDescription className="text-sm text-muted-foreground mt-0.5">
                 Kelola dan pantau stok barang Anda
               </CardDescription>
             </div>
 
             <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-3">
-              <Button onClick={onAddItem} size="sm">
+              <Button onClick={onAddItem} size="sm" title="Tekan N untuk tambah item">
                 <Plus className="w-4 h-4 mr-2" />
                 Tambah Item
               </Button>
@@ -101,7 +101,7 @@ export default function InventoryTable({
             </div>
           </div>
 
-          <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-4 mt-4 p-4 bg-muted/20 rounded-lg">
+          <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-4 mt-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
@@ -109,6 +109,7 @@ export default function InventoryTable({
                 value={searchTerm}
                 onChange={(e) => onSearchChange(e.target.value)}
                 className="pl-10"
+                title="Tekan / untuk fokus pencarian"
               />
             </div>
             <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
@@ -195,14 +196,14 @@ function LowStockAlert({ lowStockItems }: { lowStockItems: InventoryItem[] }) {
   const warningItems = lowStockItems.filter(item => item.quantity > 0 && item.quantity <= item.minStock)
 
   return (
-    <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+    <div className="mb-6 p-4 bg-amber-50/60 border border-amber-200/60 rounded-xl">
       <div className="flex items-center gap-2 font-semibold text-amber-800 mb-3">
         <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
         {lowStockItems.length} Item Memerlukan Perhatian
       </div>
       <div className="space-y-3">
         {criticalItems.length > 0 && (
-          <div className="bg-white rounded-lg p-3 border border-red-200">
+          <div className="bg-red-50/80 rounded-lg p-3 border border-red-200">
             <div className="font-medium text-red-700 mb-2 text-xs uppercase tracking-wide">Habis ({criticalItems.length})</div>
             <div className="flex flex-wrap gap-2">
               {criticalItems.slice(0, 6).map(item => (
@@ -218,7 +219,7 @@ function LowStockAlert({ lowStockItems }: { lowStockItems: InventoryItem[] }) {
           </div>
         )}
         {warningItems.length > 0 && (
-          <div className="bg-white rounded-lg p-3 border border-amber-200">
+          <div className="bg-card rounded-lg p-3 border border-amber-200">
             <div className="font-medium text-amber-700 mb-2 text-xs uppercase tracking-wide">Stok Rendah ({warningItems.length})</div>
             <div className="flex flex-wrap gap-2">
               {warningItems.slice(0, 6).map(item => (
@@ -285,15 +286,18 @@ function MobileCard({ item, onView, onEdit, onDelete, onStockAdjust }: {
         </div>
       </div>
       <div className="flex flex-col gap-2 pt-2 border-t">
-        <div className="flex gap-1">
-          <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => onView({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })}>
-            <Eye className="h-3 w-3" />
+        <div className="grid grid-cols-3 gap-1">
+          <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={() => onView({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })}>
+            <Eye className="h-3 w-3 mr-1" />
+            <span className="text-xs">Lihat</span>
           </Button>
-          <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => onEdit({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })}>
-            <Edit className="h-3 w-3" />
+          <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={() => onEdit({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })}>
+            <Edit className="h-3 w-3 mr-1" />
+            <span className="text-xs">Edit</span>
           </Button>
-          <Button variant="outline" size="sm" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => onDelete(item.id, item.name)}>
-            <Trash2 className="h-3 w-3" />
+          <Button variant="ghost" size="sm" className="h-8 text-destructive/70 hover:text-destructive hover:bg-destructive/5" onClick={() => onDelete(item.id, item.name)}>
+            <Trash2 className="h-3 w-3 mr-1" />
+            <span className="text-xs">Hapus</span>
           </Button>
         </div>
         <div className="grid grid-cols-2 gap-1">
@@ -322,41 +326,44 @@ function DesktopRow({ item, onView, onEdit, onDelete, onStockAdjust }: {
   const isOutOfStock = item.quantity === 0
 
   return (
-    <TableRow className={isOutOfStock ? 'bg-red-50/50' : isLowStock ? 'bg-amber-50/50' : ''}>
+    <TableRow className={isOutOfStock ? 'bg-red-50/40' : isLowStock ? 'bg-amber-50/40' : ''}>
       <TableCell>
         <div className="flex items-center gap-3">
           <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isOutOfStock ? 'bg-red-500' : isLowStock ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
           <div className="min-w-0">
-            <div className="font-medium text-foreground">{item.name}</div>
-            <div className="text-sm text-muted-foreground truncate max-w-[200px]">{item.description || "-"}</div>
+            <div className="font-semibold text-foreground text-sm">{item.name}</div>
+            <div className="text-xs text-muted-foreground truncate max-w-[200px]">{item.description || "-"}</div>
           </div>
         </div>
       </TableCell>
-      <TableCell className="text-muted-foreground">{item.category}</TableCell>
+      <TableCell className="text-muted-foreground text-sm">{item.category}</TableCell>
       <TableCell className="text-center">
-        <Badge variant={isOutOfStock ? "destructive" : isLowStock ? "secondary" : "default"}>
+        <Badge variant={isOutOfStock ? "destructive" : isLowStock ? "secondary" : "default"} className="font-mono">
           {item.quantity}
         </Badge>
-        {isLowStock && <div className="text-xs text-muted-foreground mt-1">Min: {item.minStock}</div>}
+        {isLowStock && <div className="text-[11px] text-muted-foreground mt-0.5">Min: {item.minStock}</div>}
       </TableCell>
-      <TableCell className="text-right font-medium text-foreground">Rp {item.price.toLocaleString()}</TableCell>
-      <TableCell className="text-muted-foreground">{item.location || "-"}</TableCell>
+      <TableCell className="text-right font-medium text-foreground tabular-nums">Rp {item.price.toLocaleString()}</TableCell>
+      <TableCell className="text-muted-foreground text-sm">{item.location || "-"}</TableCell>
       <TableCell className="text-right">
-        <div className="flex justify-end gap-1">
-          <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => onView({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Lihat">
-            <Eye className="h-4 w-4" />
+        <div className="flex justify-end items-center gap-1">
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" onClick={() => onStockAdjust(item, "add")} title="Tambah stok">
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            <span className="text-xs">Tambah</span>
           </Button>
-          <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => onEdit({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Edit">
-            <Edit className="h-4 w-4" />
+          <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onStockAdjust(item, "subtract")} disabled={item.quantity <= 0} title="Kurangi stok">
+            <Minus className="h-3.5 w-3.5 mr-1" />
+            <span className="text-xs">Kurangi</span>
           </Button>
-          <Button variant="outline" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:bg-emerald-50" onClick={() => onStockAdjust(item, "add")} title="Tambah Stok">
-            <Plus className="h-4 w-4" />
+          <div className="w-px h-4 bg-border mx-0.5" />
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground" onClick={() => onView({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Lihat detail">
+            <Eye className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => onStockAdjust(item, "subtract")} disabled={item.quantity <= 0} title="Kurangi">
-            <Minus className="h-4 w-4" />
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground" onClick={() => onEdit({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Edit item">
+            <Edit className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="outline" size="sm" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => onDelete(item.id, item.name)} title="Hapus">
-            <Trash2 className="h-4 w-4" />
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive/70 hover:text-destructive hover:bg-destructive/5" onClick={() => onDelete(item.id, item.name)} title="Hapus item">
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
       </TableCell>

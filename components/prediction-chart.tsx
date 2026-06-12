@@ -24,10 +24,10 @@ function formatValue(value: number | null): string {
 }
 
 function buildStatus(value: number | null, minStock: number): { label: string; color: string } {
-  if (value === null) return { label: "-", color: "#64748b" }
-  if (value <= 0) return { label: "Habis", color: "#dc2626" }
-  if (value < minStock) return { label: "Di bawah minimum", color: "#d97706" }
-  return { label: "Aman", color: "#16a34a" }
+  if (value === null) return { label: "-", color: "hsl(150 8% 50%)" }
+  if (value <= 0) return { label: "Habis", color: "hsl(0 72% 51%)" }
+  if (value < minStock) return { label: "Di bawah minimum", color: "hsl(38 78% 50%)" }
+  return { label: "Aman", color: "hsl(152 38% 38%)" }
 }
 
 export default function PredictionChart({ data, minStock }: Props) {
@@ -173,8 +173,8 @@ export default function PredictionChart({ data, minStock }: Props) {
           y={minStockY}
           width={WIDTH - PADDING.left - PADDING.right}
           height={Math.max(0, chartBottom - minStockY)}
-          fill="#f59e0b"
-          opacity={0.07}
+          fill="hsl(38 78% 50%)"
+          opacity={0.06}
         />
 
         {forecastStartX !== null && (
@@ -184,24 +184,24 @@ export default function PredictionChart({ data, minStock }: Props) {
               y={PADDING.top}
               width={WIDTH - PADDING.right - forecastStartX}
               height={chartBottom - PADDING.top}
-              fill="#16a34a"
-              opacity={0.05}
+              fill="hsl(152 38% 38%)"
+              opacity={0.04}
             />
             <line
               x1={forecastStartX}
               x2={forecastStartX}
               y1={PADDING.top}
               y2={chartBottom}
-              stroke="#16a34a"
+              stroke="hsl(152 38% 38%)"
               strokeDasharray="4 4"
               strokeWidth={1}
-              opacity={0.8}
+              opacity={0.6}
             />
             <text
               x={Math.min(WIDTH - PADDING.right - 4, forecastStartX + 6)}
               y={PADDING.top + 13}
               fontSize="10"
-              fill="#16a34a"
+              fill="hsl(152 38% 38%)"
             >
               Forecast
             </text>
@@ -253,7 +253,7 @@ export default function PredictionChart({ data, minStock }: Props) {
           x2={WIDTH - PADDING.right}
           y1={minStockY}
           y2={minStockY}
-          stroke="#f59e0b"
+          stroke="hsl(38 78% 50%)"
           strokeDasharray="4 4"
           strokeWidth={1.2}
         />
@@ -262,7 +262,7 @@ export default function PredictionChart({ data, minStock }: Props) {
           y={minStockY - 4}
           textAnchor="end"
           fontSize="10"
-          fill="#f59e0b"
+          fill="hsl(38 78% 50%)"
         >
           Min Stok ({minStock})
         </text>
@@ -303,7 +303,7 @@ export default function PredictionChart({ data, minStock }: Props) {
           <path
             d={actualPath}
             fill="none"
-            stroke="#2563eb"
+            stroke="hsl(152 32% 38%)"
             strokeWidth={2}
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -313,7 +313,7 @@ export default function PredictionChart({ data, minStock }: Props) {
           <path
             d={predictedPath}
             fill="none"
-            stroke="#16a34a"
+            stroke="hsl(158 28% 48%)"
             strokeWidth={2}
             strokeDasharray="6 4"
             strokeLinejoin="round"
@@ -324,12 +324,12 @@ export default function PredictionChart({ data, minStock }: Props) {
         {points.map((p, i) => (
           <g key={`pt-${i}`}>
             {p.actualY !== null && (
-              <circle cx={p.x} cy={p.actualY} r={3.2} fill="#2563eb">
+              <circle cx={p.x} cy={p.actualY} r={3.2} fill="hsl(152 32% 38%)">
                 <title>{`${p.date} · historis: ${p.actual}`}</title>
               </circle>
             )}
             {p.predictedY !== null && (
-              <circle cx={p.x} cy={p.predictedY} r={3} fill="#16a34a">
+              <circle cx={p.x} cy={p.predictedY} r={3} fill="hsl(158 28% 48%)">
                 <title>{`${p.date} · prediksi: ${p.predicted?.toFixed(2)}`}</title>
               </circle>
             )}
@@ -361,15 +361,15 @@ export default function PredictionChart({ data, minStock }: Props) {
               x2={activePoint.x}
               y1={PADDING.top}
               y2={chartBottom}
-              stroke="#64748b"
+              stroke="hsl(150 8% 50%)"
               strokeDasharray="3 3"
-              opacity={0.8}
+              opacity={0.6}
             />
             <circle
               cx={activePoint.x}
               cy={activeY}
               r={5}
-              fill={activePoint.actual !== null ? "#2563eb" : "#16a34a"}
+              fill={activePoint.actual !== null ? "hsl(152 32% 38%)" : "hsl(158 28% 48%)"}
               stroke="white"
               strokeWidth={2}
             />
@@ -401,17 +401,17 @@ export default function PredictionChart({ data, minStock }: Props) {
 
       <div className="flex items-center gap-4 justify-center text-xs text-muted-foreground mt-2 flex-wrap">
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block w-4 h-0.5 bg-[#2563eb]" /> Historis
+          <span className="inline-block w-4 h-0.5 rounded-full" style={{ background: "hsl(152 32% 38%)" }} /> Historis
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block w-4 border-t-2 border-dashed border-[#16a34a]" /> Prediksi
+          <span className="inline-block w-4 border-t-2 border-dashed rounded-full" style={{ borderColor: "hsl(158 28% 48%)" }} /> Prediksi
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block w-4 border-t border-dashed border-[#f59e0b]" /> Min Stok
+          <span className="inline-block w-4 border-t border-dashed" style={{ borderColor: "hsl(38 78% 50%)" }} /> Min Stok
         </span>
         {forecastStartIndex >= 0 && (
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded-sm bg-[#16a34a]/10 border border-[#16a34a]/20" /> Area Forecast
+            <span className="inline-block h-3 w-3 rounded-sm border" style={{ background: "hsl(152 38% 38% / 0.1)", borderColor: "hsl(152 38% 38% / 0.2)" }} /> Area Forecast
           </span>
         )}
       </div>

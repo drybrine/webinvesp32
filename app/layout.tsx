@@ -1,6 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Plus_Jakarta_Sans } from "next/font/google"
 import "./globals.css"
 import Navigation from "@/components/navigation"
 import { Toaster } from "@/components/ui/toaster"
@@ -11,7 +11,7 @@ import FirebaseDeprecationSuppressor from "./firebase-deprecation-suppressor"
 import { criticalCSS } from "@/lib/critical-css"
 
 // Optimized font loading
-const inter = Inter({
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   display: 'swap',
 })
@@ -45,7 +45,7 @@ export const viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: "cover",
-  themeColor: "#ffffff",
+  themeColor: "#faf8f5",
   colorScheme: "light",
 }
 
@@ -55,7 +55,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="id" className={inter.className}>
+    <html lang="id" className={jakarta.className}>
       <head>
         {/* Preconnect to critical origins for faster connections */}
         <link rel="preconnect" href="https://apis.google.com" />
@@ -71,13 +71,13 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" href="/placeholder-logo.png" />
-        <meta name="theme-color" content="#ffffff" />
+        <meta name="theme-color" content="#faf8f5" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="StokManager" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="msapplication-TileColor" content="#ffffff" />
+        <meta name="msapplication-TileColor" content="#faf8f5" />
         <meta name="msapplication-tap-highlight" content="no" />
         
         {/* Inline critical CSS to prevent render blocking */}

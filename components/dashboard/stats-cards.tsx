@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { InventoryItem } from "@/hooks/use-firebase"
 import { DeviceStatus } from "@/hooks/use-realtime-device-status"
+import { cn } from "@/lib/utils"
 
 interface StatsCardsProps {
   totalItems: number
@@ -35,13 +36,6 @@ export default function StatsCards({
   const criticalItems = lowStockItems.filter(item => item.quantity === 0)
   const warningItems = lowStockItems.filter(item => item.quantity > 0 && item.quantity <= item.minStock)
 
-  const stockHealthPercent = inventory.length > 0
-    ? Math.round(((inventory.length - lowStockItems.length) / inventory.length) * 100)
-    : 100
-
-  const deviceHealthPercent = totalDevices > 0
-    ? Math.round((onlineDevices / totalDevices) * 100)
-    : 0
   const hasOnlineDevices = onlineDevices > 0
   const batteryLevels = devices
     .filter((device) => device.status === "online")
@@ -78,64 +72,70 @@ export default function StatsCards({
   const batteryLabel = lowestBatteryLevel === null ? "Belum terbaca" : `${lowestBatteryLevel}%`
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-fade-in-up">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
       {/* Total Items */}
-      <div className="rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Item</span>
-          <Package className="h-3.5 w-3.5 text-muted-foreground" />
+      <div className="rounded-lg border border-border bg-card p-4 card-hover">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Item</span>
+          <Package className="h-3.5 w-3.5 text-primary/50" />
         </div>
-        <div className="text-3xl font-bold text-foreground">{totalItems}</div>
-        <p className="text-xs text-muted-foreground mt-1">Jenis barang unik</p>
+        <div className="text-3xl font-bold text-foreground tabular-nums">{totalItems}</div>
+        <p className="text-[11px] text-muted-foreground mt-0.5">Jenis barang unik</p>
       </div>
 
       {/* Total Value */}
-      <div className="rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Nilai</span>
-          <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+      <div className="rounded-lg border border-border bg-card p-4 card-hover">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Nilai</span>
+          <DollarSign className="h-3.5 w-3.5 text-primary/50" />
         </div>
-        <div className="text-xl font-bold text-foreground leading-tight">
+        <div className="text-xl font-bold text-foreground leading-tight tabular-nums">
           Rp {totalValue.toLocaleString('id-ID')}
         </div>
-        <p className="text-xs text-muted-foreground mt-1">Nilai inventory total</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5">Nilai inventory total</p>
       </div>
 
       {/* Low Stock */}
-      <div className={`rounded-lg border bg-card p-4 ${lowStockItems.length > 0 ? 'border-amber-200' : 'border-border'}`}>
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Stok Rendah</span>
-          <AlertCircle className={`h-3.5 w-3.5 ${lowStockItems.length > 0 ? 'text-amber-500' : 'text-muted-foreground'}`} />
+      <div className={cn(
+        "rounded-lg border bg-card p-4 card-hover",
+        lowStockItems.length > 0 && "border-l-4 border-l-amber-400"
+      )}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Stok Rendah</span>
+          <AlertCircle className={cn("h-3.5 w-3.5", lowStockItems.length > 0 ? "text-amber-500" : "text-muted-foreground")} />
         </div>
-        <div className={`text-3xl font-bold ${lowStockItems.length > 0 ? 'text-amber-600' : 'text-foreground'}`}>
+        <div className={cn("text-3xl font-bold tabular-nums", lowStockItems.length > 0 ? "text-amber-600" : "text-foreground")}>
           {lowStockItems.length}
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-0.5">
           {lowStockItems.length > 0 ? `${criticalItems.length} habis · ${warningItems.length} rendah` : 'Semua stok aman'}
         </p>
       </div>
 
       {/* Device Status */}
-      <div className={`rounded-lg border bg-card p-4 ${hasOnlineDevices ? 'border-emerald-200' : 'border-border'}`}>
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Scanner</span>
-          <div className="flex items-center gap-2">
-            {hasOnlineDevices && <BatteryIcon className={`h-4 w-4 ${batteryColor}`} />}
-            <Smartphone className={`h-3.5 w-3.5 ${hasOnlineDevices ? 'text-emerald-500' : 'text-muted-foreground'}`} />
+      <div className={cn(
+        "rounded-lg border bg-card p-4 card-hover",
+        hasOnlineDevices && "border-l-4 border-l-emerald-400"
+      )}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Scanner</span>
+          <div className="flex items-center gap-1.5">
+            {hasOnlineDevices && <BatteryIcon className={cn("h-3.5 w-3.5", batteryColor)} />}
+            <Smartphone className={cn("h-3.5 w-3.5", hasOnlineDevices ? "text-emerald-500" : "text-muted-foreground")} />
           </div>
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <div className="text-3xl font-bold text-foreground">
-            {onlineDevices}<span className="text-lg text-muted-foreground font-normal">/{totalDevices}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-3xl font-bold text-foreground tabular-nums">
+            {onlineDevices}<span className="text-base text-muted-foreground font-normal">/{totalDevices}</span>
           </div>
           {hasOnlineDevices && (
-            <div className={`inline-flex min-h-7 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold ${batteryBadgeClass}`}>
-              <BatteryIcon className="h-4 w-4 shrink-0" />
+            <div className={cn("inline-flex min-h-6 items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold", batteryBadgeClass)}>
+              <BatteryIcon className="h-3.5 w-3.5 shrink-0" />
               <span>{batteryLabel}</span>
             </div>
           )}
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-0.5">
           {hasOnlineDevices ? 'Device online' : 'Semua offline'}
         </p>
       </div>

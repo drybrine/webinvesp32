@@ -282,7 +282,7 @@ export default function ScannerIntegration() {
               </Badge>
               {lastScan && (
                 <span className="ml-4">
-                  Pemindaian terakhir: <code className="bg-gray-100 px-2 py-1 rounded text-sm">{lastScan}</code>
+                  Pemindaian terakhir: <code className="bg-muted px-2 py-1 rounded text-sm">{lastScan}</code>
                 </span>
               )}
             </AlertDescription>
@@ -301,7 +301,7 @@ export default function ScannerIntegration() {
         </CardHeader>
         <CardContent>
           {devices.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">Tidak ada pemindai terhubung</p>
+            <p className="text-muted-foreground text-center py-8">Tidak ada pemindai terhubung</p>
           ) : (
             <Table>
               <TableHeader>
@@ -354,9 +354,9 @@ export default function ScannerIntegration() {
         <CardContent>
           {scans.length === 0 ? (
             <div className="text-center py-8">
-              <Package className="w-12 h-12 mx-auto text-gray-600 dark:text-gray-300 mb-4" />
-              <p className="text-gray-500">Belum ada pemindaian</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Barcode yang dipindai akan muncul di sini secara real-time</p>
+              <Package className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">Belum ada pemindaian</p>
+              <p className="text-sm text-muted-foreground">Barcode yang dipindai akan muncul di sini secara real-time</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -364,16 +364,16 @@ export default function ScannerIntegration() {
                 <div
                   key={index}
                   className={`flex items-center justify-between p-3 rounded-lg border ${
-                    scan.processed ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"
+                    scan.processed ? "bg-green-50 border-green-200" : "bg-muted/50 border-border"
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <Badge variant={scan.processed ? "default" : "secondary"}>
                       {scan.processed ? "Diproses" : "Tertunda"}
                     </Badge>
-                    <code className="bg-white px-2 py-1 rounded text-sm font-mono">{scan.barcode}</code>
+                    <code className="bg-card px-2 py-1 rounded text-sm font-mono">{scan.barcode}</code>
                   </div>
-                  <div className="text-sm text-gray-500 flex items-center gap-2">
+                  <div className="text-sm text-muted-foreground flex items-center gap-2">
                     <span>{scan.deviceId}</span>
                     <Clock className="w-4 h-4" />
                     <span>{new Date(scan.timestamp).toLocaleTimeString()}</span>

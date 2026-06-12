@@ -9,14 +9,11 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Package,
   Search,
   Download,
-  CheckCircle,
-  Clock,
-  Wifi,
-  Activity,
 } from "lucide-react"
 import { useFirebaseScans } from "@/hooks/use-firebase"
 import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
@@ -117,61 +114,54 @@ export default function ScanPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-6">
         {/* Header */}
         <div className="animate-fade-in-up">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Activity className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Riwayat Scan</h1>
-              <p className="text-sm text-muted-foreground">Pantau aktivitas scan barcode</p>
-            </div>
-          </div>
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">Riwayat Scan</h1>
+          <p className="text-sm text-muted-foreground mt-1">Pantau aktivitas scan barcode</p>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up">
-          <Card>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
+          <Card className="card-hover">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Scan</CardTitle>
+              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Scan</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold">{scans.length}</div>
-              <p className="text-xs text-muted-foreground">Semua waktu</p>
+              <div className="text-3xl font-bold tabular-nums">{scans.length}</div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Semua waktu</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Hari Ini</CardTitle>
+              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Hari Ini</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold">{todayScans}</div>
-              <p className="text-xs text-muted-foreground">Scan hari ini</p>
+              <div className="text-3xl font-bold tabular-nums">{todayScans}</div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Scan hari ini</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Berhasil</CardTitle>
+              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Berhasil</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-emerald-600">{processedScans}</div>
-              <p className="text-xs text-muted-foreground">Item ditemukan</p>
+              <div className="text-3xl font-bold text-emerald-700 tabular-nums">{processedScans}</div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Item ditemukan</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Status</CardTitle>
+              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${firebaseStatus.isConfigured ? 'bg-emerald-500' : 'bg-gray-400'}`}></div>
-                <span className={`font-medium ${firebaseStatus.isConfigured ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                <div className={`w-2 h-2 rounded-full ${firebaseStatus.isConfigured ? 'bg-emerald-500' : 'bg-muted-foreground'}`}></div>
+                <span className={`font-semibold text-sm ${firebaseStatus.isConfigured ? 'text-emerald-700' : 'text-muted-foreground'}`}>
                   {firebaseStatus.isConfigured ? 'Aktif' : 'Offline'}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-[11px] text-muted-foreground mt-0.5">
                 {firebaseStatus.isConfigured ? 'Real-time aktif' : 'Menunggu koneksi'}
               </p>
             </CardContent>
@@ -193,10 +183,9 @@ export default function ScanPage() {
             </div>
             <div className="mt-4 relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <input
-                type="text"
+              <Input
                 placeholder="Cari barcode, produk..."
-                className="pl-10 h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
