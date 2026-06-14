@@ -378,6 +378,9 @@ export const firebaseHelpers = {
     delta: number,
     transactionData?: Record<string, any>,
   ) => {
+    if (!Number.isFinite(delta) || delta === 0) {
+      throw new Error("Invalid stock adjustment delta");
+    }
     if (!database || !dbRefs) {
       console.error("Firebase not available for adjustStock");
       throw new Error("Firebase not available - operation failed");

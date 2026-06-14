@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import {
   Card,
   CardContent,
@@ -18,6 +18,7 @@ import {
 import { useFirebaseScans } from "@/hooks/use-firebase"
 import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
 import { getFirebaseStatus } from "@/lib/firebase"
+import { downloadCsv } from "@/lib/csv"
 import { ScanHistory } from "@/components/scan-history"
 
 export default function ScanPage() {
@@ -96,17 +97,7 @@ export default function ScanPage() {
       s.processed ? "Ya" : "Tidak",
       s.location || "",
     ])
-    const csv = [headers, ...rows].map(r => r.join(",")).join("\n")
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `scan_history_${new Date().toISOString().split("T")[0]}.csv`)
-    link.style.visibility = "hidden"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    downloadCsv(`scan_history_${new Date().toISOString().split("T")[0]}.csv`, [headers, ...rows])
   }
 
   return (

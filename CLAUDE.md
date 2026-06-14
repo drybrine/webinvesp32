@@ -11,7 +11,7 @@ npm install            # or: pnpm install
 npm run dev            # runs scripts/check-env.js first, then next dev on :3000
 npm run build          # next build (production)
 npm run start          # next start (serves prebuilt .next)
-npm run lint           # next lint (ESLint 9)
+npm run lint           # eslint . (ESLint 9 flat config)
 npm run check-env      # validates NEXT_PUBLIC_FIREBASE_* are set
 npx tsx scripts/test-stock-prediction.ts                              # dummy dataset
 npx tsx scripts/test-stock-prediction.ts --export barcodescanesp32-default-rtdb-export.json
@@ -48,7 +48,7 @@ Attendance was fully removed from both web and firmware. Do not reintroduce atte
 ### Pages and their responsibilities
 
 - `app/page.tsx` — dashboard: inventory table, stock adjustment dialogs, prediction summary card (top-3 risk items via server-side batch `/api/predict?mode=batch`), stockout toast notifier (session-scoped, one notification per item per day), device status card with battery level (only shown when scanner is online). All hooks must be declared before any conditional early-return — see the #310 incident in git history.
-- `app/transaksi/page.tsx` — transaction feed, filters by type/period/**source** (Manual = operator is Dashboard/Manual/empty; Scanner = anything else). Pagination 50/halaman. Export CSV.
+- `app/transaksi/page.tsx` — transaction feed, filters by type/period/**source** (Manual = operator is Dashboard/Manual/empty; legacy Admin is also treated as Manual; Scanner = anything else). Pagination 50/halaman. Export CSV.
 - `app/prediksi/page.tsx` — Simple Linear Regression prediction per item via Python serverless, detailed SVG chart in `components/prediction-chart.tsx`, model metrics (R², MAE, RMSE), forecast table, testing model panel, badge sumber model. Do not display anomaly detection in this page; it is outside the thesis scope.
 - `app/scan/page.tsx` — manual barcode input, PDF417 barcode render via bwip-js (`components/pdf417-barcode.tsx`), scan history.
 - `/api/predict` — **not a Next.js route**. `vercel.json` maps `api/predict.py` (Vercel Python function, `@vercel/python@4.3.1`, maxDuration 30s) to handle `/api/predict` directly. The frontend `fetch("/api/predict", …)` calls hit the Python handler. Supports single item and batch mode (`mode: 'batch'` for dashboard top-N risk items). There is no `app/api/predict/route.ts`.

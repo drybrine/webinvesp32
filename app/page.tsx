@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, InventoryItem, useFirebaseTransactions } from "@/hooks/use-firebase"
 import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
 import { firebaseHelpers } from "@/lib/firebase"
+import { downloadCsv } from "@/lib/csv"
 import StatsCards from "@/components/dashboard/stats-cards"
 import InventoryTable from "@/components/dashboard/inventory-table"
 import {
@@ -470,27 +471,22 @@ export default function DashboardPage() {
   const lowStockItems = inventory.filter((item) => item.quantity <= item.minStock)
 
   const exportToCSV = () => {
-    const csvRows = [];
     const headers = ["ID", "Barcode", "Nama", "Deskripsi", "Kategori", "Kuantitas", "Stok Min", "Harga", "Pemasok", "Lokasi", "Update Terakhir"];
-    csvRows.push(headers.join(','));
-    for (const item of inventory) {
-      const values = [item.id, item.barcode || "", `"${item.name.replace(/"/g, '""')}"`, `"${item.description.replace(/"/g, '""')}"`, item.category, item.quantity, item.minStock, item.price, `"${(item.supplier || "").replace(/"/g, '""')}"`, `"${item.location.replace(/"/g, '""')}"`, item.lastUpdated ? new Date(item.lastUpdated).toLocaleString() : ""];
-      csvRows.push(values.join(','));
-    }
-    const csvString = csvRows.join('\n');
-    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
     const fileName = `inventory_${new Date().toISOString().split('T')[0]}.csv`;
-    const link = document.createElement("a");
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", fileName);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }
+    const rows = inventory.map((item) => [
+      item.id,
+      item.barcode || "",
+      item.name,
+      item.description || "",
+      item.category || "",
+      item.quantity,
+      item.minStock,
+      item.price,
+      item.supplier || "",
+      item.location || "",
+      item.lastUpdated ? new Date(item.lastUpdated).toLocaleString() : "",
+    ]);
+    downloadCsv(fileName, [headers, ...rows]);
     toast({ title: "Export Berhasil", description: `${inventory.length} item diexport` });
   };
 

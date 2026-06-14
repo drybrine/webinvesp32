@@ -21,6 +21,7 @@ import { Plus, Search, Eye, Download, TrendingUp, TrendingDown, Calendar, FileTe
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase"
 import { firebaseHelpers } from "@/lib/firebase"
+import { downloadCsv } from "@/lib/csv"
 
 interface Transaction {
   id: string
@@ -66,7 +67,7 @@ export default function TransaksiPage() {
 
   const isManualSource = (t: Transaction) => {
     const op = (t.operator || "").toLowerCase()
-    return op === "dashboard" || op === "manual" || op === ""
+    return op === "dashboard" || op === "manual" || op === "admin" || op === ""
   }
 
   const filteredTransactions = useMemo(() => {
@@ -160,7 +161,7 @@ export default function TransaksiPage() {
       unitPrice: unitPriceNum,
       totalAmount: totalAmount,
       reason: formData.reason,
-      operator: "Admin",
+      operator: "Dashboard",
       notes: formData.notes,
     }
 
@@ -286,15 +287,8 @@ export default function TransaksiPage() {
         (transaction.unitPrice || 0).toString(), (transaction.totalAmount || 0).toString(),
         transaction.reason || '', transaction.operator || ''
       ])
-      const csvContent = [headers.join(","), ...csvData.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(","))].join("\n")
-      const blob = new Blob(["﻿" + csvContent], { type: "text/csv;charset=utf-8;" })
       const fileName = `transaksi_${new Date().toISOString().split('T')[0]}.csv`
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url; link.download = fileName; link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => { document.body.removeChild(link); window.URL.revokeObjectURL(url); }, 100);
+      downloadCsv(fileName, [headers, ...csvData])
       toast({ title: "Export Berhasil", description: `${filteredTransactions.length} transaksi diekspor.` })
     } catch (error) {
       toast({ title: "Export Gagal", description: "Terjadi kesalahan.", variant: "destructive" })
