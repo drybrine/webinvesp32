@@ -2,6 +2,10 @@
 
 This file provides guidance to AI coding agents working with this repository.
 
+## Agent workflow rules
+
+- Always spawn subagent when doing exploration.
+
 ## Commands
 
 Package manager: both `pnpm-lock.yaml` and `package-lock.json` are committed. README recommends pnpm; `npm run dev` is the standard dev command invoked elsewhere in docs and CI/Vercel.
