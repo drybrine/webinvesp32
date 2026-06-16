@@ -371,7 +371,7 @@ void oledShowBarcode(String barcode, String itemName, bool sent) {
   display.setTextSize(1);
 
   // -- ZONA KUNING (y=0..15) --
-  display.setCursor(22, 0); display.println("** BARCODE SCAN **");
+  display.setCursor(19, 0); display.println("- BARCODE SCAN -");
   // Tampilkan barcode di baris kuning ke-2 jika muat
   if (barcode.length() <= 21) {
     int cx = (128 - (int)barcode.length() * 6) / 2;
@@ -388,7 +388,7 @@ void oledShowBarcode(String barcode, String itemName, bool sent) {
   }
 
   // Nama item
-  display.setCursor(0, 30);
+  display.setCursor(0, 32);
   if (itemName.length() > 0) {
     String label = itemName;
     if (label.length() > 20) label = label.substring(0, 20);
@@ -397,12 +397,12 @@ void oledShowBarcode(String barcode, String itemName, bool sent) {
     display.println("Item: Tidak ditemukan");
   }
 
-  display.drawLine(0, 41, 127, 41, SSD1306_WHITE);
+  display.drawLine(0, 43, 127, 43, SSD1306_WHITE);
 
-  display.setCursor(0, 45);
+  display.setCursor(0, 47);
   display.println(isOnline ? "Firebase: TERKIRIM" : "Firebase: OFFLINE");
 
-  display.setCursor(0, 55);
+  display.setCursor(0, 57);
   display.println(sent ? "Sync: OK" : "Sync: GAGAL");
 
   display.display();
@@ -417,25 +417,26 @@ void oledShowInventoryFound(String name, int qty, int minStock) {
   display.setTextSize(1);
 
   // -- ZONA KUNING (y=0..15) --
-  display.setCursor(14, 0); display.println("** ITEM DITEMUKAN **");
+  display.setCursor(13, 0); display.println("- ITEM DITEMUKAN -");
+  display.drawLine(0, 9, 127, 9, SSD1306_WHITE);
   if (name.length() > 21) name = name.substring(0, 21);
-  display.setCursor(0, 8); display.println(name);
+  display.setCursor(0, 12); display.println(name);
 
   // -- ZONA BIRU (y=16..63) --
-  display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
+  display.drawLine(0, 21, 127, 21, SSD1306_WHITE);
 
-  display.setCursor(0, 20);
+  display.setCursor(0, 24);
   display.print("Stok saat ini : "); display.println(qty);
 
-  display.setCursor(0, 30);
+  display.setCursor(0, 34);
   display.print("Stok minimum  : "); display.println(minStock);
 
   if (qty <= minStock) {
-    display.drawLine(0, 42, 127, 42, SSD1306_WHITE);
-    display.setCursor(14, 46); display.println("!! STOK MENIPIS !!");
-    display.setCursor(0,  56); display.println("Segera lakukan restock");
+    display.drawLine(0, 46, 127, 46, SSD1306_WHITE);
+    display.setCursor(13, 50); display.println("!! STOK MENIPIS !!");
+    display.setCursor(0,  58); display.println("Segera lakukan restock");
   } else {
-    display.setCursor(0, 44);
+    display.setCursor(0, 48);
     display.println("Stok: Aman");
   }
 
