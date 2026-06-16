@@ -79,3 +79,13 @@ Thumbs.db
 honda-dummy.json
 GM67_ESP32_BARCODESCANNER/build/
 api/__pycache__/
+
+# Jupyter auto-generated artifacts
+.ipynb_checkpoints/
+
+# Local design artifacts
+wireframe.html
+model-accuracy-export.png
+
+# Realtime Database exports
+*-rtdb-export*.json
