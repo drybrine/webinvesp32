@@ -26,7 +26,6 @@ function createNewProductDraft(barcode?: string | null): NewProductDraft {
     category: "Umum",
     quantity: 1,
     minStock: 5,
-    price: 0,
     description: "",
     location: "",
     supplier: "",
@@ -110,16 +109,11 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
 
     setIsLoading(true)
     try {
-      const unitPrice = Number(product.price) || 0
-      const totalAmount = unitPrice * quickActionAmount
-
       const transactionData = {
         type: "in" as "in" | "out" | "adjustment",
         productName: product.name,
         productBarcode: product.barcode || barcode || "",
         quantity: quickActionAmount,
-        unitPrice: unitPrice,
-        totalAmount: totalAmount,
         reason: "Stock In via Quick Action",
         operator: "ESP32 Scanner",
         notes: `Stock in via ESP32 scanner - ${isMobile ? 'Mobile' : 'Desktop'}`,
@@ -152,16 +146,11 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
 
     setIsLoading(true)
     try {
-      const unitPrice = Number(product.price) || 0
-      const totalAmount = unitPrice * quickActionAmount
-
       const transactionData = {
         type: "out" as "in" | "out" | "adjustment",
         productName: product.name,
         productBarcode: product.barcode || barcode || "",
         quantity: quickActionAmount,
-        unitPrice: unitPrice,
-        totalAmount: totalAmount,
         reason: "Stock Out via Quick Action",
         operator: "ESP32 Scanner",
         notes: `Stock out via ESP32 scanner - ${isMobile ? 'Mobile' : 'Desktop'}`,
@@ -199,7 +188,6 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         category: newProduct.category.trim() || "Umum",
         quantity: Math.max(0, Number(newProduct.quantity) || 0),
         minStock: Math.max(0, Number(newProduct.minStock) || 0),
-        price: Math.max(0, Number(newProduct.price) || 0),
         description: newProduct.description.trim(),
         location: newProduct.location.trim(),
         supplier: newProduct.supplier?.trim() || "",
@@ -216,8 +204,6 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
           productName: productData.name,
           productBarcode: productData.barcode,
           quantity: productData.quantity,
-          unitPrice: productData.price,
-          totalAmount: productData.price * productData.quantity,
           reason: "Initial Stock - New Product",
           operator: "ESP32 Scanner",
           timestamp: Date.now(),
@@ -261,11 +247,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
               Stok: {product?.quantity} unit
             </Badge>
             <Badge variant="outline" className="text-xs">
-              Harga: {new Intl.NumberFormat("id-ID", {
-                style: "currency",
-                currency: "IDR",
-                minimumFractionDigits: 0,
-              }).format(Number(product?.price) || 0)}
+              Minimum: {product?.minStock ?? 0}
             </Badge>
           </div>
         </div>
@@ -301,25 +283,6 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
           >
             <Plus className="h-4 w-4" />
           </Button>
-        </div>
-      </div>
-
-      {/* Transaction Value Preview */}
-      <div className="p-3 bg-muted/50 rounded-lg">
-        <div className="text-xs text-muted-foreground mb-1">Nilai Transaksi:</div>
-        <div className="text-sm font-semibold text-foreground">
-          {new Intl.NumberFormat("id-ID", {
-            style: "currency",
-            currency: "IDR",
-            minimumFractionDigits: 0,
-          }).format((Number(product?.price) || 0) * quickActionAmount)}
-        </div>
-        <div className="text-xs text-muted-foreground mt-1">
-          {quickActionAmount} unit × {new Intl.NumberFormat("id-ID", {
-            style: "currency",
-            currency: "IDR",
-            minimumFractionDigits: 0,
-          }).format(Number(product?.price) || 0)}
         </div>
       </div>
 
@@ -418,11 +381,11 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
             />
           </div>
           <div>
-            <Label className="text-sm font-medium">Harga</Label>
+            <Label className="text-sm font-medium">Stok Minimum</Label>
             <Input
               type="number"
-              value={newProduct.price}
-              onChange={(e) => setNewProduct(prev => ({ ...prev, price: Math.max(0, parseInt(e.target.value) || 0) }))}
+              value={newProduct.minStock}
+              onChange={(e) => setNewProduct(prev => ({ ...prev, minStock: Math.max(0, parseInt(e.target.value) || 0) }))}
               placeholder="0"
               className="h-10 text-sm"
               min="0"
@@ -442,29 +405,15 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-sm font-medium">Stok Minimum</Label>
-            <Input
-              type="number"
-              value={newProduct.minStock}
-              onChange={(e) => setNewProduct(prev => ({ ...prev, minStock: Math.max(0, parseInt(e.target.value) || 0) }))}
-              placeholder="0"
-              className="h-10 text-sm"
-              min="0"
-              disabled={isLoading}
-            />
-          </div>
-          <div>
-            <Label className="text-sm font-medium">Lokasi</Label>
-            <Input
-              value={newProduct.location}
-              onChange={(e) => setNewProduct(prev => ({ ...prev, location: e.target.value }))}
-              placeholder="Contoh: Rak A1"
-              className="h-10 text-sm"
-              disabled={isLoading}
-            />
-          </div>
+        <div>
+          <Label className="text-sm font-medium">Lokasi</Label>
+          <Input
+            value={newProduct.location}
+            onChange={(e) => setNewProduct(prev => ({ ...prev, location: e.target.value }))}
+            placeholder="Contoh: Rak A1"
+            className="h-10 text-sm"
+            disabled={isLoading}
+          />
         </div>
 
         <div>

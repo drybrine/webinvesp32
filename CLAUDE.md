@@ -20,6 +20,8 @@ npm run check-env      # validates NEXT_PUBLIC_FIREBASE_* are set
 npx tsx scripts/test-stock-prediction.ts                              # dummy dataset
 npx tsx scripts/test-stock-prediction.ts --export barcodescanesp32-default-rtdb-export.json
 npx tsc --noEmit       # type-check only (strict mode)
+npm run migrate:strip-price           # dry-run: list legacy price fields in RTDB
+npm run migrate:strip-price:apply     # actually delete them (idempotent)
 python3 api/predict.py # test Python predict serverless locally (requires requests library for HTTP mode)
 ```
 
@@ -42,12 +44,24 @@ This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sk
 - **ESP32 → Firebase**: firmware PUTs directly to `/devices/{deviceId}` (heartbeat every ~8s, includes batteryLevel/rssi) and pushes scans to `/scans/{id}`. Firmware also reads `/inventory` to display product info on its OLED.
 - **Firebase → web**: every `hooks/use-firebase.ts` hook subscribes via `onValue` — inventory, scans, devices, transactions are all reactive. No polling.
 - **Web → Firebase**: all stock changes (dashboard + ESP32 scan popup) use **atomic `adjustStock()`** — a single multi-path `update()` that writes `inventory/{id}/quantity` via server-side `increment(delta)` AND creates `transactions/{id}` in one atomic operation. This eliminates race conditions from concurrent writes (scanner + dashboard + multi-tab). Operator = `"Dashboard"` for manual, `"Scanner"` for ESP32.
-- **Unknown barcode quick add**: `components/unified-quick-action-popup.tsx` handles ESP32 scans whose barcode is not yet in `/inventory`. Keep the "Tambah Produk Baru" form aligned with the inventory schema used by Firebase/dashboard: `barcode`, `name`, `category`, `quantity`, `minStock`, `price`, optional `location`/`description`/`supplier`, and `lastUpdated`. `id`, `createdAt`, and `updatedAt` are handled by `firebaseHelpers.addInventoryItem`; record the initial stock transaction separately.
+- **Unknown barcode quick add**: `components/unified-quick-action-popup.tsx` handles ESP32 scans whose barcode is not yet in `/inventory`. Keep the "Tambah Produk Baru" form aligned with the inventory schema used by Firebase/dashboard: `barcode`, `name`, `category`, `quantity`, `minStock`, optional `location`/`description`/`supplier`, and `lastUpdated`. `id`, `createdAt`, and `updatedAt` are handled by `firebaseHelpers.addInventoryItem`; record the initial stock transaction separately. Do not reintroduce a `price` field — this project tracks warehouse sparepart stock, not retail value.
 - **Device liveness**: `hooks/use-realtime-device-status.ts` subscribes to `/devices` via `onValue`, then re-evaluates online/offline client-side every 3 seconds based on the age of `lastHeartbeat`/`lastSeen`. Threshold: 15s. There is an older `/api/check-device-status` route still present but no longer called from any hook — kept as a cron/fallback helper.
 
 ### Inventory mode is the only mode
 
 Attendance was fully removed from both web and firmware. Do not reintroduce attendance routes, scanner modes, or Firebase paths. `ScannerMode` in the firmware is a single-variant enum; `ESP32_CONFIG.MODES` in `lib/esp32-config.ts` has only `INVENTORY`.
+
+### Data model is price-free
+
+This project manages warehouse sparepart stock, not retail inventory. Price is intentionally not part of the schema:
+
+- `InventoryItem` (`hooks/use-firebase.ts`) has no `price` field.
+- `Transaction` has no `unitPrice` or `totalAmount` fields — it records stock movement (`type`, `quantity`, `reason`, `operator`, `timestamp`, optional `notes`) only.
+- Firebase security rules do not require `price` on `/inventory` (see `firebase-rules-*.json`).
+- Stats cards surface counts and units (Total Item · Total Transaksi · Stok Rendah · Scanner), never currency.
+- CSV exports from dashboard and transaksi pages do not include price/total columns.
+
+Legacy data migration: if the production database still has `price` on `/inventory/{id}` or `unitPrice`/`totalAmount` on `/transactions/{id}`, run `npm run migrate:strip-price` first (dry-run, prints counts), then `npm run migrate:strip-price:apply` (commits). The script is idempotent (sets absent keys to `null`, a no-op). The hook layer also strips these fields defensively when reading from `localStorage` cache, so old cached records will be cleaned up the next time the page loads.
 
 ### Pages and their responsibilities
 
@@ -105,6 +119,6 @@ Battery monitoring: `esp_adc_cal` eFuse Vref calibration, EMA smoothing (α=0.05
 - Prediction/forecast code uses `Math.max(0, …)` to clamp forecasts and assumes timestamps in ms.
 - All stock mutations go through `firebaseHelpers.adjustStock()` (atomic multi-path `update()` with `increment()`). Never do read-modify-write on quantity.
 - Dashboard edit item dialog can update product metadata including `minStock`. Quantity edits from that dialog must still be applied as an atomic delta through `firebaseHelpers.adjustStock()`, not by writing absolute quantity.
-- ESP32 unknown-barcode quick add should reuse `useFirebaseInventory.addItem()` and sanitize numeric fields before writing (`quantity`, `minStock`, `price` must be non-negative numbers).
+- ESP32 unknown-barcode quick add should reuse `useFirebaseInventory.addItem()` and sanitize numeric fields before writing (`quantity` and `minStock` must be non-negative numbers). Do not write a `price` field — the inventory schema is price-free.
 - Barcode rendering uses bwip-js for PDF417 (2D). Component: `components/pdf417-barcode.tsx`.
 - Anomaly detection is intentionally not surfaced in the `/prediksi` UI or chart. If `api/predict.py` returns an `anomalies` field, frontend code should ignore it unless the thesis scope changes.

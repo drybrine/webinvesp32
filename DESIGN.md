@@ -31,7 +31,7 @@ StokManager adalah sistem manajemen inventory untuk AHASS (Honda Authorized Serv
                          ▼
 ┌─────────────────────────────────────────────────────────┐
 │              Firebase Realtime Database                  │
-│  /inventory/{id}     → produk (name, qty, price, ...)   │
+│  /inventory/{id}     → produk (name, qty, category, ...)   │
 │  /devices/{id}       → status, battery, rssi, ip        │
 │  /scans/{id}         → barcode, deviceId, timestamp     │
 │  /transactions/{id}  → type, qty, operator, reason      │
@@ -153,7 +153,6 @@ GM67 scan barcode
       "category": "Oli & Pelumas",
       "quantity": 50,
       "minStock": 10,
-      "price": 45000,
       "location": "Rak A1",
       "supplier": "AHM"
     }

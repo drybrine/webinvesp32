@@ -29,8 +29,6 @@ interface Transaction {
   productName: string
   productBarcode: string
   quantity: number
-  unitPrice: number
-  totalAmount: number
   reason: string
   operator: string
   timestamp: string | number
@@ -59,7 +57,6 @@ export default function TransaksiPage() {
     productBarcode: "",
     productName: "",
     quantity: "",
-    unitPrice: "",
     reason: "",
     notes: "",
   })
@@ -120,25 +117,22 @@ export default function TransaksiPage() {
   }, [filteredTransactions, currentPage])
 
   const handleAddTransaction = async () => {
-    if (!formData.productBarcode || !formData.productName || !formData.quantity || !formData.unitPrice || !formData.reason) {
+    if (!formData.productBarcode || !formData.productName || !formData.quantity || !formData.reason) {
       toast({ title: "Error", description: "Mohon lengkapi semua field wajib.", variant: "destructive" })
       return
     }
 
     const quantityNum = Number.parseInt(formData.quantity)
-    const unitPriceNum = Number.parseFloat(formData.unitPrice)
 
-    if (isNaN(quantityNum) || isNaN(unitPriceNum)) {
-      toast({ title: "Error", description: "Jumlah dan harga harus berupa angka.", variant: "destructive" });
+    if (isNaN(quantityNum)) {
+      toast({ title: "Error", description: "Jumlah harus berupa angka.", variant: "destructive" });
       return;
     }
 
     let finalQuantity = quantityNum;
-    let totalAmount = quantityNum * unitPriceNum;
 
     if (formData.type === "out") {
       finalQuantity = -Math.abs(quantityNum);
-      totalAmount = finalQuantity * unitPriceNum;
 
       // Cek stok cukup sebelum proses
       const item = inventory.find(i => i.barcode === formData.productBarcode);
@@ -146,11 +140,8 @@ export default function TransaksiPage() {
         toast({ title: "Error", description: `Stok tidak cukup. Stok saat ini: ${item.quantity}`, variant: "destructive" });
         return;
       }
-    } else if (formData.type === "adjustment") {
-      totalAmount = finalQuantity * unitPriceNum;
     } else {
       finalQuantity = Math.abs(quantityNum);
-      totalAmount = finalQuantity * unitPriceNum;
     }
 
     const newTransactionData = {
@@ -158,8 +149,6 @@ export default function TransaksiPage() {
       productName: formData.productName,
       productBarcode: formData.productBarcode,
       quantity: finalQuantity,
-      unitPrice: unitPriceNum,
-      totalAmount: totalAmount,
       reason: formData.reason,
       operator: "Dashboard",
       notes: formData.notes,
@@ -186,7 +175,7 @@ export default function TransaksiPage() {
   }
 
   const resetForm = () => {
-    setFormData({ type: "in", productBarcode: "", productName: "", quantity: "", unitPrice: "", reason: "", notes: "" })
+    setFormData({ type: "in", productBarcode: "", productName: "", quantity: "", reason: "", notes: "" })
   }
 
   const openViewDialog = (transaction: Transaction) => {
@@ -194,9 +183,8 @@ export default function TransaksiPage() {
     setIsViewDialogOpen(true)
   }
 
-  const formatCurrency = (amount: number) => {
-    const validAmount = Number(amount) || 0;
-    return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(validAmount)
+  const formatNumber = (n: number) => {
+    return (Number(n) || 0).toLocaleString("id-ID")
   }
 
   const formatDateTime = (timestamp: string | number) => {
@@ -224,20 +212,28 @@ export default function TransaksiPage() {
     }
   }
 
-  const totalIn = useMemo(() =>
-    transactions.filter((t) => t.type === "in").reduce((sum, t) => sum + (Number(t.totalAmount) || 0), 0),
-    [transactions]
-  );
+  const totalIn = useMemo(() => {
+    const matched = transactions.filter((t) => t.type === "in");
+    return {
+      count: matched.length,
+      units: matched.reduce((sum, t) => sum + Math.abs(Number(t.quantity) || 0), 0),
+    };
+  }, [transactions]);
 
-  const totalOut = useMemo(() =>
-    transactions.filter((t) => t.type === "out").reduce((sum, t) => sum + Math.abs(Number(t.totalAmount) || 0), 0),
-    [transactions]
-  );
+  const totalOut = useMemo(() => {
+    const matched = transactions.filter((t) => t.type === "out");
+    return {
+      count: matched.length,
+      units: matched.reduce((sum, t) => sum + Math.abs(Number(t.quantity) || 0), 0),
+    };
+  }, [transactions]);
 
-  const totalAdjustment = useMemo(() =>
-    transactions.filter((t) => t.type === "adjustment").reduce((sum, t) => sum + (Number(t.totalAmount) || 0), 0),
-    [transactions]
-  );
+  const totalAdjustment = useMemo(() => {
+    const matched = transactions.filter((t) => t.type === "adjustment");
+    return {
+      count: matched.length,
+    };
+  }, [transactions]);
 
   const todayTransactionsCount = useMemo(() => {
     const today = new Date();
@@ -280,12 +276,11 @@ export default function TransaksiPage() {
       return
     }
     try {
-      const headers = ["ID", "Waktu", "Jenis", "Nama Produk", "Barcode", "Jumlah", "Harga", "Total", "Alasan", "Operator"]
+      const headers = ["ID", "Waktu", "Jenis", "Nama Produk", "Barcode", "Jumlah", "Alasan", "Operator", "Catatan"]
       const csvData = filteredTransactions.map(transaction => [
         transaction.id || '', formatDateTime(transaction.timestamp || ''), getTypeLabel(transaction.type || ''),
         transaction.productName || '', transaction.productBarcode || '', (transaction.quantity || 0).toString(),
-        (transaction.unitPrice || 0).toString(), (transaction.totalAmount || 0).toString(),
-        transaction.reason || '', transaction.operator || ''
+        transaction.reason || '', transaction.operator || '', transaction.notes || ''
       ])
       const fileName = `transaksi_${new Date().toISOString().split('T')[0]}.csv`
       downloadCsv(fileName, [headers, ...csvData])
@@ -308,21 +303,21 @@ export default function TransaksiPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
           <Card className="card-hover">
             <CardHeader className="pb-2">
-              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Masuk</CardTitle>
+              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Transaksi Masuk</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-emerald-700 tabular-nums">{formatCurrency(totalIn)}</div>
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5"><TrendingUp className="h-3 w-3" /> Semua waktu</p>
+              <div className="text-2xl font-bold text-emerald-700 tabular-nums">{totalIn.count}</div>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5"><TrendingUp className="h-3 w-3" /> {formatNumber(totalIn.units)} unit</p>
             </CardContent>
           </Card>
 
           <Card className="card-hover">
             <CardHeader className="pb-2">
-              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Keluar</CardTitle>
+              <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Transaksi Keluar</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600 tabular-nums">{formatCurrency(totalOut)}</div>
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5"><TrendingDown className="h-3 w-3" /> Semua waktu</p>
+              <div className="text-2xl font-bold text-red-600 tabular-nums">{totalOut.count}</div>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5"><TrendingDown className="h-3 w-3" /> {formatNumber(totalOut.units)} unit</p>
             </CardContent>
           </Card>
 
@@ -331,8 +326,8 @@ export default function TransaksiPage() {
               <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Penyesuaian</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-amber-600 tabular-nums">{formatCurrency(totalAdjustment)}</div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Total penyesuaian</p>
+              <div className="text-2xl font-bold text-amber-600 tabular-nums">{totalAdjustment.count}</div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Jumlah event</p>
             </CardContent>
           </Card>
 
@@ -415,17 +410,17 @@ export default function TransaksiPage() {
                             const barcode = e.target.value;
                             setFormData({ ...formData, productBarcode: barcode });
                             const item = inventory.find(i => i.barcode === barcode);
-                            if (item) { setFormData(prev => ({ ...prev, productName: item.name, unitPrice: item.price.toString() })); }
-                            else { setFormData(prev => ({ ...prev, productName: "", unitPrice: "" })); }
+                            if (item) { setFormData(prev => ({ ...prev, productName: item.name })); }
+                            else { setFormData(prev => ({ ...prev, productName: "" })); }
                           }} />
                       </div>
                       <div className="space-y-2">
                         <Label>Nama Produk</Label>
                         <Input placeholder="Nama produk" value={formData.productName} onChange={(e) => setFormData({ ...formData, productName: e.target.value })} />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>Jumlah</Label><Input type="number" placeholder="0" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: e.target.value })} /></div>
-                        <div className="space-y-2"><Label>Harga Satuan</Label><Input type="number" placeholder="0" value={formData.unitPrice} onChange={(e) => setFormData({ ...formData, unitPrice: e.target.value })} /></div>
+                      <div className="space-y-2">
+                        <Label>Jumlah</Label>
+                        <Input type="number" placeholder="0" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: e.target.value })} />
                       </div>
                       <div className="space-y-2"><Label>Alasan</Label><Input placeholder="Alasan transaksi" value={formData.reason} onChange={(e) => setFormData({ ...formData, reason: e.target.value })} /></div>
                       <div className="space-y-2"><Label>Catatan</Label><Input placeholder="Catatan (opsional)" value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} /></div>
@@ -456,7 +451,6 @@ export default function TransaksiPage() {
                     <TableHead className="w-[100px]">Jenis</TableHead>
                     <TableHead className="w-[200px]">Produk</TableHead>
                     <TableHead className="text-center w-[80px]">Jumlah</TableHead>
-                    <TableHead className="text-right w-[130px]">Total</TableHead>
                     <TableHead className="w-[100px]">Operator</TableHead>
                     <TableHead className="text-right w-[80px]">Aksi</TableHead>
                   </TableRow>
@@ -464,7 +458,7 @@ export default function TransaksiPage() {
                 <TableBody>
                   {filteredTransactions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
+                      <TableCell colSpan={6} className="text-center py-12">
                         <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
                         <p className="text-muted-foreground">Tidak ada transaksi</p>
                       </TableCell>
@@ -482,9 +476,6 @@ export default function TransaksiPage() {
                           <span className={transaction.quantity < 0 ? "text-red-600" : "text-emerald-600"}>
                             {transaction.quantity > 0 ? "+" : ""}{transaction.quantity}
                           </span>
-                        </TableCell>
-                        <TableCell className={`text-right font-medium ${transaction.totalAmount < 0 ? "text-red-600" : "text-emerald-600"}`}>
-                          {formatCurrency(transaction.totalAmount)}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           <div className="flex flex-col gap-1">
@@ -552,7 +543,6 @@ export default function TransaksiPage() {
                   <div><Label className="text-xs text-muted-foreground">Barcode</Label><p className="text-sm font-mono">{selectedTransaction.productBarcode}</p></div>
                   <div><Label className="text-xs text-muted-foreground">Stok Sekarang</Label><p>{getCurrentStock(selectedTransaction.productBarcode)}</p></div>
                   <div><Label className="text-xs text-muted-foreground">Jumlah</Label><p className={`font-semibold ${selectedTransaction.quantity < 0 ? "text-red-600" : "text-emerald-600"}`}>{selectedTransaction.quantity > 0 ? "+" : ""}{selectedTransaction.quantity} unit</p></div>
-                  <div><Label className="text-xs text-muted-foreground">Total</Label><p className={`font-semibold ${selectedTransaction.totalAmount < 0 ? "text-red-600" : "text-emerald-600"}`}>{formatCurrency(selectedTransaction.totalAmount)}</p></div>
                   <div className="col-span-2"><Label className="text-xs text-muted-foreground">Alasan</Label><p className="text-sm">{selectedTransaction.reason}</p></div>
                   {selectedTransaction.notes && <div className="col-span-2"><Label className="text-xs text-muted-foreground">Catatan</Label><p className="text-sm">{selectedTransaction.notes}</p></div>}
                 </div>

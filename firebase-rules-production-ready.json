@@ -8,7 +8,7 @@
       ".indexOn": ["barcode", "category", "name", "lastUpdated", "quantity", "minStock"],
       "$itemId": {
         ".write": "auth != null || (newData.exists() && newData.child('lastUpdated').isNumber() && newData.child('lastUpdated').val() > now - 300000)",
-        ".validate": "newData.hasChildren(['name', 'category', 'quantity', 'price', 'barcode']) && newData.child('quantity').isNumber() && newData.child('quantity').val() >= 0 && newData.child('price').isNumber() && newData.child('price').val() >= 0 && (!newData.hasChild('minStock') || (newData.child('minStock').isNumber() && newData.child('minStock').val() >= 0)) && newData.child('lastUpdated').isNumber()"
+        ".validate": "newData.hasChildren(['name', 'category', 'quantity', 'barcode']) && newData.child('quantity').isNumber() && newData.child('quantity').val() >= 0 && (!newData.hasChild('minStock') || (newData.child('minStock').isNumber() && newData.child('minStock').val() >= 0)) && newData.child('lastUpdated').isNumber()"
       }
     },
 

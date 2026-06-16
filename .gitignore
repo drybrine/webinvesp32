@@ -27,7 +27,13 @@ yarn-error.log*
 
 # Firebase service account keys (jika ada)
 *service-account*.json
-firebase-adminsdk*.json
+*firebase-adminsdk*.json
+
+# AI / agent tool directories
+.commandcode/
+.claude/
+.codex/
+.codegraph/
 
 # Performance testing
 performance-report.json

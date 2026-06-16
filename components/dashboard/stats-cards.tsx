@@ -2,7 +2,7 @@
 
 import {
   Package,
-  DollarSign,
+  Activity,
   AlertCircle,
   Smartphone,
   BatteryFull,
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils"
 
 interface StatsCardsProps {
   totalItems: number
-  totalValue: number
+  totalTransactions: number
   lowStockItems: InventoryItem[]
   inventory: InventoryItem[]
   onlineDevices: number
@@ -26,7 +26,7 @@ interface StatsCardsProps {
 
 export default function StatsCards({
   totalItems,
-  totalValue,
+  totalTransactions,
   lowStockItems,
   inventory,
   onlineDevices,
@@ -83,16 +83,14 @@ export default function StatsCards({
         <p className="text-[11px] text-muted-foreground mt-0.5">Jenis barang unik</p>
       </div>
 
-      {/* Total Value */}
+      {/* Total Transactions */}
       <div className="rounded-lg border border-border bg-card p-4 card-hover">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Nilai</span>
-          <DollarSign className="h-3.5 w-3.5 text-primary/50" />
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Transaksi</span>
+          <Activity className="h-3.5 w-3.5 text-primary/50" />
         </div>
-        <div className="text-xl font-bold text-foreground leading-tight tabular-nums">
-          Rp {totalValue.toLocaleString('id-ID')}
-        </div>
-        <p className="text-[11px] text-muted-foreground mt-0.5">Nilai inventory total</p>
+        <div className="text-3xl font-bold text-foreground tabular-nums">{totalTransactions}</div>
+        <p className="text-[11px] text-muted-foreground mt-0.5">Riwayat pergerakan stok</p>
       </div>
 
       {/* Low Stock */}

@@ -135,8 +135,6 @@ export default function InventoryTable({
                   <SelectItem value="name-desc">Nama Z-A</SelectItem>
                   <SelectItem value="quantity-asc">Stok Tertinggi</SelectItem>
                   <SelectItem value="quantity-desc">Stok Terendah</SelectItem>
-                  <SelectItem value="price-asc">Harga Terendah</SelectItem>
-                  <SelectItem value="price-desc">Harga Tertinggi</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -163,7 +161,6 @@ export default function InventoryTable({
                   <TableHead className="w-[250px]">Item</TableHead>
                   <TableHead className="w-[120px]">Kategori</TableHead>
                   <TableHead className="text-center w-[100px]">Stok</TableHead>
-                  <TableHead className="text-right w-[120px]">Harga</TableHead>
                   <TableHead className="w-[120px]">Lokasi</TableHead>
                   <TableHead className="text-right w-[180px]">Aksi</TableHead>
                 </TableRow>
@@ -171,7 +168,7 @@ export default function InventoryTable({
               <TableBody>
                 {filteredInventory.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12">
+                    <TableCell colSpan={5} className="text-center py-12">
                       <EmptyState />
                     </TableCell>
                   </TableRow>
@@ -277,8 +274,8 @@ function MobileCard({ item, onView, onEdit, onDelete, onStockAdjust }: {
       </div>
       <div className="grid grid-cols-2 gap-3 text-xs mb-3">
         <div>
-          <span className="text-muted-foreground block">Harga:</span>
-          <p className="font-medium text-foreground">Rp {item.price.toLocaleString()}</p>
+          <span className="text-muted-foreground block">Stok Minimum:</span>
+          <p className="font-medium text-foreground">{item.minStock}</p>
         </div>
         <div>
           <span className="text-muted-foreground block">Lokasi:</span>
@@ -343,7 +340,6 @@ function DesktopRow({ item, onView, onEdit, onDelete, onStockAdjust }: {
         </Badge>
         {isLowStock && <div className="text-[11px] text-muted-foreground mt-0.5">Min: {item.minStock}</div>}
       </TableCell>
-      <TableCell className="text-right font-medium text-foreground tabular-nums">Rp {item.price.toLocaleString()}</TableCell>
       <TableCell className="text-muted-foreground text-sm">{item.location || "-"}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end items-center gap-1">

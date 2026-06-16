@@ -10,7 +10,6 @@ export interface InventoryItem {
   category: string
   quantity: number
   minStock: number
-  price: number
   description: string
   location: string
   barcode?: string
@@ -49,8 +48,6 @@ interface Transaction {
   productName: string;
   productBarcode: string;
   quantity: number; // Bisa positif (in) atau negatif (out)
-  unitPrice: number;
-  totalAmount: number; // quantity * unitPrice, bisa negatif
   reason: string;
   operator: string;
   timestamp: any; // Sebaiknya number (epoch) atau string ISO
@@ -86,6 +83,16 @@ const saveToStorage = (key: string, data: any) => {
   }
 }
 
+// Strips legacy price fields from cached records (one-shot migration).
+const stripLegacyPriceFields = (records: any[] | null | undefined) => {
+  if (!records || !Array.isArray(records)) return records
+  return records.map((record) => {
+    if (!record || typeof record !== "object") return record
+    const { price, unitPrice, totalAmount, ...rest } = record
+    return rest
+  })
+}
+
 export function useFirebaseInventory() {
   const [itemsData, setItemsData] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,7 +115,7 @@ export function useFirebaseInventory() {
 
       if (!firebaseReady || !isFirebaseConfigured() || !database) {
         console.log("Firebase not available, using local storage for inventory");
-        const storedItems = getFromStorage(STORAGE_KEYS.INVENTORY);
+        const storedItems = stripLegacyPriceFields(getFromStorage(STORAGE_KEYS.INVENTORY));
         setItemsData(storedItems && storedItems.length > 0 ? storedItems : []);
         setError(null);
         setLoading(false);
@@ -492,7 +499,7 @@ export function useFirebaseTransactions(limit: number | null = 5000) {
 
       if (!firebaseReady || !isFirebaseConfigured() || !database || !dbRefs || !dbRefs.transactions) {
         console.warn("Firebase not configured or transactions ref not available for useFirebaseTransactions.");
-        const storedTransactions = getFromStorage(STORAGE_KEYS.TRANSACTIONS);
+        const storedTransactions = stripLegacyPriceFields(getFromStorage(STORAGE_KEYS.TRANSACTIONS));
         if (storedTransactions && storedTransactions.length > 0) {
           setTransactions(storedTransactions.map((t: any) => ({ ...t, timestamp: t.timestamp || Date.now() })));
         } else {

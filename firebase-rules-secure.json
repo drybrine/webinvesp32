@@ -10,7 +10,7 @@
       ".write": "auth != null",
       ".indexOn": ["barcode", "category", "name", "lastUpdated"],
       "$itemId": {
-        ".validate": "newData.hasChildren(['name', 'category', 'quantity', 'price']) && newData.child('quantity').isNumber() && newData.child('quantity').val() >= 0 && newData.child('price').isNumber() && newData.child('price').val() >= 0 && (!newData.hasChild('minStock') || (newData.child('minStock').isNumber() && newData.child('minStock').val() >= 0))"
+        ".validate": "newData.hasChildren(['name', 'category', 'quantity']) && newData.child('quantity').isNumber() && newData.child('quantity').val() >= 0 && (!newData.hasChild('minStock') || (newData.child('minStock').isNumber() && newData.child('minStock').val() >= 0))"
       }
     },
     

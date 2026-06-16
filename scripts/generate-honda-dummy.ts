@@ -36,7 +36,6 @@ interface SparePart {
   name: string
   barcode: string
   category: string
-  price: number
   initialStock: number
   avgDailyConsumption: number  // rata-rata pemakaian per hari
   reorderQty: number          // qty saat restock dari supplier
@@ -45,40 +44,40 @@ interface SparePart {
 
 const HONDA_PARTS: SparePart[] = [
   // OLI & PELUMAS (paling laku)
-  { id: "ahm-oil-spx2-08231-m99-k2lat", name: "Oli AHM SPX2 SAE 10W-30 0.8L", barcode: "8992017013015", category: "Oli & Pelumas", price: 45000, initialStock: 80, avgDailyConsumption: 4.2, reorderQty: 100, minStock: 20 },
-  { id: "ahm-oil-mpx2-08232-m99-k2lat", name: "Oli AHM MPX2 SAE 10W-30 0.8L", barcode: "8992017013022", category: "Oli & Pelumas", price: 48000, initialStock: 70, avgDailyConsumption: 3.8, reorderQty: 100, minStock: 20 },
-  { id: "ahm-gear-oil-08234", name: "Oli Gear AHM Matic 0.12L", barcode: "8992017013039", category: "Oli & Pelumas", price: 22000, initialStock: 60, avgDailyConsumption: 2.5, reorderQty: 80, minStock: 15 },
+  { id: "ahm-oil-spx2-08231-m99-k2lat", name: "Oli AHM SPX2 SAE 10W-30 0.8L", barcode: "8992017013015", category: "Oli & Pelumas", initialStock: 80, avgDailyConsumption: 4.2, reorderQty: 100, minStock: 20 },
+  { id: "ahm-oil-mpx2-08232-m99-k2lat", name: "Oli AHM MPX2 SAE 10W-30 0.8L", barcode: "8992017013022", category: "Oli & Pelumas", initialStock: 70, avgDailyConsumption: 3.8, reorderQty: 100, minStock: 20 },
+  { id: "ahm-gear-oil-08234", name: "Oli Gear AHM Matic 0.12L", barcode: "8992017013039", category: "Oli & Pelumas", initialStock: 60, avgDailyConsumption: 2.5, reorderQty: 80, minStock: 15 },
 
   // FILTER
-  { id: "filter-oli-15412-kvb-901", name: "Filter Oli 15412-KVB-901 (Beat/Vario)", barcode: "8992017020013", category: "Filter", price: 18000, initialStock: 50, avgDailyConsumption: 1.8, reorderQty: 60, minStock: 10 },
-  { id: "filter-udara-17210-kvb-900", name: "Filter Udara 17210-KVB-900 (Beat/Scoopy)", barcode: "8992017020020", category: "Filter", price: 35000, initialStock: 40, avgDailyConsumption: 1.5, reorderQty: 50, minStock: 10 },
-  { id: "filter-udara-17210-k46-n10", name: "Filter Udara 17210-K46-N10 (Vario 150)", barcode: "8992017020037", category: "Filter", price: 38000, initialStock: 35, avgDailyConsumption: 1.2, reorderQty: 50, minStock: 10 },
+  { id: "filter-oli-15412-kvb-901", name: "Filter Oli 15412-KVB-901 (Beat/Vario)", barcode: "8992017020013", category: "Filter", initialStock: 50, avgDailyConsumption: 1.8, reorderQty: 60, minStock: 10 },
+  { id: "filter-udara-17210-kvb-900", name: "Filter Udara 17210-KVB-900 (Beat/Scoopy)", barcode: "8992017020020", category: "Filter", initialStock: 40, avgDailyConsumption: 1.5, reorderQty: 50, minStock: 10 },
+  { id: "filter-udara-17210-k46-n10", name: "Filter Udara 17210-K46-N10 (Vario 150)", barcode: "8992017020037", category: "Filter", initialStock: 35, avgDailyConsumption: 1.2, reorderQty: 50, minStock: 10 },
 
   // KAMPAS REM (cepat habis)
-  { id: "kampas-rem-depan-06455-k44", name: "Kampas Rem Depan 06455-K44-V01 (Vario)", barcode: "8992017030014", category: "Rem", price: 65000, initialStock: 30, avgDailyConsumption: 1.0, reorderQty: 40, minStock: 8 },
-  { id: "kampas-rem-belakang-06435-kzr", name: "Kampas Rem Belakang 06435-KZR-601 (Beat)", barcode: "8992017030021", category: "Rem", price: 55000, initialStock: 35, avgDailyConsumption: 1.2, reorderQty: 40, minStock: 8 },
-  { id: "minyak-rem-08233-m99-k1zlt", name: "Minyak Rem AHM DOT 4 0.1L", barcode: "8992017030038", category: "Rem", price: 28000, initialStock: 45, avgDailyConsumption: 1.4, reorderQty: 60, minStock: 10 },
+  { id: "kampas-rem-depan-06455-k44", name: "Kampas Rem Depan 06455-K44-V01 (Vario)", barcode: "8992017030014", category: "Rem", initialStock: 30, avgDailyConsumption: 1.0, reorderQty: 40, minStock: 8 },
+  { id: "kampas-rem-belakang-06435-kzr", name: "Kampas Rem Belakang 06435-KZR-601 (Beat)", barcode: "8992017030021", category: "Rem", initialStock: 35, avgDailyConsumption: 1.2, reorderQty: 40, minStock: 8 },
+  { id: "minyak-rem-08233-m99-k1zlt", name: "Minyak Rem AHM DOT 4 0.1L", barcode: "8992017030038", category: "Rem", initialStock: 45, avgDailyConsumption: 1.4, reorderQty: 60, minStock: 10 },
 
   // BUSI
-  { id: "busi-cpr8ea-9-31916", name: "Busi NGK CPR8EA-9 (Beat/Vario)", barcode: "8992017040015", category: "Busi", price: 22000, initialStock: 60, avgDailyConsumption: 2.0, reorderQty: 80, minStock: 15 },
-  { id: "busi-cpr9ea-9-31917", name: "Busi NGK CPR9EA-9 (Sport)", barcode: "8992017040022", category: "Busi", price: 25000, initialStock: 40, avgDailyConsumption: 0.8, reorderQty: 50, minStock: 10 },
+  { id: "busi-cpr8ea-9-31916", name: "Busi NGK CPR8EA-9 (Beat/Vario)", barcode: "8992017040015", category: "Busi", initialStock: 60, avgDailyConsumption: 2.0, reorderQty: 80, minStock: 15 },
+  { id: "busi-cpr9ea-9-31917", name: "Busi NGK CPR9EA-9 (Sport)", barcode: "8992017040022", category: "Busi", initialStock: 40, avgDailyConsumption: 0.8, reorderQty: 50, minStock: 10 },
 
   // V-BELT (Matic)
-  { id: "vbelt-23100-k0g-901", name: "V-Belt 23100-K0G-901 (Beat/Scoopy)", barcode: "8992017050016", category: "Transmisi", price: 95000, initialStock: 25, avgDailyConsumption: 0.6, reorderQty: 30, minStock: 5 },
-  { id: "vbelt-23100-k46-n00", name: "V-Belt 23100-K46-N00 (Vario 150)", barcode: "8992017050023", category: "Transmisi", price: 105000, initialStock: 20, avgDailyConsumption: 0.5, reorderQty: 30, minStock: 5 },
-  { id: "roller-22130-k0g-901", name: "Roller Set CVT 22130-K0G-901", barcode: "8992017050030", category: "Transmisi", price: 75000, initialStock: 25, avgDailyConsumption: 0.4, reorderQty: 30, minStock: 5 },
+  { id: "vbelt-23100-k0g-901", name: "V-Belt 23100-K0G-901 (Beat/Scoopy)", barcode: "8992017050016", category: "Transmisi", initialStock: 25, avgDailyConsumption: 0.6, reorderQty: 30, minStock: 5 },
+  { id: "vbelt-23100-k46-n00", name: "V-Belt 23100-K46-N00 (Vario 150)", barcode: "8992017050023", category: "Transmisi", initialStock: 20, avgDailyConsumption: 0.5, reorderQty: 30, minStock: 5 },
+  { id: "roller-22130-k0g-901", name: "Roller Set CVT 22130-K0G-901", barcode: "8992017050030", category: "Transmisi", initialStock: 25, avgDailyConsumption: 0.4, reorderQty: 30, minStock: 5 },
 
   // BAN
-  { id: "ban-fdr-80-90-14", name: "Ban FDR 80/90-14 Sport XR Evo (Depan)", barcode: "8992017060017", category: "Ban", price: 195000, initialStock: 15, avgDailyConsumption: 0.3, reorderQty: 20, minStock: 4 },
-  { id: "ban-fdr-90-90-14", name: "Ban FDR 90/90-14 Sport XR Evo (Belakang)", barcode: "8992017060024", category: "Ban", price: 235000, initialStock: 15, avgDailyConsumption: 0.3, reorderQty: 20, minStock: 4 },
+  { id: "ban-fdr-80-90-14", name: "Ban FDR 80/90-14 Sport XR Evo (Depan)", barcode: "8992017060017", category: "Ban", initialStock: 15, avgDailyConsumption: 0.3, reorderQty: 20, minStock: 4 },
+  { id: "ban-fdr-90-90-14", name: "Ban FDR 90/90-14 Sport XR Evo (Belakang)", barcode: "8992017060024", category: "Ban", initialStock: 15, avgDailyConsumption: 0.3, reorderQty: 20, minStock: 4 },
 
   // KELISTRIKAN
-  { id: "aki-gtz5s-31500", name: "Aki GS GTZ5S MF (Beat/Vario)", barcode: "8992017070018", category: "Kelistrikan", price: 195000, initialStock: 18, avgDailyConsumption: 0.35, reorderQty: 25, minStock: 5 },
-  { id: "bohlam-h6m-12v-35w", name: "Bohlam Depan H6M 12V 35W", barcode: "8992017070025", category: "Kelistrikan", price: 28000, initialStock: 40, avgDailyConsumption: 0.7, reorderQty: 50, minStock: 10 },
+  { id: "aki-gtz5s-31500", name: "Aki GS GTZ5S MF (Beat/Vario)", barcode: "8992017070018", category: "Kelistrikan", initialStock: 18, avgDailyConsumption: 0.35, reorderQty: 25, minStock: 5 },
+  { id: "bohlam-h6m-12v-35w", name: "Bohlam Depan H6M 12V 35W", barcode: "8992017070025", category: "Kelistrikan", initialStock: 40, avgDailyConsumption: 0.7, reorderQty: 50, minStock: 10 },
 
   // KAMPAS KOPLING / GASKET
-  { id: "kampas-kopling-22535-kvg-900", name: "Kampas Kopling 22535-KVG-900 (Sport)", barcode: "8992017080019", category: "Mesin", price: 145000, initialStock: 12, avgDailyConsumption: 0.2, reorderQty: 20, minStock: 4 },
-  { id: "gasket-12251-kvb-900", name: "Gasket Cylinder Head 12251-KVB-900", barcode: "8992017080026", category: "Mesin", price: 32000, initialStock: 25, avgDailyConsumption: 0.5, reorderQty: 30, minStock: 6 },
+  { id: "kampas-kopling-22535-kvg-900", name: "Kampas Kopling 22535-KVG-900 (Sport)", barcode: "8992017080019", category: "Mesin", initialStock: 12, avgDailyConsumption: 0.2, reorderQty: 20, minStock: 4 },
+  { id: "gasket-12251-kvb-900", name: "Gasket Cylinder Head 12251-KVB-900", barcode: "8992017080026", category: "Mesin", initialStock: 25, avgDailyConsumption: 0.5, reorderQty: 30, minStock: 6 },
 ]
 
 // =============================================================================
@@ -257,7 +256,6 @@ for (const part of HONDA_PARTS) {
     name: part.name,
     barcode: part.barcode,
     category: part.category,
-    price: part.price,
     quantity: finalStock,
     minStock: part.minStock,
     lastUpdated: Date.now(),

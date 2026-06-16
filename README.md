@@ -31,7 +31,7 @@ Buka http://localhost:3000
 - Real-time barcode scanning dengan ESP32 GM67
 - CRUD produk + stock adjustment (tambah/kurangi) via dashboard
 - Edit item di dashboard dapat mengubah metadata produk termasuk `minStock` / stok minimum
-- Popup ESP32 untuk barcode belum terdaftar dapat langsung tambah produk baru dengan field inventory utama: `barcode`, `name`, `category`, `quantity`, `minStock`, `price`, dan `location`
+- Popup ESP32 untuk barcode belum terdaftar dapat langsung tambah produk baru dengan field inventory utama: `barcode`, `name`, `category`, `quantity`, `minStock`, dan `location`
 - **Atomic stock update** — server-side `increment()` + transaksi dalam satu multi-path update, anti race condition (scanner + dashboard + multi-tab tidak saling menimpa)
 - Transaksi otomatis tercatat saat stock in/out (manual maupun scanner)
 - Search, filter kategori, dan sorting inventory di dashboard
@@ -86,7 +86,7 @@ ESP32 GM67 Scanner
     ▼
 Firebase Realtime Database
     │
-    ├── /inventory/{id}       (produk: barcode, name, category, quantity, minStock, price, location, timestamps)
+    ├── /inventory/{id}       (produk: barcode, name, category, quantity, minStock, location, timestamps)
     ├── /devices/{id}         (status, lastSeen, batteryLevel, rssi, ip)
     ├── /scans/{id}           (barcode, deviceId, timestamp, processed)
     ├── /transactions/{id}    (type, qty, operator, reason, timestamp)

@@ -86,7 +86,6 @@ export default function DashboardPage() {
     category: "",
     quantity: 0,
     minStock: 5,
-    price: 0,
     supplier: "",
     location: "",
     lastUpdated: Date.now(),
@@ -128,10 +127,6 @@ export default function DashboardPage() {
           return b.quantity - a.quantity
         case "quantity-desc":
           return a.quantity - b.quantity
-        case "price-asc":
-          return a.price - b.price
-        case "price-desc":
-          return b.price - a.price
         default:
           return 0
       }
@@ -377,7 +372,7 @@ export default function DashboardPage() {
     }
     try {
       await addItem(newItem)
-      setNewItem({ barcode: "", name: "", description: "", category: "", quantity: 0, minStock: 5, price: 0, supplier: "", location: "", lastUpdated: Date.now() })
+      setNewItem({ barcode: "", name: "", description: "", category: "", quantity: 0, minStock: 5, supplier: "", location: "", lastUpdated: Date.now() })
       setIsAddItemOpen(false)
       toast({ title: "Berhasil", description: "Item berhasil ditambahkan" })
     } catch {
@@ -403,8 +398,6 @@ export default function DashboardPage() {
           productName: editingItem.name,
           productBarcode: editingItem.barcode ?? "",
           quantity: Math.abs(qtyDiff),
-          unitPrice: editingItem.price ?? 0,
-          totalAmount: (editingItem.price ?? 0) * Math.abs(qtyDiff),
           reason: "Penyesuaian via edit item",
           operator: "Dashboard",
           notes: `Penyesuaian via edit item`,
@@ -452,8 +445,6 @@ export default function DashboardPage() {
         productName: itemName,
         productBarcode: adjustedItem?.barcode ?? "",
         quantity: amount,
-        unitPrice: adjustedItem?.price ?? 0,
-        totalAmount: (adjustedItem?.price ?? 0) * amount,
         reason: type === "add" ? "Penambahan stok manual" : "Pengurangan stok manual",
         operator: "Dashboard",
         notes: `Penyesuaian stok manual`,
@@ -467,11 +458,11 @@ export default function DashboardPage() {
   }
 
   const totalItems = inventory.length
-  const totalValue = inventory.reduce((sum, item) => sum + item.quantity * item.price, 0)
+  const totalTransactions = transactions.length
   const lowStockItems = inventory.filter((item) => item.quantity <= item.minStock)
 
   const exportToCSV = () => {
-    const headers = ["ID", "Barcode", "Nama", "Deskripsi", "Kategori", "Kuantitas", "Stok Min", "Harga", "Pemasok", "Lokasi", "Update Terakhir"];
+    const headers = ["ID", "Barcode", "Nama", "Deskripsi", "Kategori", "Kuantitas", "Stok Min", "Pemasok", "Lokasi", "Update Terakhir"];
     const fileName = `inventory_${new Date().toISOString().split('T')[0]}.csv`;
     const rows = inventory.map((item) => [
       item.id,
@@ -481,7 +472,6 @@ export default function DashboardPage() {
       item.category || "",
       item.quantity,
       item.minStock,
-      item.price,
       item.supplier || "",
       item.location || "",
       item.lastUpdated ? new Date(item.lastUpdated).toLocaleString() : "",
@@ -513,7 +503,7 @@ export default function DashboardPage() {
         {/* Stats Cards */}
         <StatsCards
           totalItems={totalItems}
-          totalValue={totalValue}
+          totalTransactions={totalTransactions}
           lowStockItems={lowStockItems}
           inventory={inventory}
           onlineDevices={onlineDevices}
@@ -628,10 +618,6 @@ export default function DashboardPage() {
                 <Input id="quantity" type="number" value={newItem.quantity} onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })} className="col-span-3" />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="price" className="text-right">Harga (Rp)</Label>
-                <Input id="price" type="number" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) || 0 })} className="col-span-3" />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="location" className="text-right">Lokasi</Label>
                 <Input id="location" value={newItem.location} onChange={(e) => setNewItem({ ...newItem, location: e.target.value })} className="col-span-3" placeholder="Contoh: Rak A1" />
               </div>
@@ -671,10 +657,6 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-min-stock" className="text-right">Stok Minimum</Label>
                   <Input id="edit-min-stock" type="number" min="0" value={editingItem.minStock} onChange={(e) => setEditingItem({ ...editingItem, minStock: parseInt(e.target.value) || 0 })} className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-price" className="text-right">Harga</Label>
-                  <Input id="edit-price" type="number" value={editingItem.price} onChange={(e) => setEditingItem({ ...editingItem, price: parseFloat(e.target.value) || 0 })} className="col-span-3" />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-location" className="text-right">Lokasi</Label>
@@ -721,8 +703,8 @@ export default function DashboardPage() {
                     <p className="text-xl font-bold">{viewingItem.quantity}</p>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Harga</Label>
-                    <p className="font-semibold">Rp {viewingItem.price.toLocaleString()}</p>
+                    <Label className="text-xs text-muted-foreground">Stok Minimum</Label>
+                    <p className="font-semibold">{viewingItem.minStock}</p>
                   </div>
                 </div>
               </div>
