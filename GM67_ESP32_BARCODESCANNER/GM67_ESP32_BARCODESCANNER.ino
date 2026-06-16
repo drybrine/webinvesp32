@@ -41,7 +41,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.1"
+#define FIRMWARE_VERSION   "6.2"
 
 // --- Battery Monitoring (voltage divider R1=R2=100kΩ) ------------------------
 #define BATTERY_PIN          34
@@ -83,7 +83,7 @@ struct InventoryItem {
   String supplier;
   int    quantity;
   int    minStock;
-  float  price;
+  // price removed in v6.2 (price-free schema)
   bool   found;
 };
 
@@ -742,7 +742,6 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
         item.supplier = obj["supplier"].as<String>();
         item.quantity = obj["quantity"].as<int>();
         item.minStock = obj["minStock"].as<int>();
-        item.price    = obj["price"].as<float>();
         item.found    = true;
         Serial.printf("Item: %s | Qty: %d | MinStock: %d\n",
                       item.name.c_str(), item.quantity, item.minStock);
