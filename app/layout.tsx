@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { RealtimeScanProvider } from "@/components/realtime-scan-provider"
 import ServiceWorkerRegistration from "@/components/service-worker-registration"
 import PerformanceMonitor from "@/components/performance-monitor"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import FirebaseDeprecationSuppressor from "./firebase-deprecation-suppressor"
 import { criticalCSS } from "@/lib/critical-css"
 
@@ -92,6 +93,7 @@ export default function RootLayout({
             <main>{children}</main>
             <Toaster />
           </RealtimeScanProvider>
+        <SpeedInsights />
       </body>
     </html>
   )
