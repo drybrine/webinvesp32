@@ -1,6 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app"
 import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference, onValue, increment } from "firebase/database" // Added update, onValue, increment
-import { initializeConnectionMonitor } from "./firebase-connection-monitor"
 import { initializeFirebaseErrorHandling } from "./firebase-error-suppressor" // Use new enhanced error suppressor
 
 // Firebase configuration from environment variables
@@ -71,7 +70,6 @@ export let database: Database | null = null
 let auth: any = null // Auth will be lazy loaded
 let firebaseInitialized = false
 let connectionListenerRegistered = false
-let connectionMonitorRegistered = false
 
 // Define a type for dbRefs
 interface DbRefs {
@@ -220,17 +218,6 @@ const initializeFirebase = () => {
         }
       } catch (emulatorError) {
         console.warn("Firebase emulator connection failed:", emulatorError)
-      }
-    }
-
-    // Initialize connection monitoring for WebSocket issues (register only once)
-    if (typeof window !== "undefined" && database && !connectionMonitorRegistered) {
-      connectionMonitorRegistered = true
-      try {
-        initializeConnectionMonitor(database)
-        console.log("🔍 Firebase connection monitoring initialized")
-      } catch (monitorError) {
-        console.warn("⚠️ Could not initialize connection monitoring:", monitorError)
       }
     }
 
