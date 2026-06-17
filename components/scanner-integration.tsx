@@ -41,7 +41,7 @@ export default function ScannerIntegration() {
     if (!scannerIP) {
       toast({
         title: "Error",
-        description: "Please enter scanner IP address",
+        description: "Mohon masukkan alamat IP pemindai",
         variant: "destructive",
       })
       return
@@ -95,8 +95,8 @@ export default function ScannerIntegration() {
         wsRef.current = ws
 
         toast({
-          title: "Connected",
-          description: `Connected to scanner ${data.deviceId}`,
+          title: "Terhubung",
+          description: `Berhasil terhubung ke pemindai ${data.deviceId}`,
         })
       }
 
@@ -119,8 +119,8 @@ export default function ScannerIntegration() {
             processBarcodeScans(data.barcode)
 
             toast({
-              title: "Barcode Scanned",
-              description: `Scanned: ${data.barcode}`,
+              title: "Barcode Dipindai",
+              description: `Barcode: ${data.barcode}`,
             })
           }
         } catch (error) {
@@ -134,8 +134,8 @@ export default function ScannerIntegration() {
         wsRef.current = null
 
         toast({
-          title: "Disconnected",
-          description: "Scanner connection lost",
+          title: "Terputus",
+          description: "Koneksi pemindai terputus",
           variant: "destructive",
         })
       }
@@ -146,16 +146,16 @@ export default function ScannerIntegration() {
         setIsScanning(false)
 
         toast({
-          title: "Connection Error",
-          description: "Failed to connect to scanner",
+          title: "Kesalahan Koneksi",
+          description: "Gagal menghubungkan ke pemindai",
           variant: "destructive",
         })
       }
     } catch (error) {
       setConnectionStatus("disconnected")
       toast({
-        title: "Connection Failed",
-        description: `Cannot connect to scanner at ${scannerIP}`,
+        title: "Koneksi Gagal",
+        description: `Tidak dapat terhubung ke pemindai di ${scannerIP}`,
         variant: "destructive",
       })
     }
@@ -196,15 +196,15 @@ export default function ScannerIntegration() {
       const data = await response.json()
 
       toast({
-        title: "Test Successful",
-        description: `Scanner ${data.deviceId} is responding`,
+        title: "Tes Berhasil",
+        description: `Pemindai ${data.deviceId} merespons dengan baik`,
       })
     } catch (error) {
       toast({
-        title: "Test Failed",
-        description: error instanceof Error && error.name === 'AbortError' 
-          ? "Connection timeout - scanner not responding" 
-          : "Cannot reach scanner",
+        title: "Tes Gagal",
+        description: error instanceof Error && error.name === 'AbortError'
+          ? "Waktu koneksi habis — pemindai tidak merespons"
+          : "Tidak dapat menghubungi pemindai",
         variant: "destructive",
       })
     }
@@ -213,8 +213,8 @@ export default function ScannerIntegration() {
   const clearScanHistory = () => {
     setScans([])
     toast({
-      title: "History Cleared",
-      description: "Scan history has been cleared",
+      title: "Riwayat Dibersihkan",
+      description: "Riwayat pemindaian telah dihapus",
     })
   }
 
