@@ -95,7 +95,7 @@ export default function StatsCards({
 
       {/* Low Stock */}
       <div className={cn(
-        "rounded-lg border bg-card p-4 card-hover",
+        "rounded-lg border border-border bg-card p-4 card-hover",
         lowStockItems.length > 0 && "border-l-4 border-l-amber-400"
       )}>
         <div className="flex items-center justify-between mb-2">
@@ -112,7 +112,7 @@ export default function StatsCards({
 
       {/* Device Status */}
       <div className={cn(
-        "rounded-lg border bg-card p-4 card-hover",
+        "rounded-lg border border-border bg-card p-4 card-hover",
         hasOnlineDevices && "border-l-4 border-l-emerald-400"
       )}>
         <div className="flex items-center justify-between mb-2">
