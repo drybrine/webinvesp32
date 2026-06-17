@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { BarChart3, Receipt, Menu, X, Package, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { NotificationBell } from "@/components/notification-bell"
 
 const navigation = [
 	{ name: "Dashboard", href: "/", icon: BarChart3, key: "1" },
@@ -75,21 +76,24 @@ export default function Navigation() {
 						})}
 					</div>
 
-					{/* Mobile menu button */}
-					<div className="flex items-center md:hidden">
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-							className="p-2 rounded-md hover:bg-accent"
-							aria-label={mobileMenuOpen ? "Tutup menu" : "Buka menu"}
-						>
-							{mobileMenuOpen ? (
-								<X className="w-4 h-4" />
-							) : (
-								<Menu className="w-4 h-4" />
-							)}
-						</Button>
+					{/* Notification bell + Mobile menu button */}
+					<div className="flex items-center gap-1">
+						<NotificationBell />
+						<div className="md:hidden">
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+								className="p-2 rounded-md hover:bg-accent"
+								aria-label={mobileMenuOpen ? "Tutup menu" : "Buka menu"}
+							>
+								{mobileMenuOpen ? (
+									<X className="w-4 h-4" />
+								) : (
+									<Menu className="w-4 h-4" />
+								)}
+							</Button>
+						</div>
 					</div>
 				</div>
 			</div>

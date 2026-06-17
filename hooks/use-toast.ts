@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-const TOAST_LIMIT = 1
+const TOAST_LIMIT = 5
 const TOAST_REMOVE_DELAY = 5000 // 5 seconds
 
 type ToasterToast = {
@@ -127,11 +127,101 @@ const listeners: Array<(state: State) => void> = []
 
 let memoryState: State = { toasts: [] }
 
+export type ToastHistoryEntry = {
+  id: string
+  title?: React.ReactNode
+  description?: React.ReactNode
+  variant?: "default" | "destructive"
+  createdAt: number
+  dismissedAt: number | null
+  read: boolean
+}
+
+const HISTORY_LIMIT = 50
+const HISTORY_LISTENERS: Array<() => void> = []
+let historyMemory: ToastHistoryEntry[] = []
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function loadHistoryFromStorage(): ToastHistoryEntry[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = sessionStorage.getItem(`notification-history-${todayKey()}`)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as ToastHistoryEntry[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function persistHistory() {
+  if (typeof window === "undefined") return
+  try {
+    sessionStorage.setItem(
+      `notification-history-${todayKey()}`,
+      JSON.stringify(historyMemory),
+    )
+  } catch {
+    // ignore quota/serialization errors
+  }
+}
+
+function notifyHistoryListeners() {
+  HISTORY_LISTENERS.forEach((l) => l())
+}
+
+function recordToastAdded(toast: ToasterToast) {
+  const entry: ToastHistoryEntry = {
+    id: toast.id,
+    title: toast.title,
+    description: toast.description,
+    variant: toast.variant,
+    createdAt: Date.now(),
+    dismissedAt: null,
+    read: false,
+  }
+  historyMemory = [entry, ...historyMemory].slice(0, HISTORY_LIMIT)
+  persistHistory()
+  notifyHistoryListeners()
+}
+
+function recordToastDismissed(toastId: string | undefined) {
+  if (!toastId) return
+  const idx = historyMemory.findIndex((h) => h.id === toastId)
+  if (idx === -1) return
+  historyMemory = historyMemory.map((h) =>
+    h.id === toastId ? { ...h, dismissedAt: h.dismissedAt ?? Date.now() } : h,
+  )
+  persistHistory()
+  notifyHistoryListeners()
+}
+
+function clearHistory() {
+  historyMemory = []
+  persistHistory()
+  notifyHistoryListeners()
+}
+
+function markAllRead() {
+  historyMemory = historyMemory.map((h) => ({ ...h, read: true }))
+  persistHistory()
+  notifyHistoryListeners()
+}
+
 function dispatch(action: Action) {
   memoryState = reducer(memoryState, action)
   listeners.forEach((listener) => {
     listener(memoryState)
   })
+
+  if (action.type === "ADD_TOAST") {
+    recordToastAdded(action.toast)
+  } else if (action.type === "DISMISS_TOAST") {
+    recordToastDismissed(action.toastId)
+  }
 }
 
 type Toast = Omit<ToasterToast, "id">
@@ -194,4 +284,25 @@ function useToast() {
   }
 }
 
-export { useToast, toast }
+function useToastHistory() {
+  const [entries, setEntries] = React.useState<ToastHistoryEntry[]>(() =>
+    typeof window === "undefined" ? [] : loadHistoryFromStorage(),
+  )
+
+  React.useEffect(() => {
+    HISTORY_LISTENERS.push(() => setEntries(loadHistoryFromStorage()))
+    return () => {
+      const idx = HISTORY_LISTENERS.indexOf(setEntries as unknown as () => void)
+      if (idx > -1) HISTORY_LISTENERS.splice(idx, 1)
+    }
+  }, [])
+
+  return {
+    entries,
+    unreadCount: entries.filter((e) => !e.read).length,
+    markAllRead,
+    clearHistory,
+  }
+}
+
+export { useToast, useToastHistory, toast }
