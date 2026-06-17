@@ -37,7 +37,7 @@ Firebase Realtime Database is the only backend. All config keys are `NEXT_PUBLIC
 
 ## Architecture
 
-This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.1). The web app and the firmware share one Firebase Realtime Database.
+This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.2). The web app and the firmware share one Firebase Realtime Database.
 
 ### Data flow
 
@@ -45,7 +45,7 @@ This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sk
 - **Firebase → web**: every `hooks/use-firebase.ts` hook subscribes via `onValue` — inventory, scans, devices, transactions are all reactive. No polling.
 - **Web → Firebase**: all stock changes (dashboard + ESP32 scan popup) use **atomic `adjustStock()`** — a single multi-path `update()` that writes `inventory/{id}/quantity` via server-side `increment(delta)` AND creates `transactions/{id}` in one atomic operation. This eliminates race conditions from concurrent writes (scanner + dashboard + multi-tab). Operator = `"Dashboard"` for manual, `"Scanner"` for ESP32.
 - **Unknown barcode quick add**: `components/unified-quick-action-popup.tsx` handles ESP32 scans whose barcode is not yet in `/inventory`. Keep the "Tambah Produk Baru" form aligned with the inventory schema used by Firebase/dashboard: `barcode`, `name`, `category`, `quantity`, `minStock`, optional `location`/`description`/`supplier`, and `lastUpdated`. `id`, `createdAt`, and `updatedAt` are handled by `firebaseHelpers.addInventoryItem`; record the initial stock transaction separately. Do not reintroduce a `price` field — this project tracks warehouse sparepart stock, not retail value.
-- **Device liveness**: `hooks/use-realtime-device-status.ts` subscribes to `/devices` via `onValue`, then re-evaluates online/offline client-side every 3 seconds based on the age of `lastHeartbeat`/`lastSeen`. Threshold: 15s. There is an older `/api/check-device-status` route still present but no longer called from any hook — kept as a cron/fallback helper.
+- **Device liveness**: `hooks/use-realtime-device-status.ts` subscribes to `/devices` via `onValue`, then re-evaluates online/offline client-side every 3 seconds based on the age of `lastHeartbeat`/`lastSeen`. Threshold: 15s. The Firebase Cloud Function `functions/index.js` is the active server-side device-status sweeper (runs every 30s); no Next.js API route is involved.
 
 ### Inventory mode is the only mode
 
@@ -69,8 +69,7 @@ Legacy data migration: if the production database still has `price` on `/invento
 - `app/transaksi/page.tsx` — transaction feed, filters by type/period/**source** (Manual = operator is Dashboard/Manual/empty; legacy Admin is also treated as Manual; Scanner = anything else). Pagination 50/halaman. Export CSV.
 - `app/prediksi/page.tsx` — Simple Linear Regression prediction per item via Python serverless, detailed SVG chart in `components/prediction-chart.tsx`, model metrics (R², MAE, RMSE), forecast table, testing model panel, badge sumber model. Do not display anomaly detection in this page; it is outside the thesis scope.
 - `app/scan/page.tsx` — manual barcode input, PDF417 barcode render via bwip-js (`components/pdf417-barcode.tsx`), scan history.
-- `/api/predict` — **not a Next.js route**. `vercel.json` maps `api/predict.py` (Vercel Python function, `@vercel/python@4.3.1`, maxDuration 30s) to handle `/api/predict` directly. The frontend `fetch("/api/predict", …)` calls hit the Python handler. Supports single item and batch mode (`mode: 'batch'` for dashboard top-N risk items). There is no `app/api/predict/route.ts`.
-- `app/api/current-page/route.ts`, `/api/firebase-*`, `/api/heartbeat`, `/api/devices-status`, `/api/barcode-scan`, `/api/check-device-status` — Next.js helper endpoints for ESP32 and diagnostics (all under `app/api/**/*.ts`, maxDuration 30s).
+- `/api/predict` — **not a Next.js route**. `vercel.json` maps `api/predict.py` (Vercel Python function, `@vercel/python@4.3.1`, maxDuration 30s) to handle `/api/predict` directly. The frontend `fetch("/api/predict", …)` calls hit the Python handler. Supports single item and batch mode (`mode: 'batch'` for dashboard top-N risk items). There is no `app/api/predict/route.ts`. No other Next.js API routes exist — `app/api/` is empty. ESP32 pushes to Firebase directly; diagnostics live in `functions/index.js`.
 
 ### Prediction pipeline
 
@@ -97,7 +96,7 @@ The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/tab
 
 ### Webpack config landmines
 
-`next.config.mjs` has custom `splitChunks` with `maxSize: 50000` and `vendorSplit` that splits node_modules per-package. This previously shattered `recharts` across 7 chunks and broke cross-chunk references (`s(...) is not a function`). The fix was to render charts as hand-built SVG (`components/prediction-chart.tsx`) instead of recharts. Note: `recharts` is still in `package.json` and `components/ui/chart.tsx` (the shadcn recharts wrapper) still exists but is **not imported anywhere** — safe to ignore/remove. If you add a library with heavy internal cross-module references, test a production build, not just dev.
+`next.config.mjs` has custom `splitChunks` with `maxSize: 50000` and `vendorSplit` that splits node_modules per-package. This previously shattered `recharts` across 7 chunks and broke cross-chunk references (`s(...) is not a function`). The fix was to render charts as hand-built SVG (`components/prediction-chart.tsx`) instead of recharts. `recharts` and `components/ui/chart.tsx` (the shadcn recharts wrapper) were removed entirely. If you add a library with heavy internal cross-module references, test a production build, not just dev.
 
 ### Service worker
 
@@ -105,7 +104,7 @@ The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/tab
 
 ### Firmware notes (`GM67_ESP32_BARCODESCANNER.ino`)
 
-Single file, ~1100 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, `driver/adc` libraries. OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.1"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state (including batteryLevel, rssi) to `/devices/{deviceId}` every 8s.
+Single file, ~1100 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, `driver/adc` libraries. OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.2"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state (including batteryLevel, rssi) to `/devices/{deviceId}` every 8s.
 
 Battery monitoring: `esp_adc_cal` eFuse Vref calibration, EMA smoothing (α=0.05), hysteresis ±2%, range 3200–3800mV. Battery sampled before HTTP request to avoid WiFi voltage sag. OLED shows 4-bar battery icon + 4-bar WiFi signal icon (RSSI-based).
 
@@ -122,3 +121,13 @@ Battery monitoring: `esp_adc_cal` eFuse Vref calibration, EMA smoothing (α=0.05
 - ESP32 unknown-barcode quick add should reuse `useFirebaseInventory.addItem()` and sanitize numeric fields before writing (`quantity` and `minStock` must be non-negative numbers). Do not write a `price` field — the inventory schema is price-free.
 - Barcode rendering uses bwip-js for PDF417 (2D). Component: `components/pdf417-barcode.tsx`.
 - Anomaly detection is intentionally not surfaced in the `/prediksi` UI or chart. If `api/predict.py` returns an `anomalies` field, frontend code should ignore it unless the thesis scope changes.
+- `hooks/use-toast.ts` uses `TOAST_LIMIT = 5` (raised from 1 so loop-driven
+  stockout/battery notifications in `app/page.tsx` and device-transition
+  notifications in `hooks/use-realtime-device-status.ts` can show
+  multiple toasts in a batch). Session-scoped dedup (`sessionStorage` +
+  `previousStatusRef`) keeps repeat alerts from flooding the queue.
+- The web app has **no `app/api/*` routes**. The only API endpoint is
+  `/api/predict` served by the Vercel Python function at `api/predict.py`.
+  All Firebase writes happen client-side via `firebase/database`. The
+  Firebase Cloud Function in `functions/index.js` is the only scheduled
+  server-side task (device-status sweeper, every 30s).

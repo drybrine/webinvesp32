@@ -88,7 +88,7 @@ GND           ←   GND             GND          ← GND
 ## 4. Firmware
 
 **File**: `GM67_ESP32_BARCODESCANNER/GM67_ESP32_BARCODESCANNER.ino`  
-**Version**: 6.1
+**Version**: 6.2
 
 ### Flow Utama
 
@@ -166,7 +166,7 @@ GM67 scan barcode
       "lastSeen": 1716123456789,
       "uptime": 3600,
       "scanCount": 42,
-      "version": "6.1"
+      "version": "6.2"
     }
   },
   "scans": {
@@ -266,16 +266,11 @@ Pendekatan ini menghilangkan race condition read-modify-write: scanner, dashboar
 
 ## 7. API Routes
 
+Hanya satu endpoint API di web app: `/api/predict` (Vercel Python function di `api/predict.py`, bukan Next.js route). Semua helper endpoint lama (`barcode-scan`, `check-device-status`, `current-page`, `devices-status`, `firebase-init`, `firebase-rules`, `heartbeat`) sudah dihapus — ESP32 push langsung ke Firebase, dan device-status sweeper berjalan di `functions/index.js` (Firebase Cloud Function, scheduled setiap 30 detik).
+
 | Method | Path | Fungsi |
 |--------|------|--------|
-| POST | `/api/predict` | Python Simple Linear Regression prediction — single item atau batch (`mode: 'batch'`) |
-| POST | `/api/barcode-scan` | Process barcode scan dari ESP32 |
-| GET | `/api/devices-status` | Status semua device |
-| GET | `/api/heartbeat` | Health check |
-| POST | `/api/check-device-status` | Cek status device (legacy) |
-| GET | `/api/current-page` | ESP32 page mode detection |
-| GET | `/api/firebase-init` | Firebase config check |
-| GET | `/api/firebase-rules` | Get database rules |
+| POST | `/api/predict` | Python Simple Linear Regression prediction — single item atau batch (`mode: 'batch'`). Handler Vercel Python di `api/predict.py`; tidak ada `app/api/predict/route.ts`. |
 
 ---
 

@@ -158,7 +158,7 @@ GND           ←    GND                GND          ← GND
 
 ### Firmware
 - File: `GM67_ESP32_BARCODESCANNER/GM67_ESP32_BARCODESCANNER.ino`
-- Version: 6.1
+- Version: 6.2
 - Mode: Inventory only (single mode)
 - Heartbeat: tiap 8 detik ke Firebase `/devices/{id}`
 - Battery: `esp_adc_cal` eFuse Vref + EMA(α=0.05) + hysteresis ±2%, MIN=3200mV, MAX=3800mV
@@ -248,16 +248,13 @@ Set environment variables di Vercel Dashboard → Project Settings → Environme
 
 ## API Endpoints
 
+Hanya satu endpoint API di web app ini:
+
 | Method | Path | Fungsi |
 |--------|------|--------|
-| POST | `/api/predict` | Python Simple Linear Regression prediction — single item atau batch (`mode: 'batch'`) |
-| POST | `/api/check-device-status` | Cek status device (legacy) |
-| POST | `/api/barcode-scan` | Process barcode scan |
-| GET | `/api/devices-status` | Get all device status |
-| GET | `/api/current-page` | ESP32 page mode detection |
-| GET | `/api/firebase-init` | Firebase config check |
-| GET | `/api/firebase-rules` | Get database rules |
-| GET | `/api/heartbeat` | Health check |
+| POST | `/api/predict` | Python Simple Linear Regression prediction — single item atau batch (`mode: 'batch'`). Handler Vercel Python di `api/predict.py`; tidak ada Next.js route di `app/api/`. |
+
+Endpoint legacy (`barcode-scan`, `check-device-status`, `current-page`, `devices-status`, `firebase-init`, `firebase-rules`, `heartbeat`) sudah dihapus dari web. ESP32 push langsung ke Firebase RTDB; device-status sweeper berjalan di Firebase Cloud Function `functions/index.js` (scheduled setiap 30 detik).
 
 ## License
 
