@@ -214,16 +214,24 @@ export default function PrediksiPage() {
           <CardDescription>Pilih barang dan atur horizon prediksi</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Label htmlFor="item">Barang</Label>
             <Select value={selectedId} onValueChange={setSelectedId} disabled={loading}>
-              <SelectTrigger id="item">
+              <SelectTrigger id="item" className="min-w-0">
                 <SelectValue placeholder={loading ? "Memuat..." : "Pilih barang"} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent
+                align="start"
+                side="bottom"
+                sideOffset={4}
+                className="max-h-[min(14rem,var(--radix-select-content-available-height))] w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-2rem)]"
+              >
                 {activeInventory.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name} {item.barcode ? `— ${item.barcode}` : ""}
+                  <SelectItem key={item.id} value={item.id} title={`${item.name}${item.barcode ? ` - ${item.barcode}` : ""}`}>
+                    <span className="block min-w-0 truncate">
+                      {item.name}
+                      {item.barcode ? <span className="text-muted-foreground"> - {item.barcode}</span> : null}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
