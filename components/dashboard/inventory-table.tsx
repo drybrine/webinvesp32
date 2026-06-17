@@ -157,7 +157,7 @@ export default function InventoryTable({
           <div className="hidden sm:block">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/50">
+                <TableRow>
                   <TableHead className="w-[250px]">Item</TableHead>
                   <TableHead className="w-[120px]">Kategori</TableHead>
                   <TableHead className="text-center w-[100px]">Stok</TableHead>

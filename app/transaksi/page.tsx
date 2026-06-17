@@ -446,7 +446,7 @@ export default function TransaksiPage() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/50">
+                  <TableRow>
                     <TableHead className="w-[150px]">Waktu</TableHead>
                     <TableHead className="w-[100px]">Jenis</TableHead>
                     <TableHead className="w-[200px]">Produk</TableHead>
