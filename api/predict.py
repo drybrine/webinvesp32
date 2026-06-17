@@ -349,7 +349,11 @@ def estimate_stockout_date(model, current_quantity, base_timestamp):
     return None
 
 
-def predict_stock(series, horizon_days=14, train_ratio=0.85):
+def current_day_timestamp():
+    return int((datetime.now().timestamp() * 1000) // MS_PER_DAY) * MS_PER_DAY
+
+
+def predict_stock(series, horizon_days=14, train_ratio=0.85, now_timestamp=None):
     series = sorted(series, key=lambda point: point['timestamp'])
     if len(series) < 2:
         return {'error': 'Not enough data'}
@@ -363,12 +367,14 @@ def predict_stock(series, horizon_days=14, train_ratio=0.85):
 
     last_qty = series[-1]['quantity']
     last_ts = series[-1]['timestamp']
+    today_ts = current_day_timestamp() if now_timestamp is None else int((now_timestamp // MS_PER_DAY) * MS_PER_DAY)
+    forecast_base_ts = max(last_ts, today_ts)
     current_qty = float(last_qty)
     previous_consumption = model.get('lastConsumption', model['avgDailyConsumption'])
     forecast = []
 
     for day in range(1, horizon_days + 1):
-        ts = last_ts + day * MS_PER_DAY
+        ts = forecast_base_ts + day * MS_PER_DAY
         predicted_consumption = predict_next_consumption(model, previous_consumption)
         current_qty = max(0.0, current_qty - predicted_consumption)
         previous_consumption = predicted_consumption
@@ -401,7 +407,7 @@ def predict_stock(series, horizon_days=14, train_ratio=0.85):
             'nTest': len(test),
         },
         'forecast': forecast,
-        'stockoutDate': estimate_stockout_date(model, last_qty, last_ts),
+        'stockoutDate': estimate_stockout_date(model, last_qty, forecast_base_ts),
         'anomalies': anomalies,
     }
 

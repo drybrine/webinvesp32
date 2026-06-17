@@ -66,6 +66,10 @@ interface ConsumptionDataPoint {
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const CONSUMPTION_EMA_ALPHA = 0.05
 
+function dayTimestamp(timestamp = Date.now()): number {
+  return Math.floor(timestamp / MS_PER_DAY) * MS_PER_DAY
+}
+
 function mean(values: number[]): number {
   return values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length
 }
@@ -290,9 +294,9 @@ export function estimateStockoutDate(
  */
 export function predictStock(
   data: StockDataPoint[],
-  options: { horizonDays?: number; stepDays?: number; trainRatio?: number } = {},
+  options: { horizonDays?: number; stepDays?: number; trainRatio?: number; currentTimestamp?: number } = {},
 ): PredictionResult {
-  const { horizonDays = 14, stepDays = 1, trainRatio = 0.85 } = options
+  const { horizonDays = 14, stepDays = 1, trainRatio = 0.85, currentTimestamp = Date.now() } = options
 
   const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp)
   const { train, test } = trainTestSplit(sorted, trainRatio)
@@ -301,12 +305,13 @@ export function predictStock(
 
   const lastTimestamp = sorted[sorted.length - 1].timestamp
   const lastQuantity = sorted[sorted.length - 1].quantity
+  const forecastBaseTimestamp = Math.max(lastTimestamp, dayTimestamp(currentTimestamp))
   let currentQuantity = lastQuantity
   let previousConsumption = model.lastConsumption ?? model.avgDailyConsumption
 
   const forecast: PredictionResult["forecast"] = []
   for (let day = stepDays; day <= horizonDays; day += stepDays) {
-    const timestamp = lastTimestamp + day * MS_PER_DAY
+    const timestamp = forecastBaseTimestamp + day * MS_PER_DAY
     const dailyConsumption = predictNextConsumption(model, previousConsumption)
     currentQuantity = Math.max(0, currentQuantity - dailyConsumption * stepDays)
     previousConsumption = dailyConsumption
@@ -322,7 +327,7 @@ export function predictStock(
     model,
     metrics,
     forecast,
-    stockoutDate: estimateStockoutDate(model, lastQuantity, lastTimestamp),
+    stockoutDate: estimateStockoutDate(model, lastQuantity, forecastBaseTimestamp),
   }
 }
 
