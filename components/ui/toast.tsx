@@ -16,7 +16,7 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "fixed inset-x-0 bottom-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-2 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[min(420px,calc(100vw-2.5rem))] sm:flex-col sm:p-0",
+      "fixed inset-x-0 bottom-0 z-[100] flex max-h-screen w-full flex-col-reverse p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[min(420px,calc(100vw-2.5rem))] sm:flex-col sm:p-0",
       className
     )}
     {...props}
@@ -25,7 +25,7 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-start gap-3 overflow-hidden rounded-lg border p-4 pr-10 shadow-[0_18px_45px_-24px_rgb(0_0_0_/_0.55),0_8px_20px_-16px_rgb(0_0_0_/_0.35)] backdrop-blur-sm transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-bottom-full data-[state=open]:slide-in-from-bottom-full sm:data-[state=closed]:slide-out-to-right-full sm:data-[state=open]:slide-in-from-right-full",
+  "toast-motion group pointer-events-auto relative my-1 flex w-full items-start gap-3 overflow-hidden rounded-lg border p-4 pr-10 shadow-[0_18px_45px_-24px_rgb(0_0_0_/_0.55),0_8px_20px_-16px_rgb(0_0_0_/_0.35)] backdrop-blur-sm transition-[transform,opacity] data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none",
   {
     variants: {
       variant: {
@@ -45,9 +45,31 @@ const Toast = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
     VariantProps<typeof toastVariants>
 >(({ className, variant, ...props }, ref) => {
+  const toastRef = React.useRef<React.ElementRef<typeof ToastPrimitives.Root>>(null)
+
+  const setRefs = React.useCallback(
+    (node: React.ElementRef<typeof ToastPrimitives.Root> | null) => {
+      toastRef.current = node
+
+      if (typeof ref === "function") {
+        ref(node)
+      } else if (ref) {
+        ref.current = node
+      }
+    },
+    [ref],
+  )
+
+  React.useLayoutEffect(() => {
+    const node = toastRef.current
+    if (node?.dataset.state === "open") {
+      node.style.setProperty("--toast-height", `${node.getBoundingClientRect().height}px`)
+    }
+  })
+
   return (
     <ToastPrimitives.Root
-      ref={ref}
+      ref={setRefs}
       className={cn(toastVariants({ variant }), className)}
       {...props}
     />

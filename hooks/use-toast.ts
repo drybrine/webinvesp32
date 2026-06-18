@@ -3,7 +3,9 @@
 import * as React from "react"
 
 const TOAST_LIMIT = 5
-const TOAST_REMOVE_DELAY = 5000 // 5 seconds
+const DEFAULT_TOAST_DURATION = 5000
+const TOAST_DISMISS_GAP = 450
+const TOAST_REMOVE_DELAY = 350
 
 type ToasterToast = {
   id: string
@@ -24,10 +26,26 @@ const actionTypes = {
 } as const
 
 let count = 0
+let lastAutoDismissAt = 0
 
 function genId() {
   count = (count + 1) % Number.MAX_SAFE_INTEGER
   return count.toString()
+}
+
+function getStaggeredDuration(duration: number) {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return duration
+  }
+
+  const now = Date.now()
+  const dismissAt = Math.max(
+    now + duration,
+    lastAutoDismissAt + TOAST_DISMISS_GAP,
+  )
+
+  lastAutoDismissAt = dismissAt
+  return dismissAt - now
 }
 
 type ActionType = typeof actionTypes
@@ -228,7 +246,10 @@ type Toast = Omit<ToasterToast, "id">
 
 function toast({ ...props }: Toast) {
   const id = genId()
-  
+  const duration = getStaggeredDuration(
+    props.duration ?? DEFAULT_TOAST_DURATION,
+  )
+
   const update = (props: ToasterToast) =>
     dispatch({
       type: "UPDATE_TOAST",
@@ -242,20 +263,12 @@ function toast({ ...props }: Toast) {
       ...props,
       id,
       open: true,
-      duration: props.duration || 5000, // Default 5 seconds
+      duration,
       onOpenChange: (open: boolean) => {
         if (!open) dismiss()
       },
     },
   })
-
-  // Auto-dismiss after specified duration (default 5 seconds)
-  const duration = props.duration || 5000
-  if (duration > 0) {
-    setTimeout(() => {
-      dismiss()
-    }, duration)
-  }
 
   return {
     id: id,
