@@ -120,6 +120,9 @@ String        firebaseRefreshToken = "";
 unsigned long firebaseTokenExpiresAt = 0;
 unsigned long nextAuthRetryAt = 0;
 uint8_t       authRetryCount = 0;
+String        provisioningPin = "";
+uint8_t       provisioningFailures = 0;
+unsigned long provisioningLockedUntil = 0;
 
 std::vector<ScanData> scanHistory;
 
@@ -166,6 +169,7 @@ void          oledShowWiFiConnecting(String ssid);
 void          oledShowWiFiConnected(String ip);
 void          oledShowNoWiFi();
 void          oledShowAuthError();
+void          oledShowProvisioningPin();
 void          oledUpdateIdle();
 // -----------------------------------------------------------------------------
 
@@ -548,6 +552,19 @@ void oledShowAuthError() {
   display.setCursor(0, 52); display.println("panel admin.");
   display.display();
   lastBarcodeOnOled = millis();
+}
+
+void oledShowProvisioningPin() {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(14, 0); display.println("PROVISIONING PIN");
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  display.setTextSize(2);
+  display.setCursor(28, 23); display.println(provisioningPin);
+  display.setTextSize(1);
+  display.setCursor(10, 50); display.println("Valid sampai reboot");
+  display.display();
 }
 
 // Memperbarui tampilan idle OLED secara berkala.
@@ -1113,9 +1130,30 @@ void startWebServer() {
   server->on("/api/history", HTTP_GET,     handleApiHistory);
   server->on("/api/config",  HTTP_POST,    handleApiConfig);
   server->on("/reset",       HTTP_POST,    handleReset);
+  const char* headerKeys[] = {"X-Provisioning-Pin"};
+  server->collectHeaders(headerKeys, 1);
   server->begin();
   isServerStarted = true;
   Serial.println("Web server started: http://" + WiFi.localIP().toString());
+}
+
+bool requireProvisioningPin() {
+  if (!server) return false;
+  if ((long)(provisioningLockedUntil - millis()) > 0) {
+    server->send(429, "application/json", "{\"error\":\"Terlalu banyak percobaan. Coba lagi nanti\"}");
+    return false;
+  }
+  if (server->header("X-Provisioning-Pin") == provisioningPin) {
+    provisioningFailures = 0;
+    return true;
+  }
+  provisioningFailures++;
+  if (provisioningFailures >= 5) {
+    provisioningFailures = 0;
+    provisioningLockedUntil = millis() + 60000UL;
+  }
+  server->send(403, "application/json", "{\"error\":\"PIN provisioning tidak valid\"}");
+  return false;
 }
 
 // Mengirim halaman web sederhana untuk memantau scanner dan mengubah konfigurasi Firebase.
@@ -1183,6 +1221,8 @@ void handleRoot() {
   <input type="email" id="authEmail" autocomplete="off">
   <label>Kata Sandi Perangkat (tidak disimpan)</label>
   <input type="password" id="authPassword" autocomplete="new-password">
+  <label>PIN Provisioning (lihat OLED saat boot)</label>
+  <input type="password" id="provisioningPin" inputmode="numeric" maxlength="6" autocomplete="off">
   <button onclick="saveConfig()">Simpan Konfigurasi</button>
 </div>
 
@@ -1194,7 +1234,8 @@ void handleRoot() {
 
 <script>
 function saveConfig(){
-  fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch('/api/config',{method:'POST',
+    headers:{'Content-Type':'application/json','X-Provisioning-Pin':document.getElementById('provisioningPin').value},
     body:JSON.stringify({
       firebaseUrl:document.getElementById('fbUrl').value,
       serverUrl:document.getElementById('srvUrl').value,
@@ -1285,6 +1326,7 @@ void handleApiHistory() {
 // pernah disimpan atau dicetak; NVS hanya menyimpan refresh token.
 void handleApiConfig() {
   if (!server) return;
+  if (!requireProvisioningPin()) return;
   if (server->hasArg("plain")) {
     DynamicJsonDocument doc(1024);
     deserializeJson(doc, server->arg("plain"));
@@ -1313,6 +1355,7 @@ void handleApiConfig() {
 // Endpoint ini dipakai saat perangkat perlu dikonfigurasi ulang dari awal.
 void handleReset() {
   if (!server) return;
+  if (!requireProvisioningPin()) return;
   server->send(200,"text/plain","Resetting...");
   memset(&wifiConfig,   0, sizeof(wifiConfig));
   memset(&deviceConfig, 0, sizeof(deviceConfig));
@@ -1339,6 +1382,10 @@ void setup() {
   initOLED();
   oledShowBoot();
   delay(500);  // singkat, cukup baca "Initializing..."
+  provisioningPin = String(100000 + (esp_random() % 900000));
+  Serial.println("Provisioning PIN: " + provisioningPin);
+  oledShowProvisioningPin();
+  delay(5000);
 
   Serial.println("\nESP32 GM67 Scanner v6.3 - Inventory Only");
   Serial.println("=========================================");

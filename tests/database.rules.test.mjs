@@ -96,6 +96,12 @@ test("disabled human is denied even with a stale enabled token", async () => {
   await assertFails(get(ref(db, "inventory")))
 })
 
+test("missing or mismatched human profile is denied despite valid-looking claims", async () => {
+  await assertFails(get(ref(human("missing-user", "admin"), "inventory")))
+  await assertFails(get(ref(human("viewer-1", "admin"), "inventory")))
+  await assertSucceeds(get(ref(human("viewer-1", "viewer"), "inventory")))
+})
+
 test("operator stock and ledger update is atomic and cannot go negative", async () => {
   const db = human("operator-1", "operator")
   const now = Date.now()

@@ -39,6 +39,7 @@ function makePassword() {
 
 async function countOtherActiveAdmins(excludedUid: string) {
   const auth = getAdminAuth()
+  const profiles = (await getAdminDatabase().ref("users").get()).val() || {}
   let pageToken: string | undefined
   let count = 0
   do {
@@ -47,7 +48,9 @@ async function countOtherActiveAdmins(excludedUid: string) {
       user.uid !== excludedUid &&
       !user.disabled &&
       user.customClaims?.role === "admin" &&
-      user.customClaims?.disabled !== true,
+      user.customClaims?.disabled !== true &&
+      profiles[user.uid]?.role === "admin" &&
+      profiles[user.uid]?.disabled === false,
     ).length
     pageToken = page.pageToken
   } while (pageToken && count === 0)

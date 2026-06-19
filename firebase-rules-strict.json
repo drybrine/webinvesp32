@@ -3,58 +3,58 @@
     ".read": false,
     ".write": false,
     "inventory": {
-      ".read": "auth != null && auth.token.disabled != true && (((auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer') && root.child('users').child(auth.uid).child('disabled').val() != true) || (auth.token.device == true && auth.token.deviceId != null && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == auth.token.deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() != true))",
+      ".read": "auth != null && auth.token.disabled != true && (((auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer') && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false) || (auth.token.device == true && auth.token.deviceId != null && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == auth.token.deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false))",
       ".indexOn": ["barcode", "category", "name", "lastUpdated", "quantity", "minStock"],
       "$itemId": {
-        ".write": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).child('disabled').val() != true && (auth.token.role == 'admin' || auth.token.role == 'operator') && newData.exists()",
+        ".write": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && (auth.token.role == 'admin' || auth.token.role == 'operator') && newData.exists()",
         ".validate": "newData.hasChildren(['name', 'category', 'quantity', 'barcode', 'lastUpdated', 'operationId', 'updatedByUid']) && (!newData.hasChild('id') || newData.child('id').val() == $itemId) && newData.child('name').isString() && newData.child('category').isString() && newData.child('barcode').isString() && newData.child('quantity').isNumber() && newData.child('quantity').val() >= 0 && (!newData.hasChild('minStock') || (newData.child('minStock').isNumber() && newData.child('minStock').val() >= 0)) && newData.child('lastUpdated').isNumber() && newData.child('operationId').isString() && newData.child('operationId').val().length > 8 && newData.child('updatedByUid').val() == auth.uid && (!data.exists() || newData.child('createdAt').val() == data.child('createdAt').val())"
       }
     },
     "transactions": {
-      ".read": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).child('disabled').val() != true && (auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer')",
+      ".read": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && (auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer')",
       ".indexOn": ["timestamp", "type", "productBarcode", "operatorUid", "operationId"],
       "$transactionId": {
-        ".write": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).child('disabled').val() != true && (auth.token.role == 'admin' || auth.token.role == 'operator') && !data.exists() && newData.exists() && newData.child('operatorUid').val() == auth.uid",
+        ".write": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && (auth.token.role == 'admin' || auth.token.role == 'operator') && !data.exists() && newData.exists() && newData.child('operatorUid').val() == auth.uid",
         ".validate": "newData.hasChildren(['id', 'type', 'productName', 'productBarcode', 'quantity', 'reason', 'operator', 'operatorUid', 'operationId', 'timestamp']) && newData.child('id').val() == $transactionId && newData.child('type').val().matches(/^(in|out|adjustment)$/) && newData.child('productName').isString() && newData.child('productBarcode').isString() && newData.child('quantity').isNumber() && newData.child('quantity').val() != 0 && newData.child('reason').isString() && newData.child('operator').isString() && newData.child('operatorUid').val() == auth.uid && newData.child('operationId').isString() && newData.child('operationId').val().length > 8 && newData.child('timestamp').isNumber()"
       }
     },
     "scans": {
-      ".read": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).child('disabled').val() != true && (auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer')",
+      ".read": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && (auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer')",
       ".indexOn": ["timestamp", "deviceId", "barcode", "processed"],
       "$scanId": {
-        ".write": "auth != null && auth.token.disabled != true && ((!data.exists() && newData.exists() && ((auth.token.device == true && auth.token.deviceId == newData.child('deviceId').val() && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == auth.token.deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() != true) || ((auth.token.role == 'admin' || auth.token.role == 'operator') && root.child('users').child(auth.uid).child('disabled').val() != true && newData.child('operatorUid').val() == auth.uid))) || (data.exists() && newData.exists() && (auth.token.role == 'admin' || auth.token.role == 'operator') && root.child('users').child(auth.uid).child('disabled').val() != true && newData.child('barcode').val() == data.child('barcode').val() && newData.child('deviceId').val() == data.child('deviceId').val() && newData.child('timestamp').val() == data.child('timestamp').val() && newData.child('mode').val() == data.child('mode').val() && newData.child('type').val() == data.child('type').val()))",
+        ".write": "auth != null && auth.token.disabled != true && ((!data.exists() && newData.exists() && ((auth.token.device == true && auth.token.deviceId == newData.child('deviceId').val() && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == auth.token.deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false) || ((auth.token.role == 'admin' || auth.token.role == 'operator') && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && newData.child('operatorUid').val() == auth.uid))) || (data.exists() && newData.exists() && (auth.token.role == 'admin' || auth.token.role == 'operator') && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && newData.child('barcode').val() == data.child('barcode').val() && newData.child('deviceId').val() == data.child('deviceId').val() && newData.child('timestamp').val() == data.child('timestamp').val() && newData.child('mode').val() == data.child('mode').val() && newData.child('type').val() == data.child('type').val()))",
         ".validate": "newData.hasChildren(['barcode', 'deviceId', 'timestamp', 'mode', 'type', 'processed']) && newData.child('barcode').isString() && newData.child('deviceId').isString() && newData.child('timestamp').isNumber() && newData.child('mode').val() == 'inventory' && newData.child('type').val() == 'inventory_scan' && newData.child('processed').isBoolean()"
       }
     },
     "devices": {
-      ".read": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).child('disabled').val() != true && (auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer')",
+      ".read": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && (auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer')",
       ".indexOn": ["lastSeen", "status"],
       "$deviceId": {
-        ".write": "auth != null && auth.token.disabled != true && auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() != true && newData.exists()",
+        ".write": "auth != null && auth.token.disabled != true && auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false && newData.exists()",
         ".validate": "newData.hasChildren(['status', 'lastSeen']) && newData.child('status').val().matches(/^(online|offline)$/) && newData.child('lastSeen').isNumber() && (!newData.hasChild('ipAddress') || newData.child('ipAddress').isString())"
       }
     },
     "users": {
       "$uid": {
-        ".read": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).child('disabled').val() != true && (auth.uid == $uid || auth.token.role == 'admin')",
+        ".read": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && (auth.uid == $uid || auth.token.role == 'admin')",
         ".write": false
       }
     },
     "deviceAuth": {
-      ".read": "auth != null && auth.token.disabled != true && auth.token.role == 'admin' && root.child('users').child(auth.uid).child('disabled').val() != true",
+      ".read": "auth != null && auth.token.disabled != true && auth.token.role == 'admin' && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false",
       ".write": false
     },
     "auditLogs": {
-      ".read": "auth != null && auth.token.disabled != true && auth.token.role == 'admin' && root.child('users').child(auth.uid).child('disabled').val() != true",
+      ".read": "auth != null && auth.token.disabled != true && auth.token.role == 'admin' && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false",
       ".write": false,
       ".indexOn": ["timestamp", "actorUid", "action", "entity", "entityId", "operationId"]
     },
     "analytics": {
-      ".read": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).child('disabled').val() != true && (auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer')",
+      ".read": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && (auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer')",
       ".write": false
     },
     "settings": {
-      ".read": "auth != null && auth.token.disabled != true && auth.token.role == 'admin' && root.child('users').child(auth.uid).child('disabled').val() != true",
+      ".read": "auth != null && auth.token.disabled != true && auth.token.role == 'admin' && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false",
       ".write": false
     }
   }

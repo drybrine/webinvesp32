@@ -52,71 +52,97 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false
 
     const start = async () => {
-      for (const key of ["inventory_items", "scan_records", "device_status", "transaction_records"]) {
-        localStorage.removeItem(key)
-      }
-      await waitForFirebaseReady(10000)
-      if (cancelled) return
-
-      const auth = await getFirebaseAuth()
-      const { onIdTokenChanged } = await import("firebase/auth")
-
-      unsubscribeAuth = onIdTokenChanged(auth, async (nextUser) => {
-        unsubscribeProfile?.()
-        unsubscribeProfile = undefined
-        setUser(nextUser)
-        setProfile(null)
-        setRole(null)
-        setProfileReady(false)
-
-        if (!nextUser) {
-          setAuthReady(true)
-          setProfileReady(true)
-          return
+      try {
+        for (const key of ["inventory_items", "scan_records", "device_status", "transaction_records"]) {
+          localStorage.removeItem(key)
         }
+        await waitForFirebaseReady(10000)
+        if (cancelled) return
 
-        const token = await nextUser.getIdTokenResult()
-        const claimRole = token.claims.role
-        const nextRole: UserRole | null =
-          claimRole === "admin" || claimRole === "operator" || claimRole === "viewer"
-            ? claimRole
-            : null
+        const auth = await getFirebaseAuth()
+        const { onIdTokenChanged } = await import("firebase/auth")
 
-        setRole(nextRole)
-        setAuthReady(true)
+        unsubscribeAuth = onIdTokenChanged(auth, async (nextUser) => {
+          try {
+            unsubscribeProfile?.()
+            unsubscribeProfile = undefined
+            setUser(nextUser)
+            setProfile(null)
+            setRole(null)
+            setProfileReady(false)
 
-        if (!database) {
-          setProfileReady(true)
-          return
-        }
+            if (!nextUser) {
+              setAuthReady(true)
+              setProfileReady(true)
+              return
+            }
 
-        unsubscribeProfile = onValue(
-          ref(database, `users/${nextUser.uid}`),
-          (snapshot) => {
-            const value = snapshot.val()
-            if (!value || value.disabled === true || token.claims.disabled === true || !nextRole) {
-              setProfile(null)
+            const token = await nextUser.getIdTokenResult()
+            const claimRole = token.claims.role
+            const nextRole: UserRole | null =
+              claimRole === "admin" || claimRole === "operator" || claimRole === "viewer"
+                ? claimRole
+                : null
+
+            setRole(nextRole)
+            setAuthReady(true)
+
+            if (!database) {
+              setUser(null)
               setProfileReady(true)
               void firebaseAuth.signOut()
               return
             }
 
-            setProfile({
-              uid: nextUser.uid,
-              email: nextUser.email || value.email || "",
-              displayName: value.displayName || nextUser.displayName || nextUser.email || "",
-              role: nextRole,
-              disabled: false,
-              ...value,
-            })
-            setProfileReady(true)
-          },
-          () => {
+            unsubscribeProfile = onValue(
+              ref(database, `users/${nextUser.uid}`),
+              (snapshot) => {
+                const value = snapshot.val()
+                if (
+                  !value ||
+                  value.disabled === true ||
+                  token.claims.disabled === true ||
+                  !nextRole ||
+                  value.role !== nextRole
+                ) {
+                  setProfile(null)
+                  setProfileReady(true)
+                  void firebaseAuth.signOut()
+                  return
+                }
+
+                setProfile({
+                  ...value,
+                  uid: nextUser.uid,
+                  email: nextUser.email || value.email || "",
+                  displayName: value.displayName || nextUser.displayName || nextUser.email || "",
+                  role: nextRole,
+                  disabled: false,
+                })
+                setProfileReady(true)
+              },
+              () => {
+                setProfileReady(true)
+                void firebaseAuth.signOut()
+              },
+            )
+          } catch {
+            setUser(null)
+            setProfile(null)
+            setRole(null)
+            setAuthReady(true)
             setProfileReady(true)
             void firebaseAuth.signOut()
-          },
-        )
-      })
+          }
+        })
+      } catch {
+        if (cancelled) return
+        setUser(null)
+        setProfile(null)
+        setRole(null)
+        setAuthReady(true)
+        setProfileReady(true)
+      }
     }
 
     void start()

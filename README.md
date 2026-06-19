@@ -282,7 +282,7 @@ Semua `/api/admin/*` berjalan sebagai Vercel Functions, mewajibkan Firebase ID t
 2. Set `FIREBASE_SERVICE_ACCOUNT` pada Vercel untuk Preview dan Production, lalu deploy aplikasi.
 3. Deploy `firebase-rules-migration.json` dan jalankan bootstrap admin.
 4. Buat akun pengguna dan scanner dari panel admin; operasi admin dicatat ke `/auditLogs` oleh Vercel Functions.
-5. Flash firmware 6.3 dan lakukan provisioning email/password perangkat satu kali melalui web lokal ESP32.
+5. Flash firmware 6.3, catat PIN provisioning 6 digit di OLED saat boot, lalu masukkan PIN + email/password perangkat satu kali melalui web lokal ESP32.
 6. Verifikasi login, heartbeat, scan, role, dan audit administrasi.
 7. Jalankan workflow `Deploy Strict Firebase Rules` setelah approval environment.
 

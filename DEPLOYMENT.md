@@ -135,7 +135,7 @@ npm run bootstrap:admin -- --email=admin@example.com --password='minimum-12-char
 ```
 
 5. Deploy `firebase-rules-migration.json` lebih dulu. File ini mempertahankan akses legacy sementara firmware dimigrasikan.
-6. Login sebagai admin, daftarkan scanner di `/admin/devices`, masukkan kredensial satu kali ke halaman web lokal firmware 6.3, lalu verifikasi inventory lookup, heartbeat, scan, dan `/audit`.
+6. Login sebagai admin, daftarkan scanner di `/admin/devices`, lalu reboot scanner dan catat PIN provisioning 6 digit di OLED. Masukkan PIN + kredensial satu kali ke halaman web lokal firmware 6.3, lalu verifikasi inventory lookup, heartbeat, scan, dan `/audit`.
 7. Buat GitHub environment `firebase-production` dengan approval, Workload Identity secrets, serta `FIREBASE_PROJECT_ID` untuk deploy rules.
 8. Setelah backup RTDB dan verifikasi firmware, jalankan workflow `Deploy Strict Firebase Rules` (`firebase.strict.json`).
 
