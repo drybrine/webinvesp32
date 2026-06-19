@@ -56,8 +56,9 @@ export async function POST(request: Request) {
     const auth = getAdminAuth()
     const database = getAdminDatabase()
 
-    const existing = await database.ref("deviceAuth").orderByChild("deviceId").equalTo(deviceId).get()
-    if (existing.exists()) {
+    // ponytail: device registry is tiny; add an index/query only if it grows large.
+    const mappings = (await database.ref("deviceAuth").get()).val() || {}
+    if (Object.values(mappings).some((value) => (value as {deviceId?: unknown}).deviceId === deviceId)) {
       throw new AdminApiError("conflict", "Device ID sudah terdaftar")
     }
 
