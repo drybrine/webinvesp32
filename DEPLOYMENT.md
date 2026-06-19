@@ -120,3 +120,23 @@ Development Command: npm run dev
 
 ## 🔄 Auto-Deploy:
 Setiap push ke branch `555` akan trigger automatic deployment ke Vercel.
+
+## Security and Firebase Cutover
+
+Vercel Functions menangani operasi admin; Firebase RTDB tetap dideploy terpisah:
+
+1. Aktifkan Firebase Authentication provider Email/Password.
+2. Buat service account Firebase Admin dengan akses Auth + Realtime Database, lalu simpan JSON satu baris sebagai `FIREBASE_SERVICE_ACCOUNT` pada Vercel Preview dan Production. Jangan gunakan prefix `NEXT_PUBLIC_` dan jangan commit nilainya.
+3. Set `ALLOWED_ORIGINS` untuk endpoint Python `/api/predict`; endpoint `/api/admin/*` same-origin dan tidak memakai wildcard CORS.
+4. Deploy Vercel preview, kemudian gunakan service account yang sama atau Application Default Credentials untuk bootstrap admin:
+
+```bash
+npm run bootstrap:admin -- --email=admin@example.com --password='minimum-12-char' --name='Administrator'
+```
+
+5. Deploy `firebase-rules-migration.json` lebih dulu. File ini mempertahankan akses legacy sementara firmware dimigrasikan.
+6. Login sebagai admin, daftarkan scanner di `/admin/devices`, masukkan kredensial satu kali ke halaman web lokal firmware 6.3, lalu verifikasi inventory lookup, heartbeat, scan, dan `/audit`.
+7. Buat GitHub environment `firebase-production` dengan approval, Workload Identity secrets, serta `FIREBASE_PROJECT_ID` untuk deploy rules.
+8. Setelah backup RTDB dan verifikasi firmware, jalankan workflow `Deploy Strict Firebase Rules` (`firebase.strict.json`).
+
+Strict rules menolak anonymous access, hard-delete inventory, perubahan ledger lama, dan seluruh client write ke `/auditLogs`. Pada Firebase Spark tidak ada blocking/database-trigger Functions: aplikasi tidak menyediakan UI signup dan rules menolak akun tanpa profil + role valid, sedangkan audit server-generated mencakup operasi administrasi melalui Vercel Functions.

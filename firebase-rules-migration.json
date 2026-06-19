@@ -1,0 +1,62 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "inventory": {
+      ".read": true,
+      ".indexOn": ["barcode", "category", "name", "lastUpdated", "quantity", "minStock"],
+      "$itemId": {
+        ".write": "(auth != null && auth.token.disabled != true && (auth.token.role == 'admin' || auth.token.role == 'operator')) || (auth == null && newData.exists() && newData.child('lastUpdated').isNumber() && newData.child('lastUpdated').val() > now - 300000)",
+        ".validate": "newData.exists() && newData.hasChildren(['name', 'category', 'quantity', 'barcode', 'lastUpdated']) && newData.child('quantity').isNumber() && newData.child('quantity').val() >= 0 && (!newData.hasChild('minStock') || (newData.child('minStock').isNumber() && newData.child('minStock').val() >= 0))"
+      }
+    },
+    "transactions": {
+      ".read": true,
+      ".indexOn": ["timestamp", "type", "productBarcode", "operatorUid", "operationId"],
+      "$transactionId": {
+        ".write": "(!data.exists() && newData.exists()) && ((auth != null && auth.token.disabled != true && (auth.token.role == 'admin' || auth.token.role == 'operator') && newData.child('operatorUid').val() == auth.uid) || (auth == null && newData.child('timestamp').isNumber() && newData.child('timestamp').val() > now - 60000))",
+        ".validate": "newData.hasChildren(['type', 'productName', 'quantity', 'timestamp', 'operator']) && newData.child('type').val().matches(/^(in|out|adjustment)$/) && newData.child('quantity').isNumber() && newData.child('timestamp').isNumber()"
+      }
+    },
+    "scans": {
+      ".read": true,
+      ".indexOn": ["timestamp", "deviceId", "barcode", "processed"],
+      "$scanId": {
+        ".write": "(auth != null && auth.token.disabled != true) || (auth == null && newData.child('deviceId').val().matches(/^ESP32-[a-fA-F0-9]{8}$/))",
+        ".validate": "newData.hasChildren(['barcode', 'deviceId', 'timestamp', 'mode', 'type', 'processed']) && newData.child('timestamp').isNumber() && newData.child('mode').val() == 'inventory' && newData.child('type').val() == 'inventory_scan' && newData.child('processed').isBoolean()"
+      }
+    },
+    "devices": {
+      ".read": true,
+      ".indexOn": ["lastSeen", "status"],
+      "$deviceId": {
+        ".write": "(auth != null && auth.token.device == true && auth.token.deviceId == $deviceId) || (auth == null && $deviceId.matches(/^ESP32-[a-fA-F0-9]{8}$/))",
+        ".validate": "newData.hasChildren(['status', 'lastSeen']) && newData.child('status').val().matches(/^(online|offline)$/) && newData.child('lastSeen').isNumber()"
+      }
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || auth.token.role == 'admin')",
+        ".write": false
+      }
+    },
+    "deviceAuth": {
+      ".read": "auth != null && auth.token.role == 'admin'",
+      ".write": false
+    },
+    "auditLogs": {
+      ".read": "auth != null && auth.token.role == 'admin'",
+      ".write": false,
+      ".indexOn": ["timestamp", "actorUid", "action", "entity", "entityId", "operationId"]
+    },
+    "analytics": {
+      ".read": true,
+      ".write": false
+    },
+    "settings": {
+      ".read": "auth != null && auth.token.role == 'admin'",
+      ".write": false
+    }
+  }
+}
+

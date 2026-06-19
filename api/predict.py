@@ -13,28 +13,146 @@ variabel.
 from http.server import BaseHTTPRequestHandler
 import json
 import math
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta
 
 
 MS_PER_DAY = 86400000
 CONSUMPTION_EMA_ALPHA = 0.05
+MAX_BODY_BYTES = 1_500_000
+MAX_SINGLE_TRANSACTIONS = 10_000
+MAX_BATCH_TRANSACTIONS = 20_000
+MAX_BATCH_ITEMS = 500
+
+
+def allowed_origins():
+    origins = {
+        origin.strip()
+        for origin in os.environ.get("ALLOWED_ORIGINS", "").split(",")
+        if origin.strip()
+    }
+    for env_name in ("VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL"):
+        hostname = os.environ.get(env_name)
+        if hostname:
+            origins.add(f"https://{hostname}")
+    if os.environ.get("VERCEL_ENV") != "production":
+        origins.update({"http://localhost:3000", "http://127.0.0.1:3000"})
+    return origins
+
+
+def verify_firebase_token(authorization):
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+
+    api_key = os.environ.get("NEXT_PUBLIC_FIREBASE_API_KEY", "")
+    if not api_key:
+        return None
+
+    token = authorization[7:].strip()
+    request = urllib.request.Request(
+        f"https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={api_key}",
+        data=json.dumps({"idToken": token}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read())
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    users = payload.get("users") or []
+    if not users:
+        return None
+
+    user = users[0]
+    try:
+        claims = json.loads(user.get("customAttributes") or "{}")
+    except ValueError:
+        claims = {}
+
+    if claims.get("disabled") is True or user.get("disabled") is True:
+        return None
+    if claims.get("role") not in ("admin", "operator", "viewer"):
+        return None
+
+    uid = user.get("localId")
+    database_url = os.environ.get("NEXT_PUBLIC_FIREBASE_DATABASE_URL", "").rstrip("/")
+    if not uid or not database_url:
+        return None
+    profile_request = urllib.request.Request(
+        f"{database_url}/users/{urllib.parse.quote(uid, safe='')}/disabled.json"
+        f"?auth={urllib.parse.quote(token, safe='')}",
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(profile_request, timeout=8) as response:
+            if json.loads(response.read()) is True:
+                return None
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    return {
+        "uid": uid,
+        "email": user.get("email"),
+        "role": claims.get("role"),
+    }
+
+
+def bounded_int(value, default, minimum, maximum, field):
+    try:
+        parsed = int(value if value is not None else default)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field} tidak valid")
+    if parsed < minimum or parsed > maximum:
+        raise ValueError(f"{field} harus antara {minimum} dan {maximum}")
+    return parsed
+
+
+def bounded_float(value, default, minimum, maximum, field):
+    try:
+        parsed = float(value if value is not None else default)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field} tidak valid")
+    if parsed < minimum or parsed > maximum:
+        raise ValueError(f"{field} harus antara {minimum} dan {maximum}")
+    return parsed
 
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
+            actor = verify_firebase_token(self.headers.get("Authorization"))
+            if not actor:
+                self._send_json(401, {"error": "Token Firebase tidak valid atau kedaluwarsa"})
+                return
+
             content_length = int(self.headers.get('Content-Length', 0))
+            if content_length <= 0 or content_length > MAX_BODY_BYTES:
+                self._send_json(413, {"error": "Ukuran request melebihi batas"})
+                return
+
             body = self.rfile.read(content_length)
             data = json.loads(body)
+            if not isinstance(data, dict):
+                self._send_json(400, {"error": "Payload harus berupa object JSON"})
+                return
 
             if data.get('mode') == 'batch':
                 self._handle_batch(data)
                 return
 
             transactions = data.get('transactions', [])
+            if not isinstance(transactions, list) or len(transactions) > MAX_SINGLE_TRANSACTIONS:
+                self._send_json(400, {'error': f'Maksimal {MAX_SINGLE_TRANSACTIONS} transaksi'})
+                return
             current_quantity = data.get('currentQuantity', 0)
-            horizon_days = data.get('horizonDays', 14)
-            train_ratio = data.get('trainRatio', 0.85)
+            horizon_days = bounded_int(data.get('horizonDays'), 14, 1, 90, "horizonDays")
+            train_ratio = bounded_float(data.get('trainRatio'), 0.85, 0.5, 0.95, "trainRatio")
 
             if len(transactions) < 2:
                 self._send_json(400, {'error': 'Minimal 2 transaksi diperlukan', 'source': 'lr-consumption-py'})
@@ -48,19 +166,29 @@ class handler(BaseHTTPRequestHandler):
             result = predict_stock(series, horizon_days, train_ratio)
             self._send_json(200, result)
 
+        except json.JSONDecodeError:
+            self._send_json(400, {'error': 'JSON tidak valid', 'source': 'lr-consumption-py'})
+        except ValueError as e:
+            self._send_json(400, {'error': str(e), 'source': 'lr-consumption-py'})
         except Exception as e:
             self._send_json(500, {'error': str(e), 'source': 'lr-consumption-py'})
 
     def _handle_batch(self, data):
         items = data.get('items', [])
         transactions = data.get('transactions', [])
-        horizon_days = data.get('horizonDays', 14)
-        train_ratio = data.get('trainRatio', 0.85)
-        top_n = data.get('topN', 3)
-        recent_days = data.get('recentDays', 90)
+        horizon_days = bounded_int(data.get('horizonDays'), 14, 1, 90, "horizonDays")
+        train_ratio = bounded_float(data.get('trainRatio'), 0.85, 0.5, 0.95, "trainRatio")
+        top_n = bounded_int(data.get('topN'), 3, 1, 20, "topN")
+        recent_days = bounded_int(data.get('recentDays'), 90, 1, 3650, "recentDays")
 
-        if not items:
+        if not isinstance(items, list) or not items:
             self._send_json(400, {'error': 'No items provided', 'source': 'lr-consumption-batch'})
+            return
+        if len(items) > MAX_BATCH_ITEMS:
+            self._send_json(400, {'error': f'Maksimal {MAX_BATCH_ITEMS} item', 'source': 'lr-consumption-batch'})
+            return
+        if not isinstance(transactions, list) or len(transactions) > MAX_BATCH_TRANSACTIONS:
+            self._send_json(400, {'error': f'Maksimal {MAX_BATCH_TRANSACTIONS} transaksi', 'source': 'lr-consumption-batch'})
             return
 
         cutoff = (datetime.now().timestamp() * 1000) - recent_days * MS_PER_DAY
@@ -135,16 +263,27 @@ class handler(BaseHTTPRequestHandler):
         })
 
     def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
+        origin = self.headers.get("Origin")
+        if origin and origin not in allowed_origins():
+            self.send_response(403)
+            self.end_headers()
+            return
+        self.send_response(204)
+        if origin:
+            self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Vary', 'Origin')
         self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         self.end_headers()
 
     def _send_json(self, status, data):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
+        origin = self.headers.get("Origin")
+        if origin and origin in allowed_origins():
+            self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Vary', 'Origin')
+        self.send_header('Cache-Control', 'no-store')
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
 

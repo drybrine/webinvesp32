@@ -55,6 +55,7 @@ interface InventoryTableProps {
   onDelete: (id: string, name: string) => void
   onStockAdjust: (item: InventoryItem, type: "add" | "subtract") => void
   lowStockItems: InventoryItem[]
+  canWrite: boolean
 }
 
 export default function InventoryTable({
@@ -73,6 +74,7 @@ export default function InventoryTable({
   onDelete,
   onStockAdjust,
   lowStockItems,
+  canWrite,
 }: InventoryTableProps) {
   return (
     <>
@@ -90,10 +92,12 @@ export default function InventoryTable({
             </div>
 
             <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-3">
-              <Button onClick={onAddItem} size="sm" title="Tekan N untuk tambah item">
-                <Plus className="w-4 h-4 mr-2" />
-                Tambah Item
-              </Button>
+              {canWrite && (
+                <Button onClick={onAddItem} size="sm" title="Tekan N untuk tambah item">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Tambah Item
+                </Button>
+              )}
               <Button variant="outline" onClick={onExport} size="sm">
                 <Download className="w-4 h-4 mr-2" />
                 Export CSV
@@ -148,7 +152,7 @@ export default function InventoryTable({
               <EmptyState />
             ) : (
               filteredInventory.map((item) => (
-                <MobileCard key={item.id} item={item} onView={onView} onEdit={onEdit} onDelete={onDelete} onStockAdjust={onStockAdjust} />
+                <MobileCard key={item.id} item={item} onView={onView} onEdit={onEdit} onDelete={onDelete} onStockAdjust={onStockAdjust} canWrite={canWrite} />
               ))
             )}
           </div>
@@ -174,7 +178,7 @@ export default function InventoryTable({
                   </TableRow>
                 ) : (
                   filteredInventory.map((item) => (
-                    <DesktopRow key={item.id} item={item} onView={onView} onEdit={onEdit} onDelete={onDelete} onStockAdjust={onStockAdjust} />
+                    <DesktopRow key={item.id} item={item} onView={onView} onEdit={onEdit} onDelete={onDelete} onStockAdjust={onStockAdjust} canWrite={canWrite} />
                   ))
                 )}
               </TableBody>
@@ -246,12 +250,13 @@ function EmptyState() {
   )
 }
 
-function MobileCard({ item, onView, onEdit, onDelete, onStockAdjust }: {
+function MobileCard({ item, onView, onEdit, onDelete, onStockAdjust, canWrite }: {
   item: InventoryItem
   onView: (item: InventoryItem) => void
   onEdit: (item: InventoryItem) => void
   onDelete: (id: string, name: string) => void
   onStockAdjust: (item: InventoryItem, type: "add" | "subtract") => void
+  canWrite: boolean
 }) {
   const isLowStock = item.quantity <= item.minStock
   const isOutOfStock = item.quantity === 0
@@ -283,21 +288,21 @@ function MobileCard({ item, onView, onEdit, onDelete, onStockAdjust }: {
         </div>
       </div>
       <div className="flex flex-col gap-2 pt-2 border-t">
-        <div className="grid grid-cols-3 gap-1">
+        <div className={canWrite ? "grid grid-cols-3 gap-1" : "grid grid-cols-1 gap-1"}>
           <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={() => onView({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })}>
             <Eye className="h-3 w-3 mr-1" />
             <span className="text-xs">Lihat</span>
           </Button>
-          <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={() => onEdit({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })}>
+          {canWrite && <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={() => onEdit({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })}>
             <Edit className="h-3 w-3 mr-1" />
             <span className="text-xs">Edit</span>
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 text-destructive/70 hover:text-destructive hover:bg-destructive/5" onClick={() => onDelete(item.id, item.name)}>
+          </Button>}
+          {canWrite && <Button variant="ghost" size="sm" className="h-8 text-destructive/70 hover:text-destructive hover:bg-destructive/5" onClick={() => onDelete(item.id, item.name)}>
             <Trash2 className="h-3 w-3 mr-1" />
             <span className="text-xs">Hapus</span>
-          </Button>
+          </Button>}
         </div>
-        <div className="grid grid-cols-2 gap-1">
+        {canWrite && <div className="grid grid-cols-2 gap-1">
           <Button size="sm" variant="outline" className="h-9 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => onStockAdjust(item, "add")}>
             <Plus className="h-3 w-3 mr-1" />
             Tambah Stok
@@ -306,18 +311,19 @@ function MobileCard({ item, onView, onEdit, onDelete, onStockAdjust }: {
             <Minus className="h-3 w-3 mr-1" />
             Kurangi Stok
           </Button>
-        </div>
+        </div>}
       </div>
     </div>
   )
 }
 
-function DesktopRow({ item, onView, onEdit, onDelete, onStockAdjust }: {
+function DesktopRow({ item, onView, onEdit, onDelete, onStockAdjust, canWrite }: {
   item: InventoryItem
   onView: (item: InventoryItem) => void
   onEdit: (item: InventoryItem) => void
   onDelete: (id: string, name: string) => void
   onStockAdjust: (item: InventoryItem, type: "add" | "subtract") => void
+  canWrite: boolean
 }) {
   const isLowStock = item.quantity <= item.minStock
   const isOutOfStock = item.quantity === 0
@@ -343,24 +349,24 @@ function DesktopRow({ item, onView, onEdit, onDelete, onStockAdjust }: {
       <TableCell className="text-muted-foreground text-sm">{item.location || "-"}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-8 px-2 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" onClick={() => onStockAdjust(item, "add")} title="Tambah stok">
+          {canWrite && <Button variant="ghost" size="sm" className="h-8 px-2 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" onClick={() => onStockAdjust(item, "add")} title="Tambah stok">
             <Plus className="h-3.5 w-3.5 mr-1" />
             <span className="text-xs">Tambah</span>
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onStockAdjust(item, "subtract")} disabled={item.quantity <= 0} title="Kurangi stok">
+          </Button>}
+          {canWrite && <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onStockAdjust(item, "subtract")} disabled={item.quantity <= 0} title="Kurangi stok">
             <Minus className="h-3.5 w-3.5 mr-1" />
             <span className="text-xs">Kurangi</span>
-          </Button>
-          <div className="w-px h-4 bg-border mx-0.5" />
+          </Button>}
+          {canWrite && <div className="w-px h-4 bg-border mx-0.5" />}
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground" onClick={() => onView({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Lihat detail">
             <Eye className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground" onClick={() => onEdit({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Edit item">
+          {canWrite && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground" onClick={() => onEdit({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Edit item">
             <Edit className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive/70 hover:text-destructive hover:bg-destructive/5" onClick={() => onDelete(item.id, item.name)} title="Hapus item">
+          </Button>}
+          {canWrite && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive/70 hover:text-destructive hover:bg-destructive/5" onClick={() => onDelete(item.id, item.name)} title="Hapus item">
             <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          </Button>}
         </div>
       </TableCell>
     </TableRow>

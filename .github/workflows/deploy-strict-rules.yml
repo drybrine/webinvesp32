@@ -1,0 +1,40 @@
+name: Deploy Strict Firebase Rules
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_confirmed:
+        description: "Production RTDB backup has been completed"
+        required: true
+        type: boolean
+      scanner_63_verified:
+        description: "Firmware 6.3 authenticated scan and heartbeat verified"
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: inputs.backup_confirmed && inputs.scanner_63_verified
+    runs-on: ubuntu-latest
+    environment: firebase-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run test:rules
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_FIREBASE_SERVICE_ACCOUNT }}
+      - run: npx firebase-tools deploy --only database --config firebase.strict.json --project "${{ vars.FIREBASE_PROJECT_ID }}" --non-interactive

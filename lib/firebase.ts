@@ -312,25 +312,75 @@ export const ensureFirebaseInitialized = () => {
 // Export initialization functions for explicit control
 export { initializeFirebaseServer }
 
+export const getFirebaseApp = (): FirebaseApp => {
+  if (!app) {
+    if (typeof window === "undefined") initializeFirebaseServer()
+    else initializeFirebase()
+  }
+  if (!app) throw new Error("Firebase app not initialized")
+  return app
+}
+
 // Database references are initialized in the initializeFirebase function above
+
+const createOperationId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID()
+  return `op_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`
+}
+
+const getMutationActor = async () => {
+  const authInstance = await getFirebaseAuth()
+  const user = authInstance.currentUser
+  if (!user) throw new Error("Authentication required")
+  const token = await user.getIdTokenResult()
+  const role = token.claims.role
+  if (role !== "admin" && role !== "operator") throw new Error("Insufficient role")
+  return { uid: user.uid, role }
+}
 
 // Helper functions for common operations with error handling
 export const firebaseHelpers = {
+  createOperationId,
+  getMutationActor,
+
   // Add new inventory item
-  addInventoryItem: async (item: any) => {
+  addInventoryItem: async (item: any, source: "Dashboard" | "Scanner" = "Dashboard") => {
     if (!database || !dbRefs || !dbRefs.inventory) {
       console.error("Firebase not available or inventory ref not initialized for addInventoryItem");
       throw new Error("Firebase not available - using local storage or operation failed");
     }
 
     try {
+      const actor = await getMutationActor()
+      const operationId = createOperationId()
       const newItemRef = push(dbRefs.inventory);
-      await set(newItemRef, {
+      const updates: Record<string, unknown> = {}
+      updates[`inventory/${newItemRef.key}`] = {
         ...item,
         id: newItemRef.key, // Store the generated key as id
+        operationId,
+        updatedByUid: actor.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      }
+      const initialQuantity = Math.max(0, Number(item.quantity) || 0)
+      if (initialQuantity > 0) {
+        const newTxRef = push(dbRefs.transactions)
+        updates[`transactions/${newTxRef.key}`] = {
+          id: newTxRef.key,
+          type: "in",
+          productName: item.name,
+          productBarcode: item.barcode || "",
+          quantity: initialQuantity,
+          reason: "Stok awal produk baru",
+          operator: source,
+          operatorUid: actor.uid,
+          operationId,
+          timestamp: serverTimestamp(),
+          notes: source === "Scanner" ? "Produk dibuat dari scan ESP32" : "Produk dibuat dari dashboard",
+        }
+      }
+      await update(ref(database), updates)
       return newItemRef.key;
     } catch (error) {
       console.error("Error adding inventory item:", error);
@@ -338,15 +388,22 @@ export const firebaseHelpers = {
     }
   },
 
-  updateInventoryItem: async (id: string, updates: Partial<any>) => { // Menggunakan Partial<InventoryItem> jika interface InventoryItem tersedia di sini
+  updateInventoryItem: async (
+    id: string,
+    updates: Partial<any>,
+    operationId = createOperationId(),
+  ) => { // Menggunakan Partial<InventoryItem> jika interface InventoryItem tersedia di sini
     if (!database) {
       console.error("Firebase database not available for updateInventoryItem");
       throw new Error("Firebase not available - operation failed");
     }
     try {
+      const actor = await getMutationActor()
       const itemRef = ref(database, `inventory/${id}`);
       await update(itemRef, {
         ...updates,
+        operationId,
+        updatedByUid: actor.uid,
         lastUpdated: Date.now(),  // rules check lastUpdated, not updatedAt
         updatedAt: serverTimestamp(),
       });
@@ -364,6 +421,7 @@ export const firebaseHelpers = {
     itemId: string,
     delta: number,
     transactionData?: Record<string, any>,
+    suppliedOperationId?: string,
   ) => {
     if (!Number.isFinite(delta) || delta === 0) {
       throw new Error("Invalid stock adjustment delta");
@@ -373,8 +431,12 @@ export const firebaseHelpers = {
       throw new Error("Firebase not available - operation failed");
     }
     try {
+      const actor = await getMutationActor()
+      const operationId = suppliedOperationId || createOperationId()
       const updates: Record<string, any> = {
         [`inventory/${itemId}/quantity`]: increment(delta),
+        [`inventory/${itemId}/operationId`]: operationId,
+        [`inventory/${itemId}/updatedByUid`]: actor.uid,
         [`inventory/${itemId}/lastUpdated`]: Date.now(),
         [`inventory/${itemId}/updatedAt`]: serverTimestamp(),
       };
@@ -384,6 +446,8 @@ export const firebaseHelpers = {
         updates[`transactions/${newTxRef.key}`] = {
           ...transactionData,
           id: newTxRef.key,
+          operationId,
+          operatorUid: actor.uid,
           timestamp: serverTimestamp(),
         };
       }
@@ -404,6 +468,7 @@ export const firebaseHelpers = {
     }
 
     try {
+      const actor = await getMutationActor()
       const newScanRef = push(dbRefs.scans);
       
       // Create data structure matching ESP32 .ino exactly
@@ -415,6 +480,7 @@ export const firebaseHelpers = {
         location: scanData.location || "Warehouse-Scanner", // Match ESP32 default location
         mode: scanData.mode || "inventory", // Match ESP32 default mode
         type: scanData.type || "inventory_scan", // Match ESP32 default type
+        operatorUid: actor.uid,
       };
       
       await set(newScanRef, esp32CompatibleData);
@@ -424,6 +490,18 @@ export const firebaseHelpers = {
       console.error("Error adding scan record:", error);
       throw error;
     }
+  },
+
+  markScanProcessed: async (scanId: string, processedData: Record<string, unknown> = {}) => {
+    if (!database) throw new Error("Firebase not available - operation failed")
+    const actor = await getMutationActor()
+    await update(ref(database, `scans/${scanId}`), {
+      ...processedData,
+      processed: true,
+      processedAt: serverTimestamp(),
+      processedByUid: actor.uid,
+      operationId: createOperationId(),
+    })
   },
 
   // Update device status
@@ -473,10 +551,13 @@ export const firebaseHelpers = {
       throw new Error("Firebase not available - operation failed");
     }
     try {
+      const actor = await getMutationActor()
       const newTransactionRef = push(dbRefs.transactions);
       await set(newTransactionRef, {
         ...transactionData,
         id: newTransactionRef.key, // Simpan ID yang digenerate Firebase
+        operationId: createOperationId(),
+        operatorUid: actor.uid,
         timestamp: serverTimestamp(),
       });
       return newTransactionRef.key;
@@ -568,15 +649,18 @@ export const getFirebaseStatus = () => {
 
 // Lazy load Firebase Auth only when needed (saves ~55KB)
 export const getFirebaseAuth = async () => {
-  if (!app) {
-    throw new Error("Firebase app not initialized");
-  }
+  if (!app) initializeFirebase()
+  if (!app) throw new Error("Firebase app not initialized")
   
   if (!auth) {
-    // Dynamically import Firebase Auth only when needed
-    const { getAuth: getAuthModule } = await import("firebase/auth");
-    auth = getAuthModule(app);
-    console.log("🔐 Firebase Auth loaded on demand");
+    const {
+      browserLocalPersistence,
+      getAuth: getAuthModule,
+      setPersistence,
+    } = await import("firebase/auth")
+    auth = getAuthModule(app)
+    await setPersistence(auth, browserLocalPersistence)
+    console.log("🔐 Firebase Auth loaded with persistent session")
   }
   
   return auth;
@@ -584,11 +668,16 @@ export const getFirebaseAuth = async () => {
 
 // Export auth functions that lazy-load the auth module
 export const firebaseAuth = {
-  // Sign in function (example)
   signIn: async (email: string, password: string) => {
     const authInstance = await getFirebaseAuth();
     const { signInWithEmailAndPassword } = await import("firebase/auth");
     return signInWithEmailAndPassword(authInstance, email, password);
+  },
+
+  sendPasswordReset: async (email: string) => {
+    const authInstance = await getFirebaseAuth()
+    const { sendPasswordResetEmail } = await import("firebase/auth")
+    return sendPasswordResetEmail(authInstance, email)
   },
   
   // Sign out function (example)

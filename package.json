@@ -8,8 +8,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:rules": "firebase emulators:exec --only database --config firebase.strict.json --project demo-stokmanager-test \"node --test tests/database.rules.test.mjs\"",
+    "test:rules:raw": "node --test tests/database.rules.test.mjs",
+    "test:predict": "python3 -m unittest tests/test_predict_api.py",
     "migrate:strip-price": "node scripts/migrate-strip-price.mjs",
-    "migrate:strip-price:apply": "node scripts/migrate-strip-price.mjs --apply"
+    "migrate:strip-price:apply": "node scripts/migrate-strip-price.mjs --apply",
+    "bootstrap:admin": "node scripts/bootstrap-admin.mjs"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "1.1.4",
@@ -24,15 +29,16 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "firebase": "^11.10.0",
+    "firebase-admin": "^13.10.0",
     "lucide-react": "^0.454.0",
-    "next": "^16.2.6",
+    "next": "^16.2.9",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7",
-    "vercel": "^44.6.4"
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
     "@types/node": "^22.15.29",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
@@ -40,9 +46,16 @@
     "@typescript-eslint/parser": "^8.35.1",
     "eslint": "9.30.0",
     "eslint-config-next": "^16.2.6",
-    "firebase-admin": "^13.0.0",
-    "postcss": "^8.5.4",
+    "firebase-tools": "^15.21.0",
+    "postcss": "^8.5.15",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3"
+  },
+  "overrides": {
+    "@grpc/grpc-js@<=1.9.15": "1.14.4",
+    "brace-expansion@2.0.0 - 2.0.2": "2.0.3",
+    "minimatch@9.0.0 - 9.0.6": "9.0.7",
+    "picomatch@<=2.3.1": "2.3.2",
+    "postcss@<8.5.10": "8.5.15"
   }
 }

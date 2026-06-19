@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, type InventoryItem } from "@/hooks/use-firebase"
 import { firebaseHelpers } from "@/lib/firebase"
 import { Package, Plus, Minus, Zap, AlertTriangle, PackageOpen, X } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
+import { canWrite } from "@/types/security"
 
 interface UnifiedQuickActionPopupProps {
   barcode: string | null
@@ -33,6 +35,8 @@ function createNewProductDraft(barcode?: string | null): NewProductDraft {
 }
 
 export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQuickActionPopupProps) {
+  const { role } = useAuth()
+  const writable = canWrite(role)
   const { items, addItem } = useFirebaseInventory()
   const { toast } = useToast()
   const [product, setProduct] = useState<InventoryItem | null>(null)
@@ -195,23 +199,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         lastUpdated: Date.now(),
       }
 
-      await addItem(productData)
-
-      // Record transaction for initial stock
-      if (productData.quantity > 0) {
-        const transactionData = {
-          type: "in" as "in" | "out" | "adjustment",
-          productName: productData.name,
-          productBarcode: productData.barcode,
-          quantity: productData.quantity,
-          reason: "Initial Stock - New Product",
-          operator: "ESP32 Scanner",
-          timestamp: Date.now(),
-          notes: `New product added via ESP32 scanner - ${isMobile ? 'Mobile' : 'Desktop'}`,
-        }
-
-        await firebaseHelpers.addTransaction(transactionData)
-      }
+      await addItem(productData, "Scanner")
 
       toast({
         title: "Produk ditambahkan",
@@ -287,7 +275,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
       </div>
 
       {/* Action Buttons */}
-      <div className="grid grid-cols-2 gap-3 pt-2">
+      {writable && <div className="grid grid-cols-2 gap-3 pt-2">
         <Button 
           onClick={handleStockIn} 
           disabled={isLoading}
@@ -312,7 +300,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
           )}
           Stock Out
         </Button>
-      </div>
+      </div>}
 
       {/* Stock Warning */}
       {product && product.quantity < quickActionAmount && (
@@ -339,6 +327,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         </div>
       </div>
 
+      {!writable && <div className="text-sm text-muted-foreground text-center">Akun viewer hanya dapat melihat data scan.</div>}
       {/* Add New Product Form */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">

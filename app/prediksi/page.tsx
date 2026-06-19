@@ -29,6 +29,7 @@ import {
   type PredictionResult,
 } from "@/lib/stock-prediction"
 import PredictionChart from "@/components/prediction-chart"
+import { useAuth } from "@/components/auth-provider"
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
@@ -40,6 +41,7 @@ function fmt(ts: number): string {
 }
 
 export default function PrediksiPage() {
+  const { getIdToken } = useAuth()
   const { items: inventory, loading: inventoryLoading } = useFirebaseInventory()
   const { transactions, loading: txLoading } = useFirebaseTransactions(null)
 
@@ -95,9 +97,10 @@ export default function PrediksiPage() {
     const fetchFromAPI = async () => {
       setPredictionError(null)
       try {
+        const token = await getIdToken()
         const res = await fetch("/api/predict", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             transactions: itemTx,
             currentQuantity: Number(selectedItem.quantity) || 0,
@@ -145,7 +148,7 @@ export default function PrediksiPage() {
 
     fetchFromAPI()
     return () => controller.abort()
-  }, [history, horizonDays, trainRatio, selectedItem, transactions])
+  }, [getIdToken, history, horizonDays, trainRatio, selectedItem, transactions])
 
   const chartData = useMemo(() => {
     if (!prediction || history.length === 0) return []

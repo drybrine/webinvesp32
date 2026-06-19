@@ -2,14 +2,14 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Plus_Jakarta_Sans } from "next/font/google"
 import "./globals.css"
-import Navigation from "@/components/navigation"
 import { Toaster } from "@/components/ui/toaster"
-import { RealtimeScanProvider } from "@/components/realtime-scan-provider"
 import ServiceWorkerRegistration from "@/components/service-worker-registration"
 import PerformanceMonitor from "@/components/performance-monitor"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import FirebaseDeprecationSuppressor from "./firebase-deprecation-suppressor"
 import { criticalCSS } from "@/lib/critical-css"
+import { AuthProvider } from "@/components/auth-provider"
+import { AppShell } from "@/components/app-shell"
 
 // Optimized font loading
 const jakarta = Plus_Jakarta_Sans({
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   authors: [{ name: "StokManager Team" }],
   creator: "StokManager",
   publisher: "StokManager",
-  robots: "index, follow",
+  robots: "noindex, nofollow",
   openGraph: {
     title: "StokManager - Sistem Manajemen Inventory",
     description: "Pemindai barcode real-time dengan integrasi ESP32",
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: "StokManager - Sistem Manajemen Inventory",
     description: "Pemindai barcode real-time dengan integrasi ESP32",
   },
-  metadataBase: new URL('https://stokmanager.netlify.app'),
+  metadataBase: new URL('https://stokmanager.app'),
 }
 
 export const viewport = {
@@ -88,11 +88,10 @@ export default function RootLayout({
         <FirebaseDeprecationSuppressor />
         <ServiceWorkerRegistration />
         {process.env.NODE_ENV === 'production' && <PerformanceMonitor />}
-        <RealtimeScanProvider>
-            <Navigation />
-            <main>{children}</main>
-            <Toaster />
-          </RealtimeScanProvider>
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+          <Toaster />
+        </AuthProvider>
         <SpeedInsights />
       </body>
     </html>

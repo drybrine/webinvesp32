@@ -2,18 +2,22 @@
 
 import React, { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
-import { limitToLast, off, onValue, orderByChild, query, ref, update } from "firebase/database"
-import { database, isFirebaseConfigured } from "@/lib/firebase"
+import { limitToLast, off, onValue, orderByChild, query, ref } from "firebase/database"
+import { database, firebaseHelpers, isFirebaseConfigured } from "@/lib/firebase"
 import { ESP32_CONFIG, ESP32_HELPERS } from "@/lib/esp32-config"
 import { UnifiedQuickActionPopup } from "./unified-quick-action-popup"
 import { RealtimeScanContext, type RealtimeScanContextType } from "@/hooks/use-realtime-scan"
 import { logger } from "@/lib/logger"
+import { useAuth } from "@/components/auth-provider"
+import { canWrite } from "@/types/security"
 
 interface RealtimeScanProviderProps {
   children: React.ReactNode
 }
 
 export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
+  const { role } = useAuth()
+  const writable = canWrite(role)
   const pathname = usePathname()
   const [isScanning, setIsScanning] = useState(false)
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null)
@@ -227,6 +231,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
           // Only trigger if this is a NEW scan ID that we haven't processed yet
           const shouldTriggerPopup = (
             isESP32Device && 
+            writable &&
             !latestScan.processed && 
             latestScan.id !== lastProcessedScanId &&
             isScanFromInventoryMode
@@ -318,7 +323,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
         cleanup()
       }
     }
-  }, [lastScannedBarcode, lastProcessedScanId, isPopupDisabled, pathname, isMobile, popupsGloballyDisabled])
+  }, [lastScannedBarcode, lastProcessedScanId, isPopupDisabled, pathname, isMobile, popupsGloballyDisabled, writable])
 
   const disablePopupsGlobally = () => {
     setPopupsGloballyDisabled(true)
@@ -331,10 +336,9 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
     logger.info('Closing ESP32 popup - Mobile:', isMobile)
     
     // Mark scan as processed in Firebase
-    if (lastProcessedScanId && database) {
+    if (writable && lastProcessedScanId && database) {
       try {
-        const scanRef = ref(database, `scans/${lastProcessedScanId}`)
-        await update(scanRef, { processed: true })
+        await firebaseHelpers.markScanProcessed(lastProcessedScanId)
         console.log('✅ Marked scan as processed in Firebase:', lastProcessedScanId)
       } catch (error) {
         console.error('❌ Error updating scan processed status:', error)

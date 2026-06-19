@@ -11,6 +11,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <EEPROM.h>
+#include <Preferences.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <time.h>
@@ -41,7 +42,9 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.2"
+#define FIRMWARE_VERSION   "6.3"
+#define AUTH_REFRESH_MARGIN_MS 300000UL
+#define AUTH_MAX_BACKOFF_MS     60000UL
 
 // --- Battery Monitoring (voltage divider R1=R2=100kΩ) ------------------------
 #define BATTERY_PIN          34
@@ -97,6 +100,7 @@ struct ScanData {
 // -----------------------------------------------------------------------------
 
 WebServer* server = nullptr;
+Preferences authPreferences;
 
 WiFiConfig   wifiConfig;
 DeviceConfig deviceConfig;
@@ -110,6 +114,12 @@ unsigned long scanCount       = 0;
 unsigned long bootTime        = 0;
 unsigned long lastWiFiCheck   = 0;
 bool          isOnline        = false;
+bool          authRejected    = false;
+String        firebaseIdToken = "";
+String        firebaseRefreshToken = "";
+unsigned long firebaseTokenExpiresAt = 0;
+unsigned long nextAuthRetryAt = 0;
+uint8_t       authRetryCount = 0;
 
 std::vector<ScanData> scanHistory;
 
@@ -120,13 +130,19 @@ void          handleApiScan();
 void          handleApiHistory();
 void          handleApiConfig();
 void          handleReset();
-void          handleOptions();
 void          startWebServer();
 void          processBarcodeInput(String input);
 void          processInventoryBarcode(String barcode);
 bool          connectToWiFi();
 bool          sendScanToFirebase(String barcode);
 bool          sendHeartbeatToFirebase();
+bool          signInDevice(String email, String password);
+bool          refreshFirebaseToken(bool force = false);
+bool          ensureFirebaseAuth();
+String        firebaseUrlWithAuth(String pathAndQuery);
+String        urlEncode(String value);
+void          loadFirebaseRefreshToken();
+void          clearFirebaseAuth();
 InventoryItem lookupInventoryByBarcode(String barcode);
 bool          parseWiFiQR(String qrData, String &ssid, String &password, String &security);
 void          saveWiFiConfig();
@@ -149,6 +165,7 @@ void          oledShowInventoryFound(String name, int qty, int minStock);
 void          oledShowWiFiConnecting(String ssid);
 void          oledShowWiFiConnected(String ip);
 void          oledShowNoWiFi();
+void          oledShowAuthError();
 void          oledUpdateIdle();
 // -----------------------------------------------------------------------------
 
@@ -264,7 +281,7 @@ void oledShowBoot() {
   display.setTextSize(1);
 
   // -- ZONA KUNING (y=0..15) --
-  display.setCursor(16, 0); display.println("ESP32 SCANNER v6.0");
+  display.setCursor(16, 0); display.print("ESP32 SCANNER v"); display.println(FIRMWARE_VERSION);
   display.setCursor(22, 8); display.println("GM67 Barcode Scanner");
 
   // -- ZONA BIRU (y=16..63) --
@@ -319,7 +336,7 @@ void oledShowStatus() {
   int batLvl = readBatteryLevel();
 
   // -- Row 1 (y=0): Title + Battery icon
-  display.setCursor(0, 0); display.print("SCANNER v6.1");
+  display.setCursor(0, 0); display.print("SCANNER v"); display.print(FIRMWARE_VERSION);
   drawBatteryIcon(105, 0, batLvl);
 
   // -- Row 2 (y=9): Status + Battery %
@@ -517,6 +534,22 @@ void oledShowNoWiFi() {
   display.display();
 }
 
+// Menampilkan kegagalan autentikasi secara eksplisit. Scanner tetap menyimpan
+// refresh token saja dan menunggu kredensial baru/rotasi dari administrator.
+void oledShowAuthError() {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(10, 0); display.println("AUTHENTICATION ERROR");
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  display.setCursor(0, 18); display.println("Kredensial scanner");
+  display.setCursor(0, 28); display.println("ditolak / dicabut.");
+  display.setCursor(0, 42); display.println("Rotasi kredensial di");
+  display.setCursor(0, 52); display.println("panel admin.");
+  display.display();
+  lastBarcodeOnOled = millis();
+}
+
 // Memperbarui tampilan idle OLED secara berkala.
 // Tampilan barcode terakhir ditahan beberapa detik agar hasil scan tidak langsung tertimpa.
 void oledUpdateIdle() {
@@ -582,12 +615,16 @@ void loadDeviceConfig() {
   deviceConfig.checksum = stored;
 
   if (stored == calc && deviceConfig.isConfigured) {
+    String normalizedId = String(deviceConfig.deviceId);
+    normalizedId.toUpperCase();
+    strncpy(deviceConfig.deviceId, normalizedId.c_str(), sizeof(deviceConfig.deviceId) - 1);
     Serial.printf("Device config loaded: %s\n", deviceConfig.deviceId);
   } else {
     Serial.println("Device config tidak valid, pakai default");
     memset(&deviceConfig, 0, sizeof(deviceConfig));
-    String defId = "ESP32-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-    strncpy(deviceConfig.deviceId,    defId.c_str(), sizeof(deviceConfig.deviceId)    - 1);
+    char defId[24];
+    snprintf(defId, sizeof(defId), "ESP32-%08lX", (unsigned long)((uint32_t)ESP.getEfuseMac()));
+    strncpy(deviceConfig.deviceId,    defId, sizeof(deviceConfig.deviceId)    - 1);
     strncpy(deviceConfig.serverUrl,   "https://stokmanager.vercel.app/",
                                                       sizeof(deviceConfig.serverUrl)   - 1);
     strncpy(deviceConfig.firebaseUrl,
@@ -674,6 +711,165 @@ void checkWiFiConnection() {
 //  FIREBASE FUNCTIONS
 // =============================================================================
 
+String urlEncode(String value) {
+  String encoded = "";
+  const char* hex = "0123456789ABCDEF";
+  for (size_t i = 0; i < value.length(); i++) {
+    char c = value.charAt(i);
+    if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+      encoded += c;
+    } else {
+      encoded += '%';
+      encoded += hex[(c >> 4) & 0x0F];
+      encoded += hex[c & 0x0F];
+    }
+  }
+  return encoded;
+}
+
+void loadFirebaseRefreshToken() {
+  firebaseRefreshToken = authPreferences.getString("refreshToken", "");
+  firebaseIdToken = "";
+  firebaseTokenExpiresAt = 0;
+  authRejected = false;
+  Serial.println(firebaseRefreshToken.length() > 0 ?
+    "Device auth refresh token loaded" :
+    "Device auth belum diprovisikan");
+}
+
+void clearFirebaseAuth() {
+  firebaseIdToken = "";
+  firebaseRefreshToken = "";
+  firebaseTokenExpiresAt = 0;
+  authRejected = false;
+  authRetryCount = 0;
+  nextAuthRetryAt = 0;
+  authPreferences.remove("refreshToken");
+}
+
+void scheduleAuthRetry() {
+  authRetryCount = min<uint8_t>(authRetryCount + 1, 6);
+  unsigned long delayMs = min<unsigned long>(1000UL << authRetryCount, AUTH_MAX_BACKOFF_MS);
+  nextAuthRetryAt = millis() + delayMs;
+  Serial.printf("Auth retry dijadwalkan dalam %lu ms\n", delayMs);
+}
+
+bool signInDevice(String email, String password) {
+  if (!isWiFiConnected || strlen(deviceConfig.apiKey) == 0 || email.length() == 0 || password.length() == 0) {
+    password = "";
+    return false;
+  }
+
+  HTTPClient http;
+  String url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" +
+               String(deviceConfig.apiKey);
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(10000);
+
+  DynamicJsonDocument requestDoc(512);
+  requestDoc["email"] = email;
+  requestDoc["password"] = password;
+  requestDoc["returnSecureToken"] = true;
+  String body;
+  serializeJson(requestDoc, body);
+  password = "";
+
+  int code = http.POST(body);
+  body = "";
+  if (code != 200) {
+    Serial.printf("Device sign-in ditolak (HTTP %d)\n", code);
+    http.end();
+    authRejected = code == 400 || code == 401 || code == 403;
+    scheduleAuthRetry();
+    if (authRejected) oledShowAuthError();
+    return false;
+  }
+
+  DynamicJsonDocument responseDoc(2048);
+  DeserializationError error = deserializeJson(responseDoc, http.getString());
+  http.end();
+  if (error || !responseDoc["idToken"] || !responseDoc["refreshToken"]) {
+    Serial.println("Respons sign-in tidak valid");
+    scheduleAuthRetry();
+    return false;
+  }
+
+  firebaseIdToken = responseDoc["idToken"].as<String>();
+  firebaseRefreshToken = responseDoc["refreshToken"].as<String>();
+  unsigned long expiresIn = responseDoc["expiresIn"].as<unsigned long>();
+  firebaseTokenExpiresAt = millis() + expiresIn * 1000UL;
+  authPreferences.putString("refreshToken", firebaseRefreshToken);
+  authRejected = false;
+  authRetryCount = 0;
+  nextAuthRetryAt = 0;
+  Serial.println("Device authentication berhasil");
+  return true;
+}
+
+bool refreshFirebaseToken(bool force) {
+  if (!isWiFiConnected || strlen(deviceConfig.apiKey) == 0 || firebaseRefreshToken.length() == 0) return false;
+  if (!force) {
+    if ((long)(nextAuthRetryAt - millis()) > 0) return false;
+    if (firebaseIdToken.length() > 0 &&
+        (long)(firebaseTokenExpiresAt - millis()) > (long)AUTH_REFRESH_MARGIN_MS) {
+      return true;
+    }
+  }
+
+  HTTPClient http;
+  String url = "https://securetoken.googleapis.com/v1/token?key=" + String(deviceConfig.apiKey);
+  http.begin(url);
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  http.setTimeout(10000);
+  String body = "grant_type=refresh_token&refresh_token=" + urlEncode(firebaseRefreshToken);
+  int code = http.POST(body);
+  body = "";
+
+  if (code != 200) {
+    Serial.printf("Refresh token gagal (HTTP %d)\n", code);
+    http.end();
+    firebaseIdToken = "";
+    authRejected = code == 400 || code == 401 || code == 403;
+    scheduleAuthRetry();
+    if (authRejected) oledShowAuthError();
+    return false;
+  }
+
+  DynamicJsonDocument responseDoc(2048);
+  DeserializationError error = deserializeJson(responseDoc, http.getString());
+  http.end();
+  if (error || !responseDoc["access_token"]) {
+    scheduleAuthRetry();
+    return false;
+  }
+
+  firebaseIdToken = responseDoc["access_token"].as<String>();
+  String rotatedRefreshToken = responseDoc["refresh_token"].as<String>();
+  if (rotatedRefreshToken.length() > 0 && rotatedRefreshToken != firebaseRefreshToken) {
+    firebaseRefreshToken = rotatedRefreshToken;
+    authPreferences.putString("refreshToken", firebaseRefreshToken);
+  }
+  unsigned long expiresIn = responseDoc["expires_in"].as<unsigned long>();
+  firebaseTokenExpiresAt = millis() + expiresIn * 1000UL;
+  authRejected = false;
+  authRetryCount = 0;
+  nextAuthRetryAt = 0;
+  Serial.println("ID token diperbarui");
+  return true;
+}
+
+bool ensureFirebaseAuth() {
+  return refreshFirebaseToken(false);
+}
+
+String firebaseUrlWithAuth(String pathAndQuery) {
+  if (!ensureFirebaseAuth()) return "";
+  String delimiter = pathAndQuery.indexOf('?') >= 0 ? "&" : "?";
+  return String(deviceConfig.firebaseUrl) + pathAndQuery + delimiter +
+         "auth=" + firebaseIdToken;
+}
+
 // Mengirim hasil scan barcode ke node /scans di Firebase Realtime Database.
 // Record dibuat sebagai inventory_scan agar web dapat menampilkan popup scan dengan cepat.
 bool sendScanToFirebase(String barcode) {
@@ -682,7 +878,8 @@ bool sendScanToFirebase(String barcode) {
     return false;
   }
   HTTPClient http;
-  String url = String(deviceConfig.firebaseUrl) + "/scans.json";
+  String url = firebaseUrlWithAuth("/scans.json");
+  if (url.length() == 0) return false;
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(10000);
@@ -701,12 +898,18 @@ bool sendScanToFirebase(String barcode) {
   Serial.println("POST /scans: " + json);
 
   int code = http.POST(json);
-  bool ok  = (code > 0);
+  bool ok  = (code >= 200 && code < 300);
   if (ok) {
     DynamicJsonDocument res(256); deserializeJson(res, http.getString());
     Serial.println("Scan ID: " + res["name"].as<String>());
   } else {
     Serial.printf("/scans HTTP error: %d\n", code);
+    if (code == 401 || code == 403) {
+      firebaseIdToken = "";
+      authRejected = true;
+      oledShowAuthError();
+      scheduleAuthRetry();
+    }
   }
   http.end();
   return ok;
@@ -720,8 +923,10 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
   if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) return item;
 
   HTTPClient http;
-  String url = String(deviceConfig.firebaseUrl) +
-               "/inventory.json?orderBy=\"barcode\"&equalTo=\"" + barcode + "\"";
+  String url = firebaseUrlWithAuth(
+    "/inventory.json?orderBy=\"barcode\"&equalTo=\"" + barcode + "\""
+  );
+  if (url.length() == 0) return item;
   http.begin(url);
   http.setTimeout(8000);
   int code = http.GET();
@@ -753,6 +958,12 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
     }
   } else {
     Serial.printf("Inventory lookup error: %d\n", code);
+    if (code == 401 || code == 403) {
+      firebaseIdToken = "";
+      authRejected = true;
+      oledShowAuthError();
+      scheduleAuthRetry();
+    }
   }
   http.end();
   return item;
@@ -765,8 +976,10 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
 void setDeviceOffline() {
   if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) return;
   HTTPClient http;
-  String url = String(deviceConfig.firebaseUrl) + "/devices/" +
-               String(deviceConfig.deviceId) + "/status.json";
+  String url = firebaseUrlWithAuth(
+    "/devices/" + String(deviceConfig.deviceId) + "/status.json"
+  );
+  if (url.length() == 0) return;
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
   http.PUT("\"offline\"");
@@ -781,8 +994,13 @@ bool sendHeartbeatToFirebase() {
     return false;
   }
   HTTPClient http;
-  String url = String(deviceConfig.firebaseUrl) + "/devices/" +
-               String(deviceConfig.deviceId) + ".json";
+  String url = firebaseUrlWithAuth(
+    "/devices/" + String(deviceConfig.deviceId) + ".json"
+  );
+  if (url.length() == 0) {
+    isOnline = false;
+    return false;
+  }
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(5000);
@@ -805,9 +1023,20 @@ bool sendHeartbeatToFirebase() {
   Serial.println("PUT /devices/" + String(deviceConfig.deviceId));
 
   int code = http.PUT(json);
-  bool ok  = (code > 0);
+  bool ok  = (code >= 200 && code < 300);
   if (ok) { isOnline = true; Serial.printf("Heartbeat OK (HTTP %d)\n", code); }
-  else    { isOnline = false; Serial.printf("Heartbeat gagal (%d)\n", code); checkWiFiConnection(); }
+  else {
+    isOnline = false;
+    Serial.printf("Heartbeat gagal (%d)\n", code);
+    if (code == 401 || code == 403) {
+      firebaseIdToken = "";
+      authRejected = true;
+      oledShowAuthError();
+      scheduleAuthRetry();
+    } else {
+      checkWiFiConnection();
+    }
+  }
   http.end();
   return ok;
 }
@@ -884,10 +1113,6 @@ void startWebServer() {
   server->on("/api/history", HTTP_GET,     handleApiHistory);
   server->on("/api/config",  HTTP_POST,    handleApiConfig);
   server->on("/reset",       HTTP_POST,    handleReset);
-  server->on("/api/status",  HTTP_OPTIONS, handleOptions);
-  server->on("/api/scan",    HTTP_OPTIONS, handleOptions);
-  server->on("/api/history", HTTP_OPTIONS, handleOptions);
-  server->on("/api/config",  HTTP_OPTIONS, handleOptions);
   server->begin();
   isServerStarted = true;
   Serial.println("Web server started: http://" + WiFi.localIP().toString());
@@ -900,7 +1125,7 @@ void handleRoot() {
   String html = R"rawliteral(
 <!DOCTYPE html><html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESP32 Scanner v6.0</title>
+<title>ESP32 Scanner v6.3</title>
 <style>
   body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);color:#eee;margin:0;padding:20px;min-height:100vh}
   .card{background:rgba(255,255,255,.08);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:20px;margin:12px 0}
@@ -923,7 +1148,7 @@ void handleRoot() {
 <h1>ESP32 Scanner <span class="badge )rawliteral";
   html += isOnline ? "online\">ONLINE" : "offline\">OFFLINE";
   html += R"rawliteral(</span></h1>
-<p style="text-align:center;color:#94a3b8;font-size:.8em">v6.0 - Inventory Mode - )rawliteral";
+<p style="text-align:center;color:#94a3b8;font-size:.8em">v6.3 - Inventory Mode - )rawliteral";
   html += String(deviceConfig.deviceId);
   html += R"rawliteral(</p>
 
@@ -952,8 +1177,12 @@ void handleRoot() {
   <input id="fbUrl" value=")rawliteral" + String(deviceConfig.firebaseUrl) + R"rawliteral(">
   <label>Server URL (Backup)</label>
   <input id="srvUrl" value=")rawliteral" + String(deviceConfig.serverUrl) + R"rawliteral(">
-  <label>API Key (opsional)</label>
+  <label>Firebase Web API Key</label>
   <input type="password" id="apiKey" value=")rawliteral" + String(deviceConfig.apiKey) + R"rawliteral(">
+  <label>Email Perangkat (hanya untuk provisioning)</label>
+  <input type="email" id="authEmail" autocomplete="off">
+  <label>Kata Sandi Perangkat (tidak disimpan)</label>
+  <input type="password" id="authPassword" autocomplete="new-password">
   <button onclick="saveConfig()">Simpan Konfigurasi</button>
 </div>
 
@@ -969,7 +1198,9 @@ function saveConfig(){
     body:JSON.stringify({
       firebaseUrl:document.getElementById('fbUrl').value,
       serverUrl:document.getElementById('srvUrl').value,
-      apiKey:document.getElementById('apiKey').value
+      apiKey:document.getElementById('apiKey').value,
+      authEmail:document.getElementById('authEmail').value,
+      authPassword:document.getElementById('authPassword').value
     })}).then(r=>r.json()).then(d=>alert(d.message));
 }
 function testScan(){
@@ -985,7 +1216,6 @@ setInterval(function(){
   });
 },5000);
 </script></body></html>)rawliteral";
-  server->sendHeader("Access-Control-Allow-Origin","*");
   server->send(200,"text/html",html);
 }
 
@@ -998,6 +1228,7 @@ void handleApiStatus() {
   doc["version"]       = FIRMWARE_VERSION;
   doc["wifiConnected"] = isWiFiConnected;
   doc["isOnline"]      = isOnline;
+  doc["authenticated"] = firebaseIdToken.length() > 0 && !authRejected;
   doc["ssid"]          = wifiConfig.ssid;
   doc["ipAddress"]     = WiFi.localIP().toString();
   doc["rssi"]          = WiFi.RSSI();
@@ -1009,7 +1240,6 @@ void handleApiStatus() {
   doc["currentMode"]   = "inventory";
   doc["lastHeartbeat"] = (millis() - lastHeartbeat) / 1000;
   String res; serializeJson(doc, res);
-  server->sendHeader("Access-Control-Allow-Origin","*");
   server->send(200,"application/json",res);
 }
 
@@ -1025,7 +1255,6 @@ void handleApiScan() {
   doc["currentMode"] = "inventory";
   doc["isOnline"]    = isOnline;
   String res; serializeJson(doc, res);
-  server->sendHeader("Access-Control-Allow-Origin","*");
   server->send(200,"application/json",res);
 }
 
@@ -1048,15 +1277,14 @@ void handleApiHistory() {
   doc["total"]    = scanHistory.size();
   doc["deviceId"] = deviceConfig.deviceId;
   String res; serializeJson(doc, res);
-  server->sendHeader("Access-Control-Allow-Origin","*");
   server->send(200,"application/json",res);
 }
 
 // Menerima pembaruan konfigurasi dari halaman web lokal.
-// Nilai Firebase URL, server URL, dan API key disimpan ke EEPROM lewat saveDeviceConfig().
+// Email/password hanya dipakai sekali untuk memperoleh refresh token. Password tidak
+// pernah disimpan atau dicetak; NVS hanya menyimpan refresh token.
 void handleApiConfig() {
   if (!server) return;
-  server->sendHeader("Access-Control-Allow-Origin","*");
   if (server->hasArg("plain")) {
     DynamicJsonDocument doc(1024);
     deserializeJson(doc, server->arg("plain"));
@@ -1064,7 +1292,18 @@ void handleApiConfig() {
     if (doc.containsKey("serverUrl"))   strncpy(deviceConfig.serverUrl,   doc["serverUrl"],   sizeof(deviceConfig.serverUrl)  -1);
     if (doc.containsKey("apiKey"))      strncpy(deviceConfig.apiKey,      doc["apiKey"],      sizeof(deviceConfig.apiKey)     -1);
     saveDeviceConfig();
-    server->send(200,"application/json","{\"status\":\"success\",\"message\":\"Konfigurasi disimpan\"}");
+    String authEmail = doc["authEmail"] | "";
+    String authPassword = doc["authPassword"] | "";
+    bool authOk = firebaseRefreshToken.length() > 0;
+    if (authEmail.length() > 0 || authPassword.length() > 0) {
+      authOk = signInDevice(authEmail, authPassword);
+    }
+    authPassword = "";
+    if (authOk) {
+      server->send(200,"application/json","{\"status\":\"success\",\"message\":\"Konfigurasi dan autentikasi disimpan\"}");
+    } else {
+      server->send(401,"application/json","{\"status\":\"error\",\"message\":\"Kredensial perangkat ditolak\"}");
+    }
   } else {
     server->send(400,"application/json","{\"error\":\"No data\"}");
   }
@@ -1081,20 +1320,10 @@ void handleReset() {
   EEPROM.put(WIFI_CONFIG_ADDR,   wifiConfig);
   EEPROM.put(DEVICE_CONFIG_ADDR, deviceConfig);
   EEPROM.commit();
+  clearFirebaseAuth();
   delay(1000);
   ESP.restart();
 }
-
-// Membalas request HTTP OPTIONS untuk kebutuhan CORS pada endpoint API lokal.
-// Browser memakai preflight ini sebelum POST konfigurasi dari halaman web ESP32.
-void handleOptions() {
-  if (!server) return;
-  server->sendHeader("Access-Control-Allow-Origin", "*");
-  server->sendHeader("Access-Control-Allow-Methods","GET,POST,OPTIONS");
-  server->sendHeader("Access-Control-Allow-Headers","Content-Type,Authorization");
-  server->send(200,"text/plain","");
-}
-
 
 // =============================================================================
 //  SETUP & LOOP
@@ -1111,15 +1340,17 @@ void setup() {
   oledShowBoot();
   delay(500);  // singkat, cukup baca "Initializing..."
 
-  Serial.println("\nESP32 GM67 Scanner v6.0 - Inventory Only");
+  Serial.println("\nESP32 GM67 Scanner v6.3 - Inventory Only");
   Serial.println("=========================================");
   Serial.println("Firebase: barcodescanesp32");
   Serial.println("Paths: /scans /devices /inventory /analytics");
   Serial.println("OLED: " + String(oledAvailable ? "OK" : "NOT FOUND"));
 
   EEPROM.begin(EEPROM_SIZE);
+  authPreferences.begin("deviceAuth", false);
   loadWiFiConfig();
   loadDeviceConfig();
+  loadFirebaseRefreshToken();
 
   // Fast WiFi init — persistent=false cegah tulis flash, lebih cepat boot
   WiFi.persistent(false);
@@ -1130,6 +1361,7 @@ void setup() {
     if (connectToWiFi()) {
       startWebServer();
       Serial.println("Web: http://" + WiFi.localIP().toString());
+      ensureFirebaseAuth();
     } else {
       oledShowNoWiFi();
     }
@@ -1165,7 +1397,10 @@ void loop() {
 
   if (millis() - lastHeartbeat > 8000) {
     sampleBattery();  // read ADC BEFORE WiFi HTTP to avoid voltage sag noise
-    if (isWiFiConnected) sendHeartbeatToFirebase();
+    if (isWiFiConnected) {
+      ensureFirebaseAuth();
+      sendHeartbeatToFirebase();
+    }
     lastHeartbeat = millis();
   }
 

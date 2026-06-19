@@ -33,6 +33,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useAuth } from "@/components/auth-provider"
+import { canWrite } from "@/types/security"
+import { AuditTimeline } from "@/components/audit-timeline"
 
 const BarcodeComponent = dynamic(() => import("@/components/pdf417-barcode"), {
   ssr: false,
@@ -48,6 +51,8 @@ interface StockAdjustment {
 }
 
 export default function DashboardPage() {
+  const { role, getIdToken } = useAuth()
+  const writable = canWrite(role)
   const {
     items: inventory,
     loading: inventoryLoading,
@@ -197,9 +202,10 @@ export default function DashboardPage() {
           timestamp: Number(t.timestamp) || Date.now(),
         }))
 
+        const token = await getIdToken()
         const res = await fetch("/api/predict", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             mode: "batch",
             items,
@@ -250,7 +256,7 @@ export default function DashboardPage() {
 
     fetchRisks()
     return () => controller.abort()
-  }, [inventory, transactions, inventoryLoading, transactionsLoading])
+  }, [getIdToken, inventory, transactions, inventoryLoading, transactionsLoading])
 
   const stockoutAlertedRef = useRef(false)
   useEffect(() => {
@@ -326,14 +332,14 @@ export default function DashboardPage() {
         const searchInput = document.querySelector<HTMLInputElement>('[placeholder="Cari item..."]')
         searchInput?.focus()
       }
-      if (e.key === "n" && !isInput) {
+      if (writable && e.key === "n" && !isInput) {
         e.preventDefault()
         setIsAddItemOpen(true)
       }
     }
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [])
+  }, [writable])
 
   if (inventoryLoading || scansLoading || devicesLoading) {
     return (
@@ -361,6 +367,7 @@ export default function DashboardPage() {
   }
 
   const addInventoryItem = async () => {
+    if (!writable) return
     if (!newItem.name || !newItem.barcode) {
       toast({ title: "Kesalahan", description: "Nama dan barcode wajib diisi", variant: "destructive" })
       return
@@ -381,13 +388,14 @@ export default function DashboardPage() {
   }
 
   const updateInventoryItem = async () => {
-    if (!editingItem) return
+    if (!writable || !editingItem) return
     try {
+      const operationId = firebaseHelpers.createOperationId()
       // Write only metadata — never the absolute quantity, to avoid clobbering
       // concurrent stock changes (scanner/other tabs) that happened while the
       // dialog was open.
       const { quantity, id, ...metadata } = editingItem
-      await updateItem(id, metadata as Partial<InventoryItem>)
+      await updateItem(id, metadata as Partial<InventoryItem>, operationId)
 
       // If the user changed quantity in the dialog, apply it as an atomic delta
       // relative to what they saw when the dialog opened (not the live value).
@@ -401,7 +409,7 @@ export default function DashboardPage() {
           reason: "Penyesuaian via edit item",
           operator: "Dashboard",
           notes: `Penyesuaian via edit item`,
-        })
+        }, operationId)
       }
 
       setEditingItem(null)
@@ -416,7 +424,7 @@ export default function DashboardPage() {
   }
 
   const confirmDelete = async () => {
-    if (!deletingItem) return
+    if (!writable || !deletingItem) return
     try {
       await deleteItem(deletingItem.id)
       toast({ title: "Berhasil", description: `"${deletingItem.name}" berhasil dihapus` })
@@ -428,7 +436,7 @@ export default function DashboardPage() {
   }
 
   const handleStockAdjustment = async () => {
-    if (!stockAdjustment) return
+    if (!writable || !stockAdjustment) return
     const { itemId, amount, type, currentQuantity, itemName } = stockAdjustment
     const newQuantity = type === "add" ? currentQuantity + amount : currentQuantity - amount
     if (newQuantity < 0) {
@@ -590,6 +598,7 @@ export default function DashboardPage() {
           onDelete={deleteInventoryItem}
           onStockAdjust={handleStockAdj}
           lowStockItems={lowStockItems}
+          canWrite={writable}
         />
         </div>
 
@@ -707,6 +716,12 @@ export default function DashboardPage() {
                     <p className="font-semibold">{viewingItem.minStock}</p>
                   </div>
                 </div>
+                {role === "admin" && (
+                  <div className="border-t pt-4">
+                    <Label className="text-xs text-muted-foreground">Timeline Audit</Label>
+                    <div className="mt-2"><AuditTimeline entityId={viewingItem.id} /></div>
+                  </div>
+                )}
               </div>
             )}
             <DialogFooter>

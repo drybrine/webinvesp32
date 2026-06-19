@@ -1,0 +1,31 @@
+# Local dependencies and build output
+node_modules/
+.next/
+.vercel/
+
+# Git and agent/tool worktrees
+.git/
+.claude/
+.codex/
+.commandcode/
+.codegraph/
+.review/
+
+# Local caches and generated artifacts
+**/__pycache__/
+*.py[cod]
+.cache/
+
+# Local-only data and credentials
+.env*
+!.env.example
+*service-account*.json
+*firebase-adminsdk*.json
+*-rtdb-export*.json
+honda-dummy.json
+
+# Editor and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

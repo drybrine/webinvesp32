@@ -2,7 +2,7 @@
 
 Sistem Manajemen Inventory Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner dan prediksi stok menggunakan Simple Linear Regression.
 
-Updated: 2026-06-15
+Updated: 2026-06-18
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.1.0-blue)](https://reactjs.org/)
@@ -28,6 +28,10 @@ Buka http://localhost:3000
 ## Fitur Utama
 
 ### Manajemen Inventory
+- Aplikasi internal-only dengan Firebase email/password authentication
+- Peran `admin`, `operator`, dan `viewer` melalui Firebase custom claims
+- Tidak ada UI pendaftaran publik; akun tanpa profil dan custom claim yang sah ditolak aplikasi/rules
+- Administrasi pengguna/scanner dan auditnya diproses oleh Vercel Functions dengan Firebase Admin SDK
 - Real-time barcode scanning dengan ESP32 GM67
 - CRUD produk + stock adjustment (tambah/kurangi) via dashboard
 - Edit item di dashboard dapat mengubah metadata produk termasuk `minStock` / stok minimum
@@ -57,6 +61,8 @@ Buka http://localhost:3000
 - Notebook seminar: replikasi model website dengan validasi MAE, RMSE, MAPE, dan R²
 
 ### Device Management (ESP32)
+- Setiap scanner memakai akun Firebase Auth unik yang dipetakan ke satu `deviceId`
+- Firmware 6.3 menyimpan refresh token saja di Preferences/NVS dan memperbarui ID token otomatis
 - Monitoring realtime via Firebase `onValue` listener (bukan polling)
 - Deteksi online/offline dalam ~16 detik (threshold 15s, re-evaluasi tiap 3s)
 - Battery level monitoring (voltage divider GPIO34, `esp_adc_cal` eFuse Vref, EMA + hysteresis ±2%)
@@ -88,6 +94,9 @@ Firebase Realtime Database
     │
     ├── /inventory/{id}       (produk: barcode, name, category, quantity, minStock, location, timestamps)
     ├── /devices/{id}         (status, lastSeen, batteryLevel, rssi, ip)
+    ├── /users/{uid}          (profil + role)
+    ├── /deviceAuth/{uid}     (pemetaan akun perangkat ke deviceId)
+    ├── /auditLogs/{id}       (audit immutable, admin-only)
     ├── /scans/{id}           (barcode, deviceId, timestamp, processed)
     ├── /transactions/{id}    (type, qty, operator, reason, timestamp)
     └── /analytics            (totalScans, totalItems, lowStockAlerts)
@@ -98,6 +107,7 @@ Next.js Website (Vercel)
     ├── /transaksi            (history, filter jenis/sumber/periode, export CSV, pagination)
     ├── /prediksi             (detailed SVG Linear Regression chart, forecast tabel, metrics)
     ├── /scan                 (manual barcode input)
+    ├── /api/admin/*          (Vercel Functions + Firebase Admin SDK)
     └── /api/predict          (Python serverless, Simple Linear Regression)
 ```
 
@@ -106,7 +116,8 @@ Next.js Website (Vercel)
 2. Jika barcode belum terdaftar, popup dapat membuat `/inventory/{id}` baru dengan schema inventory utama + transaksi stok awal
 3. User pilih Stock In/Out di popup → atomic update: `increment()` ke `/inventory` + create `/transactions` dalam satu multi-path write
 4. Website subscribe semua path via `onValue` → UI update realtime tanpa refresh
-5. Prediksi: website POST ke `/api/predict` (Python) → forecast + metrics
+5. Prediksi: website POST token Firebase ke `/api/predict` → token diverifikasi via Identity Toolkit → forecast + metrics
+6. Admin: website mengirim ID token ke `/api/admin/*` → Firebase Admin memverifikasi role + profil → mutasi Auth/RTDB + audit atomik per operasi
 
 ## Environment Variables
 
@@ -121,6 +132,8 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=xxx.firebasestorage.app
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=xxx
 NEXT_PUBLIC_FIREBASE_APP_ID=xxx
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=xxx
+ALLOWED_ORIGINS=https://stokmanager.app,https://your-project.vercel.app
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"xxx",...}
 ```
 
 `scripts/check-env.js` memvalidasi env vars sebelum dev server start.
@@ -132,7 +145,10 @@ npm run dev        # Turbopack dev server (:3000)
 npm run build      # Production build (Turbopack)
 npm run start      # Serve production build
 npm run lint       # ESLint
+npm run typecheck  # TypeScript strict check
+npm run test:rules # Firebase Emulator security-rule matrix
 npm run check-env  # Validate Firebase env vars
+npm run bootstrap:admin -- --email=admin@example.com --password='minimum-12-char'
 ```
 
 ## ESP32 Hardware
@@ -158,13 +174,14 @@ GND           ←    GND                GND          ← GND
 
 ### Firmware
 - File: `GM67_ESP32_BARCODESCANNER/GM67_ESP32_BARCODESCANNER.ino`
-- Version: 6.2
+- Version: 6.3
 - Mode: Inventory only (single mode)
 - Heartbeat: tiap 8 detik ke Firebase `/devices/{id}`
 - Battery: `esp_adc_cal` eFuse Vref + EMA(α=0.05) + hysteresis ±2%, MIN=3200mV, MAX=3800mV
 - OLED: battery icon (4-bar) + WiFi signal icon (4-bar RSSI)
 - Boot time: ~3 detik (`WiFi.persistent(false)`, delay minimal)
 - Libraries: WiFi, WebServer, EEPROM, HTTPClient, ArduinoJson v6, Wire, Adafruit_GFX, Adafruit_SSD1306, esp_adc_cal, driver/adc
+- Auth: Firebase Identity Toolkit; refresh token saja disimpan di Preferences/NVS
 
 ## Prediksi Stok
 
@@ -203,6 +220,7 @@ Card `Perkiraan Habis` pada `/prediksi` mengikuti forecast yang tampil di grafik
 ### Endpoint
 ```
 POST /api/predict
+Authorization: Bearer <Firebase ID token>
 Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
 Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
 Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, source }
@@ -248,13 +266,27 @@ Set environment variables di Vercel Dashboard → Project Settings → Environme
 
 ## API Endpoints
 
-Hanya satu endpoint API di web app ini:
-
 | Method | Path | Fungsi |
 |--------|------|--------|
-| POST | `/api/predict` | Python Simple Linear Regression prediction — single item atau batch (`mode: 'batch'`). Handler Vercel Python di `api/predict.py`; tidak ada Next.js route di `app/api/`. |
+| POST | `/api/predict` | Python Simple Linear Regression prediction — single item atau batch (`mode: 'batch'`). |
+| GET/POST/PATCH | `/api/admin/users` | List, buat, dan ubah pengguna internal. |
+| POST | `/api/admin/users/reset-password` | Buat tautan reset kata sandi pengguna. |
+| GET/POST/PATCH/DELETE | `/api/admin/devices` | List, daftar, ubah status, dan cabut scanner. |
+| POST | `/api/admin/devices/rotate` | Rotasi kredensial scanner. |
 
-Endpoint legacy (`barcode-scan`, `check-device-status`, `current-page`, `devices-status`, `firebase-init`, `firebase-rules`, `heartbeat`) sudah dihapus dari web. ESP32 push langsung ke Firebase RTDB; device-status sweeper berjalan di Firebase Cloud Function `functions/index.js` (scheduled setiap 30 detik).
+Semua `/api/admin/*` berjalan sebagai Vercel Functions, mewajibkan Firebase ID token dengan role admin aktif, dan memakai `FIREBASE_SERVICE_ACCOUNT` hanya di server. ESP32 tetap berkomunikasi langsung dengan Firebase RTDB. Status online/offline dihitung client-side dari usia heartbeat; tidak ada scheduled Firebase Function.
+
+## Security Rollout
+
+1. Backup RTDB production.
+2. Set `FIREBASE_SERVICE_ACCOUNT` pada Vercel untuk Preview dan Production, lalu deploy aplikasi.
+3. Deploy `firebase-rules-migration.json` dan jalankan bootstrap admin.
+4. Buat akun pengguna dan scanner dari panel admin; operasi admin dicatat ke `/auditLogs` oleh Vercel Functions.
+5. Flash firmware 6.3 dan lakukan provisioning email/password perangkat satu kali melalui web lokal ESP32.
+6. Verifikasi login, heartbeat, scan, role, dan audit administrasi.
+7. Jalankan workflow `Deploy Strict Firebase Rules` setelah approval environment.
+
+`firebase.json` sengaja menunjuk rules migrasi. Cutover strict memakai `firebase.strict.json` sehingga request anonim dan firmware lama baru ditolak setelah scanner 6.3 diverifikasi. Karena Firebase Spark tidak mendukung blocking/database-trigger Functions, tidak ada self-registration UI dan akun tanpa profil + custom claim yang sah tidak mendapat akses; audit otomatis hanya dijamin untuk operasi admin melalui Vercel Functions.
 
 ## License
 

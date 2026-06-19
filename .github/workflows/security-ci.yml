@@ -1,0 +1,34 @@
+name: Security CI
+
+on:
+  pull_request:
+  push:
+    branches: ["555"]
+
+jobs:
+  web-and-rules:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: AIzaSyTestOnly000000000000000000000
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: stokmanager-test.firebaseapp.com
+      NEXT_PUBLIC_FIREBASE_DATABASE_URL: https://stokmanager-test-default-rtdb.asia-southeast1.firebasedatabase.app
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: stokmanager-test
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: stokmanager-test.firebasestorage.app
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "123456789"
+      NEXT_PUBLIC_FIREBASE_APP_ID: "1:123456789:web:test"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run test:predict
+      - run: npm run test:rules

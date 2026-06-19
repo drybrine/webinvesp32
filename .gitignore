@@ -2,6 +2,8 @@
 
 # dependencies
 /node_modules
+**/node_modules/
+.firebase/
 
 # next.js
 /.next/
@@ -12,6 +14,8 @@
 
 # debug
 npm-debug.log*
+firebase-debug.log*
+database-debug.log
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
@@ -79,6 +83,7 @@ Thumbs.db
 honda-dummy.json
 GM67_ESP32_BARCODESCANNER/build/
 api/__pycache__/
+tests/__pycache__/
 
 # Jupyter auto-generated artifacts
 .ipynb_checkpoints/

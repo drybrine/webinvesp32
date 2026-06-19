@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"; // Add useMemo
-import { ref, onValue, DataSnapshot, query, orderByChild, limitToLast, Unsubscribe, push, set } from "firebase/database";
+import { ref, onValue, DataSnapshot, query, orderByChild, limitToLast, Unsubscribe } from "firebase/database";
 import { firebaseHelpers, isFirebaseConfigured, database, dbRefs, firebaseCleanup, waitForFirebaseReady } from "@/lib/firebase"; // Ensure all are imported
 
 export interface InventoryItem {
@@ -54,45 +54,6 @@ interface Transaction {
   notes?: string;
 }
 
-// Local storage keys
-const STORAGE_KEYS = {
-  INVENTORY: "inventory_items",
-  SCANS: "scan_records",
-  DEVICES: "device_status",
-  TRANSACTIONS: "transaction_records", // Ditambahkan
-}
-
-// Helper functions for local storage
-const getFromStorage = (key: string) => {
-  if (typeof window === "undefined") return null
-  try {
-    const item = localStorage.getItem(key)
-    return item ? JSON.parse(item) : null
-  } catch (error) {
-    console.error("Error reading from localStorage:", error)
-    return null
-  }
-}
-
-const saveToStorage = (key: string, data: any) => {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(key, JSON.stringify(data))
-  } catch (error) {
-    console.error("Error saving to localStorage:", error)
-  }
-}
-
-// Strips legacy price fields from cached records (one-shot migration).
-const stripLegacyPriceFields = (records: any[] | null | undefined) => {
-  if (!records || !Array.isArray(records)) return records
-  return records.map((record) => {
-    if (!record || typeof record !== "object") return record
-    const { price, unitPrice, totalAmount, ...rest } = record
-    return rest
-  })
-}
-
 export function useFirebaseInventory() {
   const [itemsData, setItemsData] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,10 +75,8 @@ export function useFirebaseInventory() {
       if (cancelled) return;
 
       if (!firebaseReady || !isFirebaseConfigured() || !database) {
-        console.log("Firebase not available, using local storage for inventory");
-        const storedItems = stripLegacyPriceFields(getFromStorage(STORAGE_KEYS.INVENTORY));
-        setItemsData(storedItems && storedItems.length > 0 ? storedItems : []);
-        setError(null);
+        setItemsData([]);
+        setError("Firebase tidak tersedia. Data cache lokal dinonaktifkan untuk keamanan.");
         setLoading(false);
         return;
       }
@@ -174,22 +133,16 @@ export function useFirebaseInventory() {
     };
   }, []);
 
-  const addItem = async (item: Omit<InventoryItem, "id" | "createdAt" | "updatedAt">): Promise<string | undefined> => {
+  const addItem = async (
+    item: Omit<InventoryItem, "id" | "createdAt" | "updatedAt">,
+    source: "Dashboard" | "Scanner" = "Dashboard",
+  ): Promise<string | undefined> => {
     if (!isFirebaseConfigured()) {
-      const newItem: InventoryItem = {
-        ...item,
-        id: `local_${Date.now()}`,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      const updatedItems = [...itemsData, newItem];
-      setItemsData(updatedItems);
-      saveToStorage(STORAGE_KEYS.INVENTORY, updatedItems);
-      return newItem.id;
+      throw new Error("Firebase tidak tersedia")
     }
 
     try {
-      return await firebaseHelpers.addInventoryItem(item);
+      return await firebaseHelpers.addInventoryItem(item, source);
     } catch (err) {
       console.error("Error adding item:", err);
       const message = err instanceof Error ? err.message : "Failed to add item";
@@ -197,18 +150,13 @@ export function useFirebaseInventory() {
     }
   };
 
-  const updateItem = async (id: string, updates: Partial<InventoryItem>) => {
+  const updateItem = async (id: string, updates: Partial<InventoryItem>, operationId?: string) => {
     if (!isFirebaseConfigured()) {
-      const updatedItems = itemsData.map((itemData) =>
-        itemData.id === id ? { ...itemData, ...updates, updatedAt: Date.now() } : itemData
-      );
-      setItemsData(updatedItems);
-      saveToStorage(STORAGE_KEYS.INVENTORY, updatedItems);
-      return;
+      throw new Error("Firebase tidak tersedia")
     }
 
     try {
-      await firebaseHelpers.updateInventoryItem(id, updates);
+      await firebaseHelpers.updateInventoryItem(id, updates, operationId);
     } catch (err) {
       console.error("Error updating item:", err);
       const message = err instanceof Error ? err.message : "Failed to update item";
@@ -218,12 +166,7 @@ export function useFirebaseInventory() {
 
   const deleteItem = async (id: string) => {
     if (!isFirebaseConfigured()) {
-      const updatedItems = itemsData.map(itemData =>
-        itemData.id === id ? { ...itemData, deleted: true, updatedAt: Date.now() } : itemData
-      );
-      setItemsData(updatedItems); // Keep deleted items in local state but filter in activeItems
-      saveToStorage(STORAGE_KEYS.INVENTORY, updatedItems.filter(i => !i.deleted)); // Save only non-deleted to localStorage
-      return;
+      throw new Error("Firebase tidak tersedia")
     }
 
     try {
@@ -269,36 +212,8 @@ export function useFirebaseScans() {
       if (cancelled) return;
       
       if (!firebaseReady || !isFirebaseConfigured() || !database) {
-        console.log("Firebase not available, using local storage for scans");
-        // Load from local storage or use mock data
-        const storedScans = getFromStorage(STORAGE_KEYS.SCANS)
-
-        if (storedScans && storedScans.length > 0) {
-          setScans(storedScans)
-        } else {
-          // Mock data for development
-          const mockScans: ScanRecord[] = [
-            {
-              id: "scan_1",
-              barcode: "1234567890123",
-              deviceId: "ESP32_001",
-              timestamp: Date.now() - 120000, // 2 minutes ago
-              processed: true,
-              itemFound: true,
-              itemId: "mock_1",
-            },
-            {
-              id: "scan_2",
-              barcode: "9876543210987",
-              deviceId: "ESP32_001",
-              timestamp: Date.now() - 300000, // 5 minutes ago
-              processed: false,
-              itemFound: false,
-            },
-          ]
-          setScans(mockScans)
-        }
-        setError(null);
+        setScans([])
+        setError("Firebase tidak tersedia. Riwayat lokal dinonaktifkan.")
         setLoading(false);
         return;
       }
@@ -361,17 +276,7 @@ export function useFirebaseScans() {
 
   const addScan = async (scanData: Omit<ScanRecord, "id" | "timestamp" | "processed">) => {
     if (!isFirebaseConfigured()) {
-      // Local storage implementation
-      const newScan: ScanRecord = {
-        ...scanData,
-        id: `scan_${Date.now()}`,
-        timestamp: Date.now(),
-        processed: false
-      }
-      const updatedScans = [newScan, ...scans.slice(0, 99)]
-      setScans(updatedScans)
-      saveToStorage(STORAGE_KEYS.SCANS, updatedScans)
-      return newScan.id
+      throw new Error("Firebase tidak tersedia")
     }
 
     try {
@@ -400,28 +305,8 @@ export function useFirebaseDevices() {
   useEffect(() => {
     let unsubscribe: Unsubscribe | undefined;
     if (!isFirebaseConfigured() || !database) {
-      // Load from local storage or use mock data
-      const storedDevices = getFromStorage(STORAGE_KEYS.DEVICES)
-
-      if (storedDevices && storedDevices.length > 0) {
-        setDevices(storedDevices)
-      } else {
-        // Mock data for development
-        const mockDevices: DeviceStatus[] = [
-          {
-            deviceId: "ESP32_001",
-            status: "online",
-            ipAddress: "192.168.1.100",
-            lastSeen: Date.now(),
-            scanCount: 45,
-            freeHeap: 245760,
-          },
-        ]
-        setDevices(mockDevices)
-        saveToStorage(STORAGE_KEYS.DEVICES, mockDevices)
-      }
-
-      setError(null)
+      setDevices([])
+      setError("Firebase tidak tersedia.")
       setLoading(false)
       return
     }
@@ -454,11 +339,7 @@ export function useFirebaseDevices() {
 
   const updateDeviceStatus = async (deviceId: string, status: Partial<DeviceStatus>) => {
     if (!isFirebaseConfigured()) {
-      // Local storage implementation
-      const updatedDevices = devices.map((device) => (device.deviceId === deviceId ? { ...device, ...status } : device))
-      setDevices(updatedDevices)
-      saveToStorage(STORAGE_KEYS.DEVICES, updatedDevices)
-      return
+      throw new Error("Firebase tidak tersedia")
     }
 
     try {
@@ -499,12 +380,8 @@ export function useFirebaseTransactions(limit: number | null = 5000) {
 
       if (!firebaseReady || !isFirebaseConfigured() || !database || !dbRefs || !dbRefs.transactions) {
         console.warn("Firebase not configured or transactions ref not available for useFirebaseTransactions.");
-        const storedTransactions = stripLegacyPriceFields(getFromStorage(STORAGE_KEYS.TRANSACTIONS));
-        if (storedTransactions && storedTransactions.length > 0) {
-          setTransactions(storedTransactions.map((t: any) => ({ ...t, timestamp: t.timestamp || Date.now() })));
-        } else {
-          setTransactions([]);
-        }
+        setTransactions([]);
+        setError("Firebase tidak tersedia. Cache transaksi lokal dinonaktifkan.");
         setLoading(false);
         return;
       }

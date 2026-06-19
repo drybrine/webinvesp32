@@ -37,7 +37,7 @@ Firebase Realtime Database is the only backend. All config keys are `NEXT_PUBLIC
 
 ## Architecture
 
-This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.2). The web app and the firmware share one Firebase Realtime Database.
+This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.3). The web app and the firmware share one Firebase Realtime Database.
 
 ### Data flow
 
@@ -45,7 +45,9 @@ This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sk
 - **Firebase → web**: every `hooks/use-firebase.ts` hook subscribes via `onValue` — inventory, scans, devices, transactions are all reactive. No polling.
 - **Web → Firebase**: all stock changes (dashboard + ESP32 scan popup) use **atomic `adjustStock()`** — a single multi-path `update()` that writes `inventory/{id}/quantity` via server-side `increment(delta)` AND creates `transactions/{id}` in one atomic operation. This eliminates race conditions from concurrent writes (scanner + dashboard + multi-tab). Operator = `"Dashboard"` for manual, `"Scanner"` for ESP32.
 - **Unknown barcode quick add**: `components/unified-quick-action-popup.tsx` handles ESP32 scans whose barcode is not yet in `/inventory`. Keep the "Tambah Produk Baru" form aligned with the inventory schema used by Firebase/dashboard: `barcode`, `name`, `category`, `quantity`, `minStock`, optional `location`/`description`/`supplier`, and `lastUpdated`. `id`, `createdAt`, and `updatedAt` are handled by `firebaseHelpers.addInventoryItem`; record the initial stock transaction separately. Do not reintroduce a `price` field — this project tracks warehouse sparepart stock, not retail value.
-- **Device liveness**: `hooks/use-realtime-device-status.ts` subscribes to `/devices` via `onValue`, then re-evaluates online/offline client-side every 3 seconds based on the age of `lastHeartbeat`/`lastSeen`. Threshold: 15s. The Firebase Cloud Function `functions/index.js` is the active server-side device-status sweeper (runs every 30s); no Next.js API route is involved.
+- **Device liveness**: `hooks/use-realtime-device-status.ts` subscribes to `/devices` via `onValue`, then re-evaluates online/offline client-side every 3 seconds based on the age of `lastHeartbeat`/`lastSeen`. Threshold: 15s. Tidak ada scheduled Firebase Function; status tampilan diturunkan dari usia heartbeat.
+- **Admin server API**: `/api/admin/*` adalah Next.js Route Handlers yang berjalan sebagai Vercel Functions. `lib/server/firebase-admin.ts` memuat `FIREBASE_SERVICE_ACCOUNT` server-only; setiap request memverifikasi Firebase ID token, role admin, dan profil `/users/{uid}`. `lib/admin-api.ts` mempertahankan kontrak typed client melalui same-origin `fetch`.
+- **Audit scope**: Karena Firebase Spark tidak mendukung database triggers, `/auditLogs` server-generated mencakup mutasi user/device melalui Vercel admin API. Write inventory/transaksi/scan yang langsung menuju RTDB tidak otomatis diaudit oleh Vercel.
 
 ### Inventory mode is the only mode
 
@@ -69,7 +71,11 @@ Legacy data migration: if the production database still has `price` on `/invento
 - `app/transaksi/page.tsx` — transaction feed, filters by type/period/**source** (Manual = operator is Dashboard/Manual/empty; legacy Admin is also treated as Manual; Scanner = anything else). Pagination 50/halaman. Export CSV.
 - `app/prediksi/page.tsx` — Simple Linear Regression prediction per item via Python serverless, detailed SVG chart in `components/prediction-chart.tsx`, model metrics (R², MAE, RMSE), forecast table, testing model panel, badge sumber model. Do not display anomaly detection in this page; it is outside the thesis scope.
 - `app/scan/page.tsx` — manual barcode input, PDF417 barcode render via bwip-js (`components/pdf417-barcode.tsx`), scan history.
-- `/api/predict` — **not a Next.js route**. `vercel.json` maps `api/predict.py` (Vercel Python function, `@vercel/python@4.3.1`, maxDuration 30s) to handle `/api/predict` directly. The frontend `fetch("/api/predict", …)` calls hit the Python handler. Supports single item and batch mode (`mode: 'batch'` for dashboard top-N risk items). There is no `app/api/predict/route.ts`. No other Next.js API routes exist — `app/api/` is empty. ESP32 pushes to Firebase directly; diagnostics live in `functions/index.js`.
+- `app/login/page.tsx` — Firebase email/password sign-in + password reset request. No public sign-up.
+- `app/admin/users/page.tsx` & `app/admin/devices/page.tsx` — admin-only management UIs calling `/api/admin/*` via `lib/admin-api.ts`. Guarded by `components/auth-provider.tsx` (redirects non-admins). One-time secrets shown via `components/credential-dialog.tsx`.
+- `app/audit/page.tsx` — admin-only read view of `/auditLogs`.
+- `/api/predict` — **not a Next.js route**. `vercel.json` maps `api/predict.py` (Vercel Python function, `@vercel/python@4.3.1`, maxDuration 30s) to handle `/api/predict` directly. The frontend `fetch("/api/predict", …)` calls hit the Python handler. Supports single item and batch mode (`mode: 'batch'` for dashboard top-N risk items). There is no `app/api/predict/route.ts`.
+- `/api/admin/*` — Next.js Route Handlers for user/device administration. These are the only `app/api/*` routes. They use Node.js runtime + Firebase Admin SDK, require a bearer ID token for an active admin, and write administration audit records. ESP32 never calls these endpoints and pushes to Firebase directly.
 
 ### Prediction pipeline
 
@@ -104,7 +110,7 @@ The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/tab
 
 ### Firmware notes (`GM67_ESP32_BARCODESCANNER.ino`)
 
-Single file, ~1100 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, `driver/adc` libraries. OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.2"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state (including batteryLevel, rssi) to `/devices/{deviceId}` every 8s.
+Single file, ~1100 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, `driver/adc` libraries. OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.3"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state (including batteryLevel, rssi) to `/devices/{deviceId}` every 8s.
 
 Battery monitoring: `esp_adc_cal` eFuse Vref calibration, EMA smoothing (α=0.05), hysteresis ±2%, range 3200–3800mV. Battery sampled before HTTP request to avoid WiFi voltage sag. OLED shows 4-bar battery icon + 4-bar WiFi signal icon (RSSI-based).
 
@@ -126,8 +132,18 @@ Battery monitoring: `esp_adc_cal` eFuse Vref calibration, EMA smoothing (α=0.05
   notifications in `hooks/use-realtime-device-status.ts` can show
   multiple toasts in a batch). Session-scoped dedup (`sessionStorage` +
   `previousStatusRef`) keeps repeat alerts from flooding the queue.
-- The web app has **no `app/api/*` routes**. The only API endpoint is
-  `/api/predict` served by the Vercel Python function at `api/predict.py`.
-  All Firebase writes happen client-side via `firebase/database`. The
-  Firebase Cloud Function in `functions/index.js` is the only scheduled
-  server-side task (device-status sweeper, every 30s).
+- API surfaces are intentionally limited: `/api/predict` is the Vercel Python
+  function at `api/predict.py`; `/api/admin/*` are authenticated Vercel Node.js
+  Functions for user/device administration. Inventory, transaction, scan, and
+  heartbeat traffic still goes directly through `firebase/database`.
+- Admin one-time secrets (temporary passwords, scanner credentials, reset
+  links) are surfaced via `components/credential-dialog.tsx` — a persistent
+  dialog with copy buttons. Never put a one-time secret in a toast; it
+  disappears before the user can copy it.
+- `FIREBASE_SERVICE_ACCOUNT` is server-only (one-line JSON or base64;
+  `lib/server/firebase-admin.ts` accepts both). On Vercel set it for **both
+  Preview and Production** — the deploy branch `555` is the Production branch,
+  so a Preview-only secret is invisible to it.
+- `functions/` (Firebase Cloud Functions) was removed; the project cannot use
+  Blaze. Do not reintroduce callable/blocking functions, RTDB triggers, or a
+  device-status sweeper. Server logic lives in Vercel Functions.

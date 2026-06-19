@@ -22,6 +22,8 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase"
 import { firebaseHelpers } from "@/lib/firebase"
 import { downloadCsv } from "@/lib/csv"
+import { useAuth } from "@/components/auth-provider"
+import { canWrite } from "@/types/security"
 
 interface Transaction {
   id: string
@@ -36,6 +38,8 @@ interface Transaction {
 }
 
 export default function TransaksiPage() {
+  const { role } = useAuth()
+  const writable = canWrite(role)
   const { items: inventory, loading: inventoryLoading } = useFirebaseInventory()
   const {
     transactions,
@@ -296,7 +300,7 @@ export default function TransaksiPage() {
         {/* Header */}
         <div className="animate-fade-in-up">
           <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">Riwayat Transaksi</h1>
-          <p className="text-sm text-muted-foreground mt-1">Kelola dan pantau semua transaksi stok</p>
+          <p className="text-sm text-muted-foreground mt-1">Ledger bersifat permanen; koreksi dicatat sebagai transaksi pembalik baru.</p>
         </div>
 
         {/* Stats Cards */}
@@ -382,7 +386,7 @@ export default function TransaksiPage() {
                 <Button variant="outline" size="sm" onClick={() => exportTransactionsToCSV(filteredTransactions)} disabled={filteredTransactions.length === 0}>
                   <Download className="h-4 w-4 mr-2" />Export
                 </Button>
-                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                {writable && <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                   <DialogTrigger asChild>
                     <Button size="sm"><Plus className="h-4 w-4 mr-2" />Tambah</Button>
                   </DialogTrigger>
@@ -430,7 +434,7 @@ export default function TransaksiPage() {
                       <Button onClick={handleAddTransaction}>Simpan</Button>
                     </DialogFooter>
                   </DialogContent>
-                </Dialog>
+                </Dialog>}
               </div>
             </div>
           </CardHeader>
