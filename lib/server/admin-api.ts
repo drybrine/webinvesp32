@@ -55,7 +55,7 @@ interface VerifiedIdentity {
 }
 
 export interface AuditInput {
-  entity: "user" | "device"
+  entity: "user" | "device" | "firmware"
   entityId: string
   action: AuditAction
   actor: AdminActor

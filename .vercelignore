@@ -16,6 +16,18 @@ node_modules/
 *.py[cod]
 .cache/
 
+# Firmware build artifacts (.elf/.map/.bin ~70MB) — kalau ikut ter-upload,
+# @vercel/python membundel seluruh dir proyek dan menembus limit 250MB function.
+GM67_ESP32_BARCODESCANNER/build/
+*.elf
+*.ino.map
+*.ino.bin
+*.merged.bin
+
+# Thesis sources (tidak perlu di runtime)
+skripsi/
+*.docx
+
 # Local-only data and credentials
 .env*
 !.env.example

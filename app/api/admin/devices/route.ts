@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto"
+import type { UserRecord } from "firebase-admin/auth"
 import { ServerValue } from "firebase-admin/database"
 import {
   AdminApiError,
@@ -20,6 +21,7 @@ type UpdateDeviceInput = {uid?: unknown; disabled?: unknown}
 type RevokeDeviceInput = {uid?: unknown}
 
 function makePassword() {
+  // Keep ":" out because firmware provisioning uses it as the field delimiter.
   return `${randomBytes(18).toString("base64url")}aA1!`
 }
 
@@ -58,11 +60,38 @@ export async function POST(request: Request) {
 
     // ponytail: device registry is tiny; add an index/query only if it grows large.
     const mappings = (await database.ref("deviceAuth").get()).val() || {}
-    if (Object.values(mappings).some((value) => (value as {deviceId?: unknown}).deviceId === deviceId)) {
+    if (Object.values(mappings).some((value) => String((value as {deviceId?: unknown}).deviceId || "").toUpperCase() === deviceId)) {
       throw new AdminApiError("conflict", "Device ID sudah terdaftar")
     }
 
-    const record = await auth.createUser({email, password, displayName: label})
+    let record: UserRecord
+    let created = false
+    try {
+      record = await auth.getUserByEmail(email)
+      const profileExists = (await database.ref(`users/${record.uid}`).get()).exists()
+      const role = record.customClaims?.role
+      const claimedDeviceId = String(record.customClaims?.deviceId || "").toUpperCase()
+      if (
+        mappings[record.uid] ||
+        profileExists ||
+        role === "admin" ||
+        role === "operator" ||
+        role === "viewer" ||
+        (claimedDeviceId && claimedDeviceId !== deviceId)
+      ) {
+        throw new AdminApiError("conflict", "Akun tersebut sudah terdaftar dan tidak dapat dipulihkan otomatis")
+      }
+      await auth.updateUser(record.uid, {password, displayName: label, disabled: false})
+      await auth.revokeRefreshTokens(record.uid)
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error
+        ? String((error as {code: unknown}).code)
+        : ""
+      if (code !== "auth/user-not-found") throw error
+      record = await auth.createUser({email, password, displayName: label})
+      created = true
+    }
+
     try {
       await auth.setCustomUserClaims(record.uid, {
         role: "device",
@@ -70,16 +99,19 @@ export async function POST(request: Request) {
         deviceId,
         disabled: false,
       })
-      await database.ref(`deviceAuth/${record.uid}`).set({
-        uid: record.uid,
-        deviceId,
-        email,
-        label,
-        disabled: false,
-        operationId,
-        updatedByUid: actor.uid,
-        createdAt: ServerValue.TIMESTAMP,
-        updatedAt: ServerValue.TIMESTAMP,
+      await database.ref().update({
+        [`deviceAuth/${record.uid}`]: {
+          uid: record.uid,
+          deviceId,
+          email,
+          label,
+          disabled: false,
+          operationId,
+          updatedByUid: actor.uid,
+          createdAt: ServerValue.TIMESTAMP,
+          updatedAt: ServerValue.TIMESTAMP,
+        },
+        [`devices/${deviceId}`]: null,
       })
       const device = publicDevice({
         uid: record.uid,
@@ -101,10 +133,8 @@ export async function POST(request: Request) {
       })
       return json({device, password}, {status: 201})
     } catch (error) {
-      await Promise.allSettled([
-        auth.deleteUser(record.uid),
-        database.ref(`deviceAuth/${record.uid}`).remove(),
-      ])
+      await database.ref(`deviceAuth/${record.uid}`).remove()
+      if (created) await auth.deleteUser(record.uid)
       throw error
     }
   } catch (error) {
@@ -175,7 +205,10 @@ export async function DELETE(request: Request) {
     const operationId = randomUUID()
     await auth.updateUser(uid, {disabled: true})
     await auth.revokeRefreshTokens(uid)
-    await mappingRef.remove()
+    await Promise.all([
+      mappingRef.remove(),
+      database.ref(`devices/${before.deviceId}`).remove(),
+    ])
     await auth.deleteUser(uid)
     await writeAudit({
       entity: "device",

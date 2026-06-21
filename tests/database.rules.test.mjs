@@ -210,6 +210,40 @@ test("scan identity fields are immutable when operator marks processed", async (
   await assertFails(update(ref(db, "scans/scan-1"), {barcode: "changed"}))
 })
 
+test("device reads only its own OTA command and writes only its own OTA status", async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.database()
+    await set(ref(db, "deviceCommands/ESP32-1234ABCD/ota"), {
+      commandId: "cmd-1",
+      version: "6.4.0",
+      binaryUrl: "https://example.com/firmware.bin",
+      size: 1200000,
+      sha256: "a".repeat(64),
+      signature: "sig",
+      issuedAt: 100,
+    })
+    await set(ref(db, "deviceCommands/ESP32-FFFFFFFF/ota"), {commandId: "cmd-2", version: "6.4.0", issuedAt: 100})
+  })
+  const db = device()
+  const now = Date.now()
+  await assertSucceeds(get(ref(db, "deviceCommands/ESP32-1234ABCD/ota")))
+  await assertFails(get(ref(db, "deviceCommands/ESP32-FFFFFFFF/ota")))
+  await assertFails(set(ref(db, "deviceCommands/ESP32-1234ABCD/ota"), {commandId: "x", version: "6.4.0", issuedAt: now}))
+  await assertSucceeds(set(ref(db, "deviceOtaStatus/ESP32-1234ABCD"), {phase: "downloading", progress: 40, updatedAt: now}))
+  await assertFails(set(ref(db, "deviceOtaStatus/ESP32-FFFFFFFF"), {phase: "downloading", updatedAt: now}))
+  await assertFails(set(ref(db, "deviceOtaStatus/ESP32-1234ABCD"), {phase: "haxor", updatedAt: now}))
+})
+
+test("admin can read OTA status but cannot forge a device command or status", async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await set(ref(context.database(), "deviceOtaStatus/ESP32-1234ABCD"), {phase: "success", version: "6.4.0", updatedAt: 100})
+  })
+  const admin = human("admin-1", "admin")
+  await assertSucceeds(get(ref(admin, "deviceOtaStatus/ESP32-1234ABCD")))
+  await assertFails(set(ref(admin, "deviceCommands/ESP32-1234ABCD/ota"), {commandId: "x", version: "6.4.0", issuedAt: Date.now()}))
+  await assertFails(set(ref(admin, "deviceOtaStatus/ESP32-1234ABCD"), {phase: "success", updatedAt: Date.now()}))
+})
+
 test("audit logs are admin-readable and immutable to every client", async () => {
   await assertSucceeds(get(ref(human("admin-1", "admin"), "auditLogs")))
   await assertFails(get(ref(human("viewer-1", "viewer"), "auditLogs")))

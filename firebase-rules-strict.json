@@ -34,6 +34,19 @@
         ".validate": "newData.hasChildren(['status', 'lastSeen']) && newData.child('status').val().matches(/^(online|offline)$/) && newData.child('lastSeen').isNumber() && (!newData.hasChild('ipAddress') || newData.child('ipAddress').isString())"
       }
     },
+    "deviceCommands": {
+      "$deviceId": {
+        ".read": "auth != null && auth.token.disabled != true && auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false",
+        ".write": false
+      }
+    },
+    "deviceOtaStatus": {
+      "$deviceId": {
+        ".read": "auth != null && auth.token.disabled != true && ((auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false) || (auth.token.role == 'admin' && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false))",
+        ".write": "auth != null && auth.token.disabled != true && auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false && newData.exists()",
+        ".validate": "newData.hasChildren(['phase', 'updatedAt']) && newData.child('phase').val().matches(/^(pending|deferred|downloading|verifying|flashing|success|failed|rollback)$/) && newData.child('updatedAt').isNumber() && (!newData.hasChild('progress') || (newData.child('progress').isNumber() && newData.child('progress').val() >= 0 && newData.child('progress').val() <= 100))"
+      }
+    },
     "users": {
       "$uid": {
         ".read": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && (auth.uid == $uid || auth.token.role == 'admin')",

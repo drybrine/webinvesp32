@@ -33,11 +33,25 @@ yarn-error.log*
 *service-account*.json
 *firebase-adminsdk*.json
 
+# OTA firmware signing keys — private key never leaves your machine / GitHub Secret.
+# Public key (ota_public.pem) is embedded in the sketch, so it is safe to keep,
+# but the .pem files themselves should not be committed.
+ota_private.pem
+ota_public.pem
+*-private.pem
+*signing*.pem
+
 # AI / agent tool directories
 .commandcode/
 .claude/
 .codex/
 .codegraph/
+.review/
+
+# Stray Python packages installed into repo root (use a venv instead)
+werkzeug/
+Werkzeug-*.dist-info/
+*.dist-info/
 
 # Performance testing
 performance-report.json

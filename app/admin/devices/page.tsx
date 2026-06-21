@@ -11,6 +11,7 @@ import {
 } from "@/lib/admin-api"
 import type { RegisteredDevice } from "@/types/security"
 import { CredentialDialog, type Credential } from "@/components/credential-dialog"
+import { FirmwareOtaPanel } from "@/components/firmware-ota-panel"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -44,7 +45,8 @@ export default function AdminDevicesPage() {
   const showCredential = (deviceId: string, email: string, password: string) => {
     setCredential({
       title: "Kredensial scanner",
-      description: "Salin dan masukkan ke web lokal firmware sekarang. Kata sandi hanya ditampilkan satu kali.",
+      description: "Pindai barcode ini dengan scanner setelah WiFi tersambung. Kata sandi hanya ditampilkan satu kali.",
+      barcodeValue: `ESP32PROV:1:${deviceId}:${email}:${password}`,
       fields: [
         { label: "Device ID", value: deviceId, mono: true },
         { label: "Email", value: email, mono: true },
@@ -69,6 +71,9 @@ export default function AdminDevicesPage() {
     try {
       const result = await rotateRegisteredDevice(device.uid)
       showCredential(result.device.deviceId, result.device.email, result.password)
+      if (result.warning) {
+        toast({ title: "Kredensial berubah dengan peringatan", description: result.warning, variant: "destructive" })
+      }
       await refresh()
     } catch (error) {
       toast({ title: "Gagal merotasi kredensial", description: error instanceof Error ? error.message : undefined, variant: "destructive" })
@@ -134,6 +139,12 @@ export default function AdminDevicesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <div className="space-y-2">
+        <h2 className="text-2xl font-bold">Firmware OTA</h2>
+        <p className="text-sm text-muted-foreground">Build firmware bertanda tangan dan kirim pembaruan jarak jauh ke scanner terpilih.</p>
+      </div>
+      <FirmwareOtaPanel registeredDevices={devices} />
 
       <CredentialDialog credential={credential} onClose={() => setCredential(null)} />
     </div>

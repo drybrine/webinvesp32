@@ -34,6 +34,19 @@
         ".validate": "newData.hasChildren(['status', 'lastSeen']) && newData.child('status').val().matches(/^(online|offline)$/) && newData.child('lastSeen').isNumber()"
       }
     },
+    "deviceCommands": {
+      "$deviceId": {
+        ".read": "(auth != null && auth.token.device == true && auth.token.deviceId == $deviceId) || (auth == null && $deviceId.matches(/^ESP32-[a-fA-F0-9]{8}$/))",
+        ".write": false
+      }
+    },
+    "deviceOtaStatus": {
+      "$deviceId": {
+        ".read": "auth != null && (auth.token.role == 'admin' || (auth.token.device == true && auth.token.deviceId == $deviceId))",
+        ".write": "(auth != null && auth.token.device == true && auth.token.deviceId == $deviceId) || (auth == null && $deviceId.matches(/^ESP32-[a-fA-F0-9]{8}$/))",
+        ".validate": "newData.hasChildren(['phase', 'updatedAt']) && newData.child('phase').val().matches(/^(pending|deferred|downloading|verifying|flashing|success|failed|rollback)$/) && newData.child('updatedAt').isNumber()"
+      }
+    },
     "users": {
       "$uid": {
         ".read": "auth != null && (auth.uid == $uid || auth.token.role == 'admin')",

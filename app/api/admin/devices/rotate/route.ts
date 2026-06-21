@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic"
 type RotateDeviceInput = {uid?: unknown}
 
 function makePassword() {
+  // Keep ":" out because firmware provisioning uses it as the field delimiter.
   return `${randomBytes(18).toString("base64url")}aA1!`
 }
 
@@ -37,32 +38,47 @@ export async function POST(request: Request) {
     const operationId = randomUUID()
     const record = await auth.getUser(uid)
     await auth.updateUser(uid, {password, disabled: false})
-    await auth.setCustomUserClaims(uid, {
-      ...(record.customClaims || {}),
-      disabled: false,
-    })
-    await auth.revokeRefreshTokens(uid)
-    await mappingRef.set({
-      ...mapping,
-      disabled: false,
-      operationId,
-      updatedByUid: actor.uid,
-      rotatedAt: ServerValue.TIMESTAMP,
-      updatedAt: ServerValue.TIMESTAMP,
-    })
 
     const now = Date.now()
     const after = publicDevice({...mapping, disabled: false, rotatedAt: now, updatedAt: now})
-    await writeAudit({
-      entity: "device",
-      entityId: uid,
-      action: "rotate",
-      actor,
-      before,
-      after,
-      operationId,
-    })
-    return json({device: after, password})
+    const updates = await Promise.allSettled([
+      auth.setCustomUserClaims(uid, {
+        ...(record.customClaims || {}),
+        disabled: false,
+      }),
+      auth.revokeRefreshTokens(uid),
+      mappingRef.set({
+        ...mapping,
+        disabled: false,
+        operationId,
+        updatedByUid: actor.uid,
+        rotatedAt: ServerValue.TIMESTAMP,
+        updatedAt: ServerValue.TIMESTAMP,
+      }),
+    ])
+
+    let warning: string | undefined
+    if (updates.some((result) => result.status === "rejected")) {
+      console.error("Device credential rotation metadata sync failed:", updates)
+      warning = "Kata sandi sudah berubah, tetapi sinkronisasi metadata belum lengkap. Simpan kredensial ini dan coba lagi bila scanner belum terhubung."
+    } else {
+      try {
+        await writeAudit({
+          entity: "device",
+          entityId: uid,
+          action: "rotate",
+          actor,
+          before,
+          after,
+          operationId,
+        })
+      } catch (error) {
+        console.error("Device credential rotation audit failed:", error)
+        warning = "Kata sandi sudah berubah, tetapi audit gagal dicatat. Simpan kredensial ini."
+      }
+    }
+
+    return json({device: after, password, warning})
   } catch (error) {
     return errorResponse(error)
   }

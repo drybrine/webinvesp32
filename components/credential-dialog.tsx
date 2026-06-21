@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Check, Copy } from "lucide-react"
+import Pdf417Barcode from "@/components/pdf417-barcode"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
@@ -16,6 +17,7 @@ export interface Credential {
   title: string
   description?: string
   fields: CredentialField[]
+  barcodeValue?: string
 }
 
 function CopyButton({ value }: { value: string }) {
@@ -46,9 +48,20 @@ export function CredentialDialog({ credential, onClose }: { credential: Credenti
             {credential?.description ?? "Salin dan simpan sekarang. Nilai ini hanya ditampilkan satu kali."}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 py-2">
+        <div className="flex flex-col gap-3 py-2">
+          {credential?.barcodeValue ? (
+            <div className="flex flex-col items-center gap-2 rounded-md border p-3">
+              <Label className="text-xs text-muted-foreground">Pindai dengan scanner</Label>
+              <Pdf417Barcode
+                value={credential.barcodeValue}
+                height={90}
+                className="h-auto max-w-full"
+                ariaLabel="Barcode provisioning scanner"
+              />
+            </div>
+          ) : null}
           {credential?.fields.map((field) => (
-            <div key={field.label} className="space-y-1">
+            <div key={field.label} className="flex flex-col gap-1">
               <Label className="text-xs text-muted-foreground">{field.label}</Label>
               <div className="flex items-center gap-2">
                 <code className={`flex-1 rounded-md bg-muted px-3 py-2 text-sm break-all ${field.mono ? "font-mono" : ""}`}>

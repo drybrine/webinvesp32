@@ -13,10 +13,16 @@
 #include <EEPROM.h>
 #include <Preferences.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <Update.h>
 #include <ArduinoJson.h>
 #include <time.h>
 #include <esp_adc_cal.h>
 #include <driver/adc.h>
+#include <esp_ota_ops.h>
+#include "mbedtls/pk.h"
+#include "mbedtls/sha256.h"
+#include "mbedtls/base64.h"
 
 // --- OLED SSD1306 I2C --------------------------------------------------------
 #include <Wire.h>
@@ -42,9 +48,26 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.3"
+#define FIRMWARE_VERSION   "6.4.0"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
+#define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
+#define FIREBASE_WEB_API_KEY  "AIzaSyBDMTHkz_BwbqKfkVQYvKEI3yfrOLa_jLY"
+#define PROVISIONING_PREFIX   "ESP32PROV:"
+
+// --- OTA (over-the-air firmware update) --------------------------------------
+#define OTA_MIN_BATTERY_PCT     30      // do not flash below this charge
+#define OTA_IDLE_REQUIRED_MS    10000UL // require this long since last scan
+#define OTA_MAX_RETRIES         3       // attempts per commandId before giving up
+#define OTA_BOOT_VALIDATE_MS    20000UL // confirm heartbeat OK within this window post-update
+
+// ECDSA P-256 public key (PEM/SPKI) matching OTA_SIGNING_PRIVATE_KEY in CI.
+// The private key never leaves the GitHub secret; only this public half ships.
+// Replace this placeholder with the real public key before deploying OTA.
+static const char OTA_PUBLIC_KEY_PEM[] = R"PEM(-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAESfNSHy9GKbRYMLwbN0PpUco70un0
+ZJfN84aY52ZkOOxZG8Yq6GBQadq269UEtQXPvwZXT/ZjZFqORuqBifgmWg==
+-----END PUBLIC KEY-----)PEM";
 
 // --- Battery Monitoring (voltage divider R1=R2=100kΩ) ------------------------
 #define BATTERY_PIN          34
@@ -68,9 +91,6 @@ struct WiFiConfig {
 
 struct DeviceConfig {
   char     deviceId[32];
-  char     serverUrl[128];
-  char     firebaseUrl[128];
-  char     apiKey[64];
   bool     isConfigured;
   uint32_t checksum;
   uint8_t  version;
@@ -124,17 +144,25 @@ String        provisioningPin = "";
 uint8_t       provisioningFailures = 0;
 unsigned long provisioningLockedUntil = 0;
 
+// --- OTA state ---------------------------------------------------------------
+unsigned long lastOtaCheck       = 0;
+String        otaActiveCommandId = "";   // commandId currently being attempted
+String        otaLastFailedId    = "";   // commandId that exhausted retries
+uint8_t       otaRetryCount      = 0;
+bool          otaInProgress      = false;
+Preferences   otaPreferences;
+#define OTA_CHECK_INTERVAL_MS 8000UL
+
 std::vector<ScanData> scanHistory;
 
 // --- Function Declarations ---------------------------------------------------
 void          handleRoot();
 void          handleApiStatus();
 void          handleApiScan();
-void          handleApiHistory();
-void          handleApiConfig();
 void          handleReset();
 void          startWebServer();
 void          processBarcodeInput(String input);
+void          processProvisioningBarcode(String input);
 void          processInventoryBarcode(String barcode);
 bool          connectToWiFi();
 bool          sendScanToFirebase(String barcode);
@@ -153,7 +181,6 @@ void          loadWiFiConfig();
 void          saveDeviceConfig();
 void          loadDeviceConfig();
 void          checkWiFiConnection();
-void          setDeviceOffline();
 uint32_t      calculateChecksum(const void* data, size_t length);
 void          initOLED();
 void          drawBatteryIcon(int x, int y, int percent);
@@ -170,7 +197,19 @@ void          oledShowWiFiConnected(String ip);
 void          oledShowNoWiFi();
 void          oledShowAuthError();
 void          oledShowProvisioningPin();
+void          oledShowProvisioningSuccess();
+bool          isDeviceProvisioned();
 void          oledUpdateIdle();
+// --- OTA ---------------------------------------------------------------------
+void          checkForOtaCommand();
+bool          performOtaUpdate(const String& commandId, const String& binaryUrl,
+                               const String& sha256Hex, const String& signatureB64,
+                               size_t expectedSize, const String& version);
+bool          verifyOtaSignature(const uint8_t* hash, const uint8_t* signature, size_t sigLen);
+void          reportOtaStatus(const char* phase, const String& version, int progress, const String& message);
+bool          otaPreconditionsMet();
+void          validateOtaBootSuccess(bool heartbeatOk);
+void          oledShowOtaProgress(const String& version, const char* phase, int progress);
 // -----------------------------------------------------------------------------
 
 
@@ -558,13 +597,37 @@ void oledShowProvisioningPin() {
   if (!oledAvailable) return;
   display.clearDisplay();
   display.setTextSize(1);
-  display.setCursor(14, 0); display.println("PROVISIONING PIN");
+  display.setCursor(22, 0); display.println("PROVISIONING");
   display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-  display.setTextSize(2);
-  display.setCursor(28, 23); display.println(provisioningPin);
-  display.setTextSize(1);
-  display.setCursor(10, 50); display.println("Valid sampai reboot");
+  if (isWiFiConnected) {
+    display.setCursor(0, 18); display.println(deviceConfig.deviceId);
+    display.setCursor(0, 32); display.println("Daftar ID di admin,");
+    display.setCursor(0, 42); display.println("lalu scan barcode.");
+    display.setCursor(0, 56); display.print("PIN reset: "); display.println(provisioningPin);
+  } else {
+    display.setCursor(0, 22); display.println("Scan QR WiFi dahulu.");
+    display.setCursor(0, 42); display.println(deviceConfig.deviceId);
+  }
   display.display();
+}
+
+void oledShowProvisioningSuccess() {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(12, 0); display.println("PROVISIONING BERHASIL");
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  display.setCursor(0, 22); display.println(deviceConfig.deviceId);
+  display.setCursor(0, 40); display.println("Firebase terhubung.");
+  display.setCursor(0, 52); display.println("Scanner siap.");
+  display.display();
+  lastBarcodeOnOled = millis();
+}
+
+// Provisioning selesai setelah refresh token tersimpan. Kondisi authRejected adalah
+// kesehatan sesi saat ini, bukan alasan untuk meminta provisioning ulang.
+bool isDeviceProvisioned() {
+  return firebaseRefreshToken.length() > 0;
 }
 
 // Memperbarui tampilan idle OLED secara berkala.
@@ -574,6 +637,16 @@ void oledUpdateIdle() {
   if (millis() - lastBarcodeOnOled < OLED_BARCODE_HOLD_MS) return;
   if (millis() - lastOledRefresh   < 3000) return;
   lastOledRefresh = millis();
+  // Selama belum diprovisikan, tahan PIN di layar agar admin tetap bisa membacanya
+  // (jika tidak, koneksi WiFi & status idle akan menimpanya dan PIN tak terlihat lagi).
+  if (!isDeviceProvisioned()) {
+    oledShowProvisioningPin();
+    return;
+  }
+  if (authRejected) {
+    oledShowAuthError();
+    return;
+  }
   oledShowStatus();
 }
 
@@ -608,7 +681,7 @@ void loadWiFiConfig() {
   }
 }
 
-// Menyimpan konfigurasi perangkat seperti deviceId, Firebase URL, dan server URL.
+// Menyimpan identitas perangkat. Firebase memakai satu konfigurasi tetap firmware.
 // Checksum memastikan data EEPROM yang dibaca nanti masih utuh.
 void saveDeviceConfig() {
   deviceConfig.version      = 1;
@@ -641,13 +714,7 @@ void loadDeviceConfig() {
     memset(&deviceConfig, 0, sizeof(deviceConfig));
     char defId[24];
     snprintf(defId, sizeof(defId), "ESP32-%08lX", (unsigned long)((uint32_t)ESP.getEfuseMac()));
-    strncpy(deviceConfig.deviceId,    defId, sizeof(deviceConfig.deviceId)    - 1);
-    strncpy(deviceConfig.serverUrl,   "https://stokmanager.vercel.app/",
-                                                      sizeof(deviceConfig.serverUrl)   - 1);
-    strncpy(deviceConfig.firebaseUrl,
-      "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app",
-                                                      sizeof(deviceConfig.firebaseUrl) - 1);
-    strncpy(deviceConfig.apiKey,      "",             sizeof(deviceConfig.apiKey)      - 1);
+    strncpy(deviceConfig.deviceId, defId, sizeof(deviceConfig.deviceId) - 1);
     deviceConfig.version      = 1;
     deviceConfig.isConfigured = true;
     memset(deviceConfig.padding, 0, sizeof(deviceConfig.padding));
@@ -705,7 +772,6 @@ void checkWiFiConnection() {
     if (isWiFiConnected) {
       Serial.println("WiFi putus, reconnecting...");
       isWiFiConnected = false; isOnline = false;
-      setDeviceOffline();
       if (wifiConfig.isValid) {
         oledShowWiFiConnecting(String(wifiConfig.ssid));
         WiFi.reconnect(); delay(5000);
@@ -772,14 +838,14 @@ void scheduleAuthRetry() {
 }
 
 bool signInDevice(String email, String password) {
-  if (!isWiFiConnected || strlen(deviceConfig.apiKey) == 0 || email.length() == 0 || password.length() == 0) {
+  if (!isWiFiConnected || email.length() == 0 || password.length() == 0) {
     password = "";
     return false;
   }
 
   HTTPClient http;
   String url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" +
-               String(deviceConfig.apiKey);
+               String(FIREBASE_WEB_API_KEY);
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(10000);
@@ -812,20 +878,41 @@ bool signInDevice(String email, String password) {
     return false;
   }
 
+  String previousIdToken = firebaseIdToken;
+  String previousRefreshToken = firebaseRefreshToken;
+  unsigned long previousExpiresAt = firebaseTokenExpiresAt;
+  unsigned long previousRetryAt = nextAuthRetryAt;
+  uint8_t previousRetryCount = authRetryCount;
+  bool previousAuthRejected = authRejected;
+
   firebaseIdToken = responseDoc["idToken"].as<String>();
   firebaseRefreshToken = responseDoc["refreshToken"].as<String>();
   unsigned long expiresIn = responseDoc["expiresIn"].as<unsigned long>();
   firebaseTokenExpiresAt = millis() + expiresIn * 1000UL;
-  authPreferences.putString("refreshToken", firebaseRefreshToken);
   authRejected = false;
   authRetryCount = 0;
   nextAuthRetryAt = 0;
+
+  // Rules memastikan token ini benar-benar dipetakan ke deviceId lokal sebelum
+  // refresh token lama diganti.
+  if (!sendHeartbeatToFirebase()) {
+    firebaseIdToken = previousIdToken;
+    firebaseRefreshToken = previousRefreshToken;
+    firebaseTokenExpiresAt = previousExpiresAt;
+    nextAuthRetryAt = previousRetryAt;
+    authRetryCount = previousRetryCount;
+    authRejected = previousAuthRejected;
+    Serial.println("Device authentication ditolak: deviceId tidak cocok");
+    return false;
+  }
+
+  authPreferences.putString("refreshToken", firebaseRefreshToken);
   Serial.println("Device authentication berhasil");
   return true;
 }
 
 bool refreshFirebaseToken(bool force) {
-  if (!isWiFiConnected || strlen(deviceConfig.apiKey) == 0 || firebaseRefreshToken.length() == 0) return false;
+  if (!isWiFiConnected || firebaseRefreshToken.length() == 0) return false;
   if (!force) {
     if ((long)(nextAuthRetryAt - millis()) > 0) return false;
     if (firebaseIdToken.length() > 0 &&
@@ -835,7 +922,7 @@ bool refreshFirebaseToken(bool force) {
   }
 
   HTTPClient http;
-  String url = "https://securetoken.googleapis.com/v1/token?key=" + String(deviceConfig.apiKey);
+  String url = "https://securetoken.googleapis.com/v1/token?key=" + String(FIREBASE_WEB_API_KEY);
   http.begin(url);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   http.setTimeout(10000);
@@ -883,15 +970,15 @@ bool ensureFirebaseAuth() {
 String firebaseUrlWithAuth(String pathAndQuery) {
   if (!ensureFirebaseAuth()) return "";
   String delimiter = pathAndQuery.indexOf('?') >= 0 ? "&" : "?";
-  return String(deviceConfig.firebaseUrl) + pathAndQuery + delimiter +
+  return String(FIREBASE_DATABASE_URL) + pathAndQuery + delimiter +
          "auth=" + firebaseIdToken;
 }
 
 // Mengirim hasil scan barcode ke node /scans di Firebase Realtime Database.
 // Record dibuat sebagai inventory_scan agar web dapat menampilkan popup scan dengan cepat.
 bool sendScanToFirebase(String barcode) {
-  if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) {
-    Serial.println("Tidak bisa kirim scan: no WiFi/URL");
+  if (!isWiFiConnected) {
+    Serial.println("Tidak bisa kirim scan: no WiFi");
     return false;
   }
   HTTPClient http;
@@ -937,7 +1024,7 @@ bool sendScanToFirebase(String barcode) {
 InventoryItem lookupInventoryByBarcode(String barcode) {
   InventoryItem item;
   item.found = false;
-  if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) return item;
+  if (!isWiFiConnected) return item;
 
   HTTPClient http;
   String url = firebaseUrlWithAuth(
@@ -986,28 +1073,11 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
   return item;
 }
 
-// 4. Update /analytics
-
-// Menandai perangkat offline pada /devices/{deviceId}/status.
-// Dipakai saat WiFi terputus agar dashboard tidak terus menganggap scanner online.
-void setDeviceOffline() {
-  if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) return;
-  HTTPClient http;
-  String url = firebaseUrlWithAuth(
-    "/devices/" + String(deviceConfig.deviceId) + "/status.json"
-  );
-  if (url.length() == 0) return;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  http.PUT("\"offline\"");
-  http.end();
-}
-
 // Mengirim heartbeat berkala ke /devices/{deviceId}.
 // Payload berisi status koneksi, uptime, heap, baterai, RSSI, versi firmware, dan mode.
 bool sendHeartbeatToFirebase() {
-  if (!isWiFiConnected || strlen(deviceConfig.firebaseUrl) == 0) {
-    Serial.println("Heartbeat: no WiFi/URL");
+  if (!isWiFiConnected) {
+    Serial.println("Heartbeat: no WiFi");
     return false;
   }
   HTTPClient http;
@@ -1060,6 +1130,350 @@ bool sendHeartbeatToFirebase() {
 
 
 // =============================================================================
+//  OTA FIRMWARE UPDATE
+//  Native Update library + ECDSA P-256 signature verification.
+//  Flow: poll /deviceCommands/{id}/ota -> gate on idle+battery -> stream binary
+//  over HTTPS while hashing -> verify signature -> Update.write -> reboot ->
+//  confirm via heartbeat, else rollback after repeated boot failure.
+// =============================================================================
+
+// Menampilkan progres OTA pada OLED agar operator tahu perangkat sedang update.
+void oledShowOtaProgress(const String& version, const char* phase, int progress) {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(20, 0); display.println("FIRMWARE UPDATE");
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  display.setCursor(0, 16); display.print("Versi : v"); display.println(version);
+  display.setCursor(0, 26); display.print("Tahap : "); display.println(phase);
+  if (progress >= 0) {
+    display.drawRect(0, 40, 128, 10, SSD1306_WHITE);
+    int w = (progress > 100 ? 100 : progress) * 126 / 100;
+    display.fillRect(1, 41, w, 8, SSD1306_WHITE);
+    display.setCursor(52, 54); display.print(progress); display.println("%");
+  }
+  display.display();
+}
+
+// Menulis status OTA ke /deviceOtaStatus/{deviceId} agar panel admin dapat memantau.
+void reportOtaStatus(const char* phase, const String& version, int progress, const String& message) {
+  if (!isWiFiConnected) return;
+  HTTPClient http;
+  String url = firebaseUrlWithAuth("/deviceOtaStatus/" + String(deviceConfig.deviceId) + ".json");
+  if (url.length() == 0) return;
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(8000);
+
+  DynamicJsonDocument doc(512);
+  doc["phase"]     = phase;
+  if (version.length() > 0) doc["version"] = version;
+  if (otaActiveCommandId.length() > 0) doc["commandId"] = otaActiveCommandId;
+  if (progress >= 0) doc["progress"] = progress;
+  if (message.length() > 0) doc["message"] = message;
+  JsonObject ts = doc.createNestedObject("updatedAt");
+  ts[".sv"]     = "timestamp";
+
+  String body; serializeJson(doc, body);
+  http.PUT(body);
+  http.end();
+}
+
+// Memverifikasi tanda tangan ECDSA P-256 atas hash SHA-256 firmware.
+// Public key ditanam di firmware; jika verifikasi gagal, update dibatalkan.
+bool verifyOtaSignature(const uint8_t* hash, const uint8_t* signature, size_t sigLen) {
+  mbedtls_pk_context pk;
+  mbedtls_pk_init(&pk);
+  int rc = mbedtls_pk_parse_public_key(
+    &pk, (const unsigned char*)OTA_PUBLIC_KEY_PEM, sizeof(OTA_PUBLIC_KEY_PEM));
+  if (rc != 0) {
+    Serial.printf("OTA: gagal parse public key (-0x%04x)\n", -rc);
+    mbedtls_pk_free(&pk);
+    return false;
+  }
+  rc = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 32, signature, sigLen);
+  mbedtls_pk_free(&pk);
+  if (rc != 0) {
+    Serial.printf("OTA: signature INVALID (-0x%04x)\n", -rc);
+    return false;
+  }
+  Serial.println("OTA: signature OK");
+  return true;
+}
+
+// Mengecek apakah perangkat aman untuk flashing: idle cukup lama dan baterai cukup.
+bool otaPreconditionsMet() {
+  if (millis() - lastScanTime < OTA_IDLE_REQUIRED_MS) return false;
+  int battery = readBatteryLevel();
+  if (battery >= 0 && battery < OTA_MIN_BATTERY_PCT) return false;
+  return true;
+}
+
+// Mengunduh firmware via HTTPS, memverifikasi hash+signature, lalu menulis ke slot OTA.
+// Mengembalikan true bila image tertulis & tervalidasi (perangkat akan reboot oleh caller).
+bool performOtaUpdate(const String& commandId, const String& binaryUrl,
+                      const String& sha256Hex, const String& signatureB64,
+                      size_t expectedSize, const String& version) {
+  Serial.println("OTA: mulai " + binaryUrl);
+  otaInProgress = true;
+  reportOtaStatus("downloading", version, 0, "");
+  oledShowOtaProgress(version, "Unduh", 0);
+
+  // Decode signature dari base64 (DER ECDSA, panjang ~70-72 byte).
+  uint8_t sigBuf[128];
+  size_t sigLen = 0;
+  if (mbedtls_base64_decode(sigBuf, sizeof(sigBuf), &sigLen,
+        (const unsigned char*)signatureB64.c_str(), signatureB64.length()) != 0) {
+    Serial.println("OTA: signature base64 invalid");
+    reportOtaStatus("failed", version, -1, "signature decode");
+    otaInProgress = false;
+    return false;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();  // GitHub release CDN; integritas dijamin signature+hash, bukan TLS pinning
+  client.setTimeout(15000);
+  HTTPClient http;
+  if (!http.begin(client, binaryUrl)) {
+    reportOtaStatus("failed", version, -1, "http begin");
+    otaInProgress = false;
+    return false;
+  }
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(20000);
+
+  int code = http.GET();
+  if (code != HTTP_CODE_OK) {
+    Serial.printf("OTA: download HTTP %d\n", code);
+    reportOtaStatus("failed", version, -1, "http " + String(code));
+    http.end();
+    otaInProgress = false;
+    return false;
+  }
+
+  int contentLen = http.getSize();
+  size_t total = contentLen > 0 ? (size_t)contentLen : expectedSize;
+  if (total == 0) { http.end(); otaInProgress = false; reportOtaStatus("failed", version, -1, "no size"); return false; }
+
+  // Begin write to the inactive OTA partition. Failure here leaves the running
+  // firmware untouched.
+  if (!Update.begin(total)) {
+    Serial.println("OTA: Update.begin gagal (slot terlalu kecil?)");
+    reportOtaStatus("failed", version, -1, "begin");
+    http.end();
+    otaInProgress = false;
+    return false;
+  }
+
+  mbedtls_sha256_context shaCtx;
+  mbedtls_sha256_init(&shaCtx);
+  mbedtls_sha256_starts(&shaCtx, 0);
+
+  WiFiClient* stream = http.getStreamPtr();
+  uint8_t buf[1024];
+  size_t written = 0;
+  int lastPct = -1;
+  unsigned long lastData = millis();
+  while (http.connected() && written < total) {
+    size_t avail = stream->available();
+    if (avail == 0) {
+      if (millis() - lastData > 15000) { Serial.println("OTA: stream stall"); break; }
+      delay(1);
+      continue;
+    }
+    int n = stream->readBytes(buf, avail > sizeof(buf) ? sizeof(buf) : avail);
+    if (n <= 0) continue;
+    lastData = millis();
+    mbedtls_sha256_update(&shaCtx, buf, n);
+    if (Update.write(buf, n) != (size_t)n) {
+      Serial.println("OTA: Update.write gagal");
+      break;
+    }
+    written += n;
+    int pct = (int)(written * 100 / total);
+    if (pct != lastPct && pct % 5 == 0) {
+      lastPct = pct;
+      reportOtaStatus("downloading", version, pct, "");
+      oledShowOtaProgress(version, "Unduh", pct);
+    }
+  }
+  http.end();
+
+  uint8_t digest[32];
+  mbedtls_sha256_finish(&shaCtx, digest);
+  mbedtls_sha256_free(&shaCtx);
+
+  // A short download leaves the firmware unchanged: abort before verify.
+  if (written != total) {
+    Serial.printf("OTA: unduh tidak lengkap (%u/%u)\n", (unsigned)written, (unsigned)total);
+    Update.abort();
+    reportOtaStatus("failed", version, -1, "incomplete");
+    otaInProgress = false;
+    return false;
+  }
+
+  // Verify SHA-256 hex from manifest.
+  char hexDigest[65];
+  for (int i = 0; i < 32; i++) sprintf(hexDigest + i * 2, "%02x", digest[i]);
+  hexDigest[64] = 0;
+  String calc = String(hexDigest);
+  String want = sha256Hex; want.toLowerCase();
+  reportOtaStatus("verifying", version, 100, "");
+  oledShowOtaProgress(version, "Verifikasi", 100);
+  if (calc != want) {
+    Serial.println("OTA: sha256 mismatch");
+    Serial.println("  calc=" + calc);
+    Serial.println("  want=" + want);
+    Update.abort();
+    reportOtaStatus("failed", version, -1, "sha mismatch");
+    otaInProgress = false;
+    return false;
+  }
+
+  // Verify ECDSA signature over the hash.
+  if (!verifyOtaSignature(digest, sigBuf, sigLen)) {
+    Update.abort();
+    reportOtaStatus("failed", version, -1, "bad signature");
+    otaInProgress = false;
+    return false;
+  }
+
+  if (!Update.end(true)) {
+    Serial.printf("OTA: Update.end gagal (err %d)\n", Update.getError());
+    reportOtaStatus("failed", version, -1, "finalize");
+    otaInProgress = false;
+    return false;
+  }
+
+  // Mark the new image so the boot validator knows which command to confirm.
+  otaPreferences.putString("pendingId", commandId);
+  otaPreferences.putString("pendingVer", version);
+  reportOtaStatus("flashing", version, 100, "rebooting");
+  oledShowOtaProgress(version, "Reboot", 100);
+  Serial.println("OTA: sukses, reboot...");
+  delay(1500);
+  ESP.restart();
+  return true;  // not reached
+}
+
+// Polls /deviceCommands/{deviceId}/ota and runs an update when one is pending.
+// Idempotent: a command already succeeded or failed (by id) is not re-run; gated
+// commands are reported as deferred until idle+battery preconditions are met.
+void checkForOtaCommand() {
+  if (otaInProgress) return;
+  if (!isWiFiConnected) return;
+  if (millis() - lastOtaCheck < OTA_CHECK_INTERVAL_MS) return;
+  lastOtaCheck = millis();
+
+  HTTPClient http;
+  String url = firebaseUrlWithAuth("/deviceCommands/" + String(deviceConfig.deviceId) + "/ota.json");
+  if (url.length() == 0) return;
+  http.begin(url);
+  http.setTimeout(8000);
+  int code = http.GET();
+  if (code != 200) {
+    http.end();
+    // OTA bersifat opsional. Permission denied pada path OTA tidak boleh membuat
+    // perangkat yang sudah diprovisikan kembali ke layar provisioning.
+    if (code == 401) {
+      firebaseIdToken = "";
+      scheduleAuthRetry();
+    } else if (code == 403) {
+      Serial.println("OTA: akses command ditolak oleh Firebase Rules");
+    }
+    return;
+  }
+  String body = http.getString();
+  http.end();
+  if (body == "null" || body.length() < 5) return;
+
+  DynamicJsonDocument doc(1024);
+  if (deserializeJson(doc, body)) return;
+
+  String commandId = doc["commandId"] | "";
+  String version   = doc["version"]   | "";
+  String binaryUrl = doc["binaryUrl"] | "";
+  String sha256Hex = doc["sha256"]    | "";
+  String signature = doc["signature"] | "";
+  size_t size      = doc["size"]      | 0;
+  if (commandId.length() == 0 || binaryUrl.length() == 0 || sha256Hex.length() != 64 || signature.length() == 0) return;
+
+  // Already done with this exact command? (idempotent across reboots)
+  String completedId = otaPreferences.getString("doneId", "");
+  if (commandId == completedId) return;
+  if (commandId == otaLastFailedId && otaRetryCount >= OTA_MAX_RETRIES) return;
+
+  // Same target as current firmware -> mark success, nothing to do.
+  if (version == String(FIRMWARE_VERSION)) {
+    otaActiveCommandId = commandId;
+    otaPreferences.putString("doneId", commandId);
+    reportOtaStatus("success", version, 100, "already on version");
+    return;
+  }
+
+  // New command id resets the retry counter.
+  if (commandId != otaActiveCommandId) {
+    otaActiveCommandId = commandId;
+    otaRetryCount = 0;
+  }
+
+  // Gate: only flash when idle and adequately charged.
+  if (!otaPreconditionsMet()) {
+    reportOtaStatus("deferred", version, -1, "menunggu idle/baterai");
+    return;
+  }
+
+  otaRetryCount++;
+  Serial.printf("OTA: attempt %d/%d for %s\n", otaRetryCount, OTA_MAX_RETRIES, commandId.c_str());
+  bool ok = performOtaUpdate(commandId, binaryUrl, sha256Hex, signature, size, version);
+  // performOtaUpdate reboots on success. Reaching here means it failed.
+  otaInProgress = false;
+  if (!ok && otaRetryCount >= OTA_MAX_RETRIES) {
+    otaLastFailedId = commandId;
+    reportOtaStatus("failed", version, -1, "max retries");
+  }
+}
+
+// Dipanggil setelah reboot pasca-OTA. Bila heartbeat pertama sukses, image baru
+// ditandai valid; bila gagal berulang, rollback ke firmware sebelumnya.
+void validateOtaBootSuccess(bool heartbeatOk) {
+  String pendingId = otaPreferences.getString("pendingId", "");
+  if (pendingId.length() == 0) return;  // bukan boot pasca-OTA
+
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  esp_ota_img_states_t state;
+  bool pendingVerify = (esp_ota_get_state_partition(running, &state) == ESP_OK &&
+                        state == ESP_OTA_IMG_PENDING_VERIFY);
+
+  if (heartbeatOk) {
+    otaActiveCommandId = pendingId;
+    otaPreferences.putString("doneId", pendingId);
+    otaPreferences.remove("pendingId");
+    otaPreferences.putUChar("bootFails", 0);
+    if (pendingVerify) esp_ota_mark_app_valid_cancel_rollback();
+    reportOtaStatus("success", String(FIRMWARE_VERSION), 100, "boot ok");
+    Serial.println("OTA: image baru tervalidasi");
+    return;
+  }
+
+  // Heartbeat gagal pada boot ini: hitung kegagalan; rollback setelah 3x.
+  uint8_t fails = otaPreferences.getUChar("bootFails", 0) + 1;
+  otaPreferences.putUChar("bootFails", fails);
+  Serial.printf("OTA: boot gagal %d kali\n", fails);
+  if (fails >= 3) {
+    otaPreferences.remove("pendingId");
+    otaPreferences.putUChar("bootFails", 0);
+    reportOtaStatus("rollback", otaPreferences.getString("pendingVer", ""), -1, "boot failures");
+    Serial.println("OTA: rollback ke firmware sebelumnya");
+    delay(1000);
+    if (Update.canRollBack() && Update.rollBack()) {
+      ESP.restart();
+    }
+  }
+}
+
+
+// =============================================================================
 //  BARCODE PROCESSING
 // =============================================================================
 // Memproses barcode inventory: kirim scan, simpan histori lokal, lookup item, dan tampilkan OLED.
@@ -1090,18 +1504,77 @@ void processInventoryBarcode(String barcode) {
   }
 }
 
+// Memproses barcode kredensial satu kali dari panel admin.
+// Format: ESP32PROV:1:<deviceId>:<email>:<password>
+void processProvisioningBarcode(String input) {
+  const String prefix = String(PROVISIONING_PREFIX) + "1:";
+  if (!input.startsWith(prefix) || !isWiFiConnected) {
+    Serial.println("Provisioning ditolak: format/WiFi tidak valid");
+    if (!isWiFiConnected) oledShowNoWiFi();
+    else oledShowAuthError();
+    input = "";
+    return;
+  }
+
+  String payload = input.substring(prefix.length());
+  input = "";
+  int first = payload.indexOf(':');
+  int second = payload.indexOf(':', first + 1);
+  if (first <= 0 || second <= first + 1 || payload.indexOf(':', second + 1) >= 0) {
+    Serial.println("Provisioning ditolak: payload tidak valid");
+    payload = "";
+    oledShowAuthError();
+    return;
+  }
+
+  String deviceId = payload.substring(0, first);
+  String email = payload.substring(first + 1, second);
+  String password = payload.substring(second + 1);
+  payload = "";
+  deviceId.toUpperCase();
+
+  if (deviceId != String(deviceConfig.deviceId) ||
+      email.length() == 0 || email.length() > 128 ||
+      password.length() == 0 || password.length() > 128) {
+    Serial.println("Provisioning ditolak: kredensial tidak cocok");
+    password = "";
+    oledShowAuthError();
+    return;
+  }
+
+  bool ok = signInDevice(email, password);
+  password = "";
+  email = "";
+  if (ok) {
+    Serial.println("Provisioning scanner berhasil");
+    oledShowProvisioningSuccess();
+    lastHeartbeat = 0;
+  } else {
+    oledShowAuthError();
+  }
+}
+
 // Menerima input dari scanner GM67 atau Serial Monitor.
-// Jika input adalah QR WiFi maka disimpan sebagai konfigurasi; selain itu diproses sebagai barcode inventory.
+// QR WiFi dan provisioning dikonsumsi lokal; input lain diproses sebagai barcode inventory.
 void processBarcodeInput(String input) {
   input.trim();
   if (input.length() == 0) return;
-  Serial.println("Input: " + input);
+
+  // Jangan log atau teruskan payload ini: isinya membawa password perangkat.
+  if (input.startsWith(PROVISIONING_PREFIX)) {
+    processProvisioningBarcode(input);
+    input = "";
+    return;
+  }
 
   if (input.startsWith("WIFI:")) {
+    Serial.println("QR WiFi diterima");
     String ssid, pass, sec;
     if (parseWiFiQR(input, ssid, pass, sec)) {
       strncpy(wifiConfig.ssid,     ssid.c_str(), sizeof(wifiConfig.ssid)    - 1);
       strncpy(wifiConfig.password, pass.c_str(), sizeof(wifiConfig.password)- 1);
+      wifiConfig.ssid[sizeof(wifiConfig.ssid) - 1] = '\0';
+      wifiConfig.password[sizeof(wifiConfig.password) - 1] = '\0';
       wifiConfig.isValid = true;
       saveWiFiConfig();
       if (connectToWiFi()) startWebServer();
@@ -1109,6 +1582,7 @@ void processBarcodeInput(String input) {
     return;
   }
 
+  Serial.println("Input: " + input);
   lastBarcode  = input;
   lastScanTime = millis();
   scanCount++;
@@ -1120,15 +1594,13 @@ void processBarcodeInput(String input) {
 //  WEB SERVER
 // =============================================================================
 // Menjalankan web server lokal ESP32 pada port 80.
-// Endpoint dipakai untuk status, test scan, histori lokal, konfigurasi, dan CORS preflight.
+// Endpoint lokal hanya untuk status read-only dan reset ber-PIN.
 void startWebServer() {
   if (isServerStarted || !isWiFiConnected) return;
   server = new WebServer(80);
   server->on("/",            HTTP_GET,     handleRoot);
   server->on("/api/status",  HTTP_GET,     handleApiStatus);
   server->on("/api/scan",    HTTP_GET,     handleApiScan);
-  server->on("/api/history", HTTP_GET,     handleApiHistory);
-  server->on("/api/config",  HTTP_POST,    handleApiConfig);
   server->on("/reset",       HTTP_POST,    handleReset);
   const char* headerKeys[] = {"X-Provisioning-Pin"};
   server->collectHeaders(headerKeys, 1);
@@ -1156,14 +1628,14 @@ bool requireProvisioningPin() {
   return false;
 }
 
-// Mengirim halaman web sederhana untuk memantau scanner dan mengubah konfigurasi Firebase.
+// Mengirim halaman web sederhana untuk memantau scanner.
 // HTML dibuat sebagai string raw literal agar bisa langsung disajikan oleh WebServer ESP32.
 void handleRoot() {
   if (!server) return;
   String html = R"rawliteral(
 <!DOCTYPE html><html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESP32 Scanner v6.3</title>
+<title>ESP32 Scanner v6.4</title>
 <style>
   body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);color:#eee;margin:0;padding:20px;min-height:100vh}
   .card{background:rgba(255,255,255,.08);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:20px;margin:12px 0}
@@ -1186,7 +1658,7 @@ void handleRoot() {
 <h1>ESP32 Scanner <span class="badge )rawliteral";
   html += isOnline ? "online\">ONLINE" : "offline\">OFFLINE";
   html += R"rawliteral(</span></h1>
-<p style="text-align:center;color:#94a3b8;font-size:.8em">v6.3 - Inventory Mode - )rawliteral";
+<p style="text-align:center;color:#94a3b8;font-size:.8em">v6.4 - Inventory Mode - )rawliteral";
   html += String(deviceConfig.deviceId);
   html += R"rawliteral(</p>
 
@@ -1210,46 +1682,12 @@ void handleRoot() {
 </div>
 
 <div class="card">
-  <label>Konfigurasi Firebase</label>
-  <label>Database URL</label>
-  <input id="fbUrl" value=")rawliteral" + String(deviceConfig.firebaseUrl) + R"rawliteral(">
-  <label>Server URL (Backup)</label>
-  <input id="srvUrl" value=")rawliteral" + String(deviceConfig.serverUrl) + R"rawliteral(">
-  <label>Firebase Web API Key</label>
-  <input type="password" id="apiKey" value=")rawliteral" + String(deviceConfig.apiKey) + R"rawliteral(">
-  <label>Email Perangkat (hanya untuk provisioning)</label>
-  <input type="email" id="authEmail" autocomplete="off">
-  <label>Kata Sandi Perangkat (tidak disimpan)</label>
-  <input type="password" id="authPassword" autocomplete="new-password">
-  <label>PIN Provisioning (lihat OLED saat boot)</label>
-  <input type="password" id="provisioningPin" inputmode="numeric" maxlength="6" autocomplete="off">
-  <button onclick="saveConfig()">Simpan Konfigurasi</button>
-</div>
-
-<div class="card">
+  <label>Provisioning</label>
+  <p>Daftarkan Device ID ini di panel admin, lalu pindai barcode kredensial dengan scanner.</p>
   <a class="btn" href="/api/status">Status JSON</a>
-  <a class="btn" href="/api/history">History</a>
-  <button onclick="testScan()">Test Scan</button>
 </div>
 
 <script>
-function saveConfig(){
-  fetch('/api/config',{method:'POST',
-    headers:{'Content-Type':'application/json','X-Provisioning-Pin':document.getElementById('provisioningPin').value},
-    body:JSON.stringify({
-      firebaseUrl:document.getElementById('fbUrl').value,
-      serverUrl:document.getElementById('srvUrl').value,
-      apiKey:document.getElementById('apiKey').value,
-      authEmail:document.getElementById('authEmail').value,
-      authPassword:document.getElementById('authPassword').value
-    })}).then(r=>r.json()).then(d=>alert(d.message));
-}
-function testScan(){
-  var bc=prompt('Masukkan barcode test:','8991906106250');
-  if(!bc)return;
-  fetch('/api/scan?test='+encodeURIComponent(bc))
-    .then(r=>r.json()).then(d=>alert(JSON.stringify(d,null,2)));
-}
 setInterval(function(){
   fetch('/api/scan').then(r=>r.json()).then(d=>{
     if(d.barcode) document.getElementById('bc').textContent=d.barcode;
@@ -1274,7 +1712,6 @@ void handleApiStatus() {
   doc["ipAddress"]     = WiFi.localIP().toString();
   doc["rssi"]          = WiFi.RSSI();
   doc["lastBarcode"]   = lastBarcode;
-  doc["firebaseUrl"]   = deviceConfig.firebaseUrl;
   doc["uptime"]        = (millis() - bootTime) / 1000;
   doc["freeHeap"]      = ESP.getFreeHeap();
   doc["scanCount"]     = scanCount;
@@ -1284,11 +1721,9 @@ void handleApiStatus() {
   server->send(200,"application/json",res);
 }
 
-// Mengirim informasi scan terakhir dalam format JSON.
-// Jika query test diberikan, endpoint ini memproses barcode test sebelum membalas.
+// Mengirim informasi scan terakhir dalam format JSON read-only.
 void handleApiScan() {
   if (!server) return;
-  if (server->hasArg("test")) processBarcodeInput(server->arg("test"));
   DynamicJsonDocument doc(512);
   doc["status"]      = lastBarcode.length() > 0 ? "success" : "no_scan";
   doc["barcode"]     = lastBarcode;
@@ -1297,58 +1732,6 @@ void handleApiScan() {
   doc["isOnline"]    = isOnline;
   String res; serializeJson(doc, res);
   server->send(200,"application/json",res);
-}
-
-// Mengirim histori scan lokal yang disimpan di RAM.
-// Histori ini dibatasi di processInventoryBarcode agar penggunaan memori tetap kecil.
-void handleApiHistory() {
-  if (!server) return;
-  DynamicJsonDocument doc(2048);
-  JsonArray arr = doc.createNestedArray("scans");
-  for (const auto& s : scanHistory) {
-    JsonObject o        = arr.createNestedObject();
-    o["barcode"]        = s.barcode;
-    o["timestamp"]      = s.timestamp;
-    o["deviceId"]       = s.deviceId;
-    o["processed"]      = s.processed;
-    o["sentToFirebase"] = s.sentToFirebase;
-    o["mode"]           = "inventory";
-    o["type"]           = "inventory_scan";
-  }
-  doc["total"]    = scanHistory.size();
-  doc["deviceId"] = deviceConfig.deviceId;
-  String res; serializeJson(doc, res);
-  server->send(200,"application/json",res);
-}
-
-// Menerima pembaruan konfigurasi dari halaman web lokal.
-// Email/password hanya dipakai sekali untuk memperoleh refresh token. Password tidak
-// pernah disimpan atau dicetak; NVS hanya menyimpan refresh token.
-void handleApiConfig() {
-  if (!server) return;
-  if (!requireProvisioningPin()) return;
-  if (server->hasArg("plain")) {
-    DynamicJsonDocument doc(1024);
-    deserializeJson(doc, server->arg("plain"));
-    if (doc.containsKey("firebaseUrl")) strncpy(deviceConfig.firebaseUrl, doc["firebaseUrl"], sizeof(deviceConfig.firebaseUrl)-1);
-    if (doc.containsKey("serverUrl"))   strncpy(deviceConfig.serverUrl,   doc["serverUrl"],   sizeof(deviceConfig.serverUrl)  -1);
-    if (doc.containsKey("apiKey"))      strncpy(deviceConfig.apiKey,      doc["apiKey"],      sizeof(deviceConfig.apiKey)     -1);
-    saveDeviceConfig();
-    String authEmail = doc["authEmail"] | "";
-    String authPassword = doc["authPassword"] | "";
-    bool authOk = firebaseRefreshToken.length() > 0;
-    if (authEmail.length() > 0 || authPassword.length() > 0) {
-      authOk = signInDevice(authEmail, authPassword);
-    }
-    authPassword = "";
-    if (authOk) {
-      server->send(200,"application/json","{\"status\":\"success\",\"message\":\"Konfigurasi dan autentikasi disimpan\"}");
-    } else {
-      server->send(401,"application/json","{\"status\":\"error\",\"message\":\"Kredensial perangkat ditolak\"}");
-    }
-  } else {
-    server->send(400,"application/json","{\"error\":\"No data\"}");
-  }
 }
 
 // Mereset konfigurasi WiFi dan perangkat dari EEPROM, lalu restart ESP32.
@@ -1384,10 +1767,8 @@ void setup() {
   delay(500);  // singkat, cukup baca "Initializing..."
   provisioningPin = String(100000 + (esp_random() % 900000));
   Serial.println("Provisioning PIN: " + provisioningPin);
-  oledShowProvisioningPin();
-  delay(5000);
 
-  Serial.println("\nESP32 GM67 Scanner v6.3 - Inventory Only");
+  Serial.println("\nESP32 GM67 Scanner v" FIRMWARE_VERSION " - Inventory Only");
   Serial.println("=========================================");
   Serial.println("Firebase: barcodescanesp32");
   Serial.println("Paths: /scans /devices /inventory /analytics");
@@ -1395,9 +1776,14 @@ void setup() {
 
   EEPROM.begin(EEPROM_SIZE);
   authPreferences.begin("deviceAuth", false);
+  otaPreferences.begin("deviceOta", false);
   loadWiFiConfig();
   loadDeviceConfig();
   loadFirebaseRefreshToken();
+  if (!isDeviceProvisioned()) {
+    oledShowProvisioningPin();
+    delay(3000);
+  }
 
   // Fast WiFi init — persistent=false cegah tulis flash, lebih cepat boot
   WiFi.persistent(false);
@@ -1438,7 +1824,6 @@ void loop() {
 
   if (Serial.available()) {
     String input = Serial.readStringUntil('\n');
-    Serial.println("Test: " + input);
     processBarcodeInput(input);
   }
 
@@ -1446,10 +1831,15 @@ void loop() {
     sampleBattery();  // read ADC BEFORE WiFi HTTP to avoid voltage sag noise
     if (isWiFiConnected) {
       ensureFirebaseAuth();
-      sendHeartbeatToFirebase();
+      bool hbOk = sendHeartbeatToFirebase();
+      // First successful heartbeat after an OTA reboot confirms the new image.
+      validateOtaBootSuccess(hbOk);
     }
     lastHeartbeat = millis();
   }
+
+  // Poll for a pending OTA command; gated internally on idle + battery.
+  checkForOtaCommand();
 
   oledUpdateIdle();
   delay(100);

@@ -6,9 +6,10 @@ interface Pdf417BarcodeProps {
   value: string
   height?: number
   className?: string
+  ariaLabel?: string
 }
 
-export default function Pdf417Barcode({ value, height = 60, className }: Pdf417BarcodeProps) {
+export default function Pdf417Barcode({ value, height = 60, className, ariaLabel }: Pdf417BarcodeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,5 +48,5 @@ export default function Pdf417Barcode({ value, height = 60, className }: Pdf417B
     return <p className="text-xs text-destructive">{error}</p>
   }
 
-  return <canvas ref={canvasRef} className={className} aria-label={`Barcode PDF417: ${value}`} />
+  return <canvas ref={canvasRef} className={className} aria-label={ariaLabel ?? `Barcode PDF417: ${value}`} />
 }

@@ -4,9 +4,6 @@ export const ESP32_CONFIG = {
   // Default Firebase URL from ESP32 .ino file
   FIREBASE_URL: "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app",
   
-  // Default Server URL from ESP32 .ino file
-  SERVER_URL: "https://stokmanager.vercel.app/",
-  
   // Default location from ESP32 .ino file
   DEFAULT_LOCATION: "Warehouse-Scanner",
   
@@ -24,21 +21,21 @@ export const ESP32_CONFIG = {
   },
   
   // Device ID pattern from ESP32 .ino: "ESP32-" + MAC address
-  DEVICE_ID_PATTERN: /^ESP32-[0-9A-Fa-f]+$/,
+  DEVICE_ID_PATTERN: /^ESP32-[0-9A-Fa-f]{8}$/,
   
   // Version from ESP32 .ino file
-  VERSION: "3.3",
+  VERSION: "6.4.0",
   
-  // Heartbeat interval from ESP32 .ino (optimized to 3 seconds)
-  HEARTBEAT_INTERVAL: 3000,
+  // Heartbeat interval from ESP32 .ino
+  HEARTBEAT_INTERVAL: 8000,
   
-  // WiFi check interval from ESP32 .ino (optimized to 5 seconds)
-  WIFI_CHECK_INTERVAL: 5000,
+  // WiFi check interval from ESP32 .ino
+  WIFI_CHECK_INTERVAL: 10000,
   
-  // Timeout values from ESP32 .ino (optimized)
+  // Timeout values from ESP32 .ino
   TIMEOUTS: {
-    FIREBASE_HTTP: 5000,  // 5 seconds for scans (faster)
-    HEARTBEAT: 2000,      // 2 seconds for heartbeat (faster)
+    FIREBASE_HTTP: 10000,
+    HEARTBEAT: 5000,
   },
   
   // EEPROM addresses from ESP32 .ino
@@ -80,7 +77,7 @@ export const ESP32_HELPERS = {
   },
   
   // Create heartbeat data structure matching ESP32 .ino
-  createHeartbeatData: (deviceId: string) => {
+  createHeartbeatData: () => {
     return {
       status: "online",
       version: ESP32_CONFIG.VERSION,

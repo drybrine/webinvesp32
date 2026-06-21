@@ -18,11 +18,10 @@ export interface DeviceStatus {
   lastHeartbeat?: any
 }
 
-// Device dianggap offline jika heartbeat/lastSeen terakhir lebih dari threshold ini (ms)
+// Device dianggap offline jika timestamp server terakhir lebih dari threshold ini (ms)
 const OFFLINE_THRESHOLD_MS = 15000
 // Interval re-evaluasi status client-side (ms) — makin kecil makin responsif
 const STATUS_RECHECK_INTERVAL_MS = 3000
-const DEFAULT_OFFLINE_SCANNER_ID = "ESP32-GM67"
 
 interface RawDevice {
   status?: string
@@ -36,24 +35,16 @@ interface RawDevice {
   batteryLevel?: number
 }
 
+// `now` di sini WAJIB waktu-server (Date.now() + serverTimeOffset), bukan jam PC mentah.
+// `lastSeen` ditulis firmware sebagai server timestamp ({".sv":"timestamp"}), jadi keduanya
+// harus berada di basis waktu yang sama; kalau tidak, clock skew PC bikin device mati
+// tetap kebaca online atau device hidup kebaca offline.
 function computeStatus(raw: RawDevice, now: number): "online" | "offline" {
-  const heartbeat = Number(raw.lastHeartbeat) || 0
-  const seen = Number(raw.lastSeen) || 0
-  const latest = Math.max(heartbeat, seen)
-  if (!latest) return "offline"
-  return now - latest <= OFFLINE_THRESHOLD_MS ? "online" : "offline"
-}
-
-function createDefaultOfflineScanner(): DeviceStatus {
-  return {
-    deviceId: DEFAULT_OFFLINE_SCANNER_ID,
-    status: "offline",
-    ipAddress: "",
-    lastSeen: null,
-    lastHeartbeat: null,
-    scanCount: 0,
-    name: "Scanner ESP32 GM67",
-  }
+  const lastSeen = Number(raw.lastSeen) || 0
+  if (lastSeen <= 0) return "offline"
+  const age = now - lastSeen
+  // Toleransi skew kecil ke arah negatif (server sedikit di depan client).
+  return age <= OFFLINE_THRESHOLD_MS && age >= -OFFLINE_THRESHOLD_MS ? "online" : "offline"
 }
 
 export function useRealtimeDeviceStatus() {
@@ -65,27 +56,31 @@ export function useRealtimeDeviceStatus() {
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "connecting">("connecting")
 
   const previousStatusRef = useRef<Map<string, string>>(new Map())
+  // Selisih jam server Firebase vs client (ms). Dipakai agar umur heartbeat
+  // dihitung relatif ke waktu server, bukan jam PC yang bisa drift (WSL2 dll).
+  const serverTimeOffsetRef = useRef<number>(0)
+  // Snapshot device terakhir, agar tick interval & update offset bisa re-evaluasi
+  // tanpa menunggu event onValue berikutnya.
+  const latestRawRef = useRef<Record<string, RawDevice>>({})
 
   const recomputeDevices = useCallback((raw: Record<string, RawDevice>) => {
-    const now = Date.now()
-    const list: DeviceStatus[] =
-      Object.keys(raw).length === 0
-        ? [createDefaultOfflineScanner()]
-        : Object.keys(raw).map((deviceId) => {
-            const d = raw[deviceId] || {}
-            return {
-              deviceId,
-              status: computeStatus(d, now),
-              ipAddress: d.ipAddress || "",
-              lastSeen: d.lastSeen,
-              lastHeartbeat: d.lastHeartbeat,
-              scanCount: Number(d.scanCount) || 0,
-              freeHeap: d.freeHeap,
-              version: d.version,
-              name: d.name || deviceId,
-              batteryLevel: d.batteryLevel,
-            }
-          })
+    latestRawRef.current = raw
+    const now = Date.now() + serverTimeOffsetRef.current
+    const list: DeviceStatus[] = Object.keys(raw).map((deviceId) => {
+      const d = raw[deviceId] || {}
+      return {
+        deviceId,
+        status: computeStatus(d, now),
+        ipAddress: d.ipAddress || "",
+        lastSeen: d.lastSeen,
+        lastHeartbeat: d.lastHeartbeat,
+        scanCount: Number(d.scanCount) || 0,
+        freeHeap: d.freeHeap,
+        version: d.version,
+        name: d.name || deviceId,
+        batteryLevel: d.batteryLevel,
+      }
+    })
 
     const changes: { deviceId: string; previousStatus: string; newStatus: string }[] = []
     list.forEach((device) => {
@@ -111,6 +106,7 @@ export function useRealtimeDeviceStatus() {
 
   useEffect(() => {
     let unsubscribe: Unsubscribe | undefined
+    let unsubscribeOffset: Unsubscribe | undefined
     let cancelled = false
 
     const initializeDevices = async () => {
@@ -126,6 +122,17 @@ export function useRealtimeDeviceStatus() {
         setLoading(false)
         return
       }
+
+      // Lacak offset waktu server agar computeStatus tahan terhadap clock skew client.
+      const offsetRef = ref(database, ".info/serverTimeOffset")
+      unsubscribeOffset = onValue(offsetRef, (snap: DataSnapshot) => {
+        const off = Number(snap.val())
+        if (Number.isFinite(off)) {
+          serverTimeOffsetRef.current = off
+          // Re-evaluasi dengan offset terbaru memakai snapshot device terakhir.
+          recomputeDevices(latestRawRef.current)
+        }
+      })
 
       const devicesRef = ref(database, "devices")
 
@@ -156,6 +163,7 @@ export function useRealtimeDeviceStatus() {
     return () => {
       cancelled = true
       if (unsubscribe) unsubscribe()
+      if (unsubscribeOffset) unsubscribeOffset()
     }
   }, [recomputeDevices])
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { getFirebaseAuth } from "@/lib/firebase"
+import type { DeviceOtaState, FirmwareBuild, FirmwareRelease } from "@/types/firmware"
 import type { RegisteredDevice, UserProfile, UserRole } from "@/types/security"
 
 interface ApiErrorBody {
@@ -97,7 +98,7 @@ export async function updateRegisteredDevice(input: {
   return result.device
 }
 
-export async function rotateRegisteredDevice(uid: string): Promise<{device: RegisteredDevice; password: string}> {
+export async function rotateRegisteredDevice(uid: string): Promise<{device: RegisteredDevice; password: string; warning?: string}> {
   return adminRequest("/api/admin/devices/rotate", {
     method: "POST",
     body: JSON.stringify({uid}),
@@ -108,5 +109,41 @@ export async function revokeRegisteredDevice(uid: string): Promise<void> {
   await adminRequest<{ok: true}>("/api/admin/devices", {
     method: "DELETE",
     body: JSON.stringify({uid}),
+  })
+}
+
+export async function triggerFirmwareBuild(input: {version: string; notes?: string}): Promise<void> {
+  await adminRequest<{ok: true}>("/api/admin/firmware/build", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function listFirmwareBuilds(): Promise<FirmwareBuild[]> {
+  const result = await adminRequest<{builds: FirmwareBuild[]}>("/api/admin/firmware/builds")
+  return result.builds
+}
+
+export async function listFirmwareReleases(): Promise<FirmwareRelease[]> {
+  const result = await adminRequest<{releases: FirmwareRelease[]}>("/api/admin/firmware/releases")
+  return result.releases
+}
+
+export async function listDeviceOtaStates(): Promise<DeviceOtaState[]> {
+  const result = await adminRequest<{states: DeviceOtaState[]}>("/api/admin/devices/ota")
+  return result.states
+}
+
+export async function dispatchFirmwareUpdate(input: {version: string; deviceIds: string[]}): Promise<{dispatched: number}> {
+  return adminRequest("/api/admin/devices/ota", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function cancelFirmwareUpdate(deviceIds: string[]): Promise<void> {
+  await adminRequest<{ok: true}>("/api/admin/devices/ota", {
+    method: "DELETE",
+    body: JSON.stringify({deviceIds}),
   })
 }

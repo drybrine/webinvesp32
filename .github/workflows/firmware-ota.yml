@@ -1,0 +1,142 @@
+name: Build Firmware OTA
+
+# Compiles the ESP32 sketch, verifies it fits the OTA slot, signs it with an
+# ECDSA P-256 key, and publishes the signed binary + manifest as a GitHub
+# Release. The matching public key is embedded in the firmware, which refuses
+# any image whose signature does not verify. The private key never leaves the
+# OTA_SIGNING_PRIVATE_KEY secret.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Firmware semver, must equal FIRMWARE_VERSION in the sketch (e.g. 6.4.0)"
+        required: true
+        type: string
+      notes:
+        description: "Release notes"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  SKETCH_DIR: GM67_ESP32_BARCODESCANNER
+  FQBN: esp32:esp32:esp32
+  # Default partition scheme: each OTA app slot is 0x140000 = 1310720 bytes.
+  OTA_SLOT_BYTES: "1310720"
+  PARTITION_SCHEME: default
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate version input
+        run: |
+          if ! echo "${{ inputs.version }}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version must be semver (e.g. 6.4.0)"
+            exit 1
+          fi
+
+      - name: Verify version matches FIRMWARE_VERSION
+        run: |
+          SHORT="$(echo "${{ inputs.version }}" | sed -E 's/\.[0-9]+$//')"
+          if ! grep -Eq "define +FIRMWARE_VERSION +\"(${{ inputs.version }}|${SHORT})\"" "${SKETCH_DIR}/${SKETCH_DIR}.ino"; then
+            echo "::error::FIRMWARE_VERSION in the sketch does not match ${{ inputs.version }} (or ${SHORT})"
+            grep -n "FIRMWARE_VERSION" "${SKETCH_DIR}/${SKETCH_DIR}.ino" || true
+            exit 1
+          fi
+
+      - name: Install arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh -s 0.35.3
+          echo "${PWD}/bin" >> "$GITHUB_PATH"
+
+      - name: Install ESP32 core and libraries
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@3.0.7
+          arduino-cli lib install "Adafruit GFX Library" "Adafruit SSD1306" "ArduinoJson"
+
+      - name: Compile firmware
+        run: |
+          arduino-cli compile \
+            --fqbn "${FQBN}:PartitionScheme=${PARTITION_SCHEME}" \
+            --output-dir build \
+            "${SKETCH_DIR}"
+
+      - name: Locate binary
+        id: bin
+        run: |
+          BIN="$(find build -name '*.ino.bin' | head -n1)"
+          if [ -z "$BIN" ]; then echo "::error::No .bin produced"; exit 1; fi
+          cp "$BIN" firmware_signed.bin
+          echo "path=firmware_signed.bin" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce OTA slot size budget
+        run: |
+          SIZE="$(stat -c%s firmware_signed.bin)"
+          LIMIT="$(( OTA_SLOT_BYTES * 95 / 100 ))"
+          echo "Binary size: ${SIZE} bytes; 95% slot limit: ${LIMIT} bytes"
+          if [ "$SIZE" -gt "$LIMIT" ]; then
+            echo "::error::Firmware ${SIZE}B exceeds 95% of OTA slot (${LIMIT}B)"
+            exit 1
+          fi
+
+      - name: Sign binary (ECDSA P-256 over SHA-256)
+        env:
+          OTA_SIGNING_PRIVATE_KEY: ${{ secrets.OTA_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$OTA_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::OTA_SIGNING_PRIVATE_KEY secret is not set"
+            exit 1
+          fi
+          printf '%s\n' "$OTA_SIGNING_PRIVATE_KEY" > signing_key.pem
+          # DER-encoded ECDSA-with-SHA256 signature over the raw binary.
+          openssl dgst -sha256 -sign signing_key.pem -out firmware.sig firmware_signed.bin
+          # Sanity-check against the embedded public key derived from the same key.
+          openssl ec -in signing_key.pem -pubout -out signing_pub.pem
+          openssl dgst -sha256 -verify signing_pub.pem -signature firmware.sig firmware_signed.bin
+          rm -f signing_key.pem
+
+      - name: Build manifest
+        id: manifest
+        run: |
+          SIZE="$(stat -c%s firmware_signed.bin)"
+          SHA="$(sha256sum firmware_signed.bin | cut -d' ' -f1)"
+          SIG="$(base64 -w0 firmware.sig)"
+          TAG="firmware-v${{ inputs.version }}"
+          URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/firmware_signed.bin"
+          CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cat > manifest.json <<EOF
+          {
+            "version": "${{ inputs.version }}",
+            "releaseTag": "${TAG}",
+            "binaryUrl": "${URL}",
+            "size": ${SIZE},
+            "sha256": "${SHA}",
+            "signature": "${SIG}",
+            "board": "${FQBN}",
+            "partitionScheme": "${PARTITION_SCHEME}",
+            "createdAt": "${CREATED}"
+          }
+          EOF
+          cat manifest.json
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.manifest.outputs.tag }}
+          name: Firmware v${{ inputs.version }}
+          body: ${{ inputs.notes }}
+          draft: false
+          prerelease: false
+          files: |
+            firmware_signed.bin
+            manifest.json

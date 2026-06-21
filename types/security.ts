@@ -24,11 +24,11 @@ export interface RegisteredDevice {
 }
 
 export type AuditActorType = "user" | "device" | "system"
-export type AuditAction = "create" | "update" | "delete" | "disable" | "enable" | "rotate" | "revoke" | "reset-password"
+export type AuditAction = "create" | "update" | "delete" | "disable" | "enable" | "rotate" | "revoke" | "reset-password" | "firmware-build" | "ota-dispatch" | "ota-cancel"
 
 export interface AuditLogEntry {
   id: string
-  entity: "inventory" | "transaction" | "user" | "device" | "scan"
+  entity: "inventory" | "transaction" | "user" | "device" | "scan" | "firmware"
   entityId: string
   action: AuditAction
   actorUid: string
