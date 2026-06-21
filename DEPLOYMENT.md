@@ -135,8 +135,33 @@ npm run bootstrap:admin -- --email=admin@example.com --password='minimum-12-char
 ```
 
 5. Deploy `firebase-rules-migration.json` lebih dulu. File ini mempertahankan akses legacy sementara firmware dimigrasikan.
-6. Login sebagai admin, daftarkan scanner di `/admin/devices`, lalu reboot scanner dan catat PIN provisioning 6 digit di OLED. Masukkan PIN + kredensial satu kali ke halaman web lokal firmware 6.3, lalu verifikasi inventory lookup, heartbeat, scan, dan `/audit`.
+6. Login sebagai admin, daftarkan scanner di `/admin/devices`, lalu reboot scanner dan catat PIN provisioning 6 digit di OLED. Masukkan PIN + kredensial satu kali ke halaman web lokal firmware 6.4.1, lalu verifikasi inventory lookup, heartbeat, scan, dan `/audit`.
 7. Buat GitHub environment `firebase-production` dengan approval, Workload Identity secrets, serta `FIREBASE_PROJECT_ID` untuk deploy rules.
 8. Setelah backup RTDB dan verifikasi firmware, jalankan workflow `Deploy Strict Firebase Rules` (`firebase.strict.json`).
 
-Strict rules menolak anonymous access, hard-delete inventory, perubahan ledger lama, dan seluruh client write ke `/auditLogs`. Pada Firebase Spark tidak ada blocking/database-trigger Functions: aplikasi tidak menyediakan UI signup dan rules menolak akun tanpa profil + role valid, sedangkan audit server-generated mencakup operasi administrasi melalui Vercel Functions.
+Strict rules menolak anonymous access, hard-delete inventory, perubahan ledger lama, dan seluruh client write ke `/auditLogs`. Pada Firebase Spark tidak ada blocking/database-trigger Functions: aplikasi tidak menyediakan UI signup dan rules menolak akun tanpa profil + role valid, sedangkan audit server-generated mencakup operasi administrasi melalui Vercel Functions. Path OTA `/deviceCommands` + `/deviceOtaStatus` hanya ada di `firebase-rules-strict.json` — harus jadi ruleset aktif agar polling OTA tidak kena 403.
+
+## OTA Firmware Update Setup
+
+OTA dispatch dari panel admin membutuhkan integrasi GitHub (build/sign firmware) + ruleset strict.
+
+### Vercel env (Preview + Production)
+
+| Key | Keterangan |
+|-----|------------|
+| `GITHUB_OTA_REPO` | `owner/repo` tempat workflow + release firmware (mis. `100percentsrgb/webinvesp32`). |
+| `GITHUB_OTA_TOKEN` | GitHub PAT/token dengan akses `actions:write` + `contents:read` (trigger build, baca release). Server-only, jangan `NEXT_PUBLIC_`. |
+| `GITHUB_OTA_WORKFLOW` | Opsional. Nama file workflow, default `firmware-ota.yml`. |
+| `GITHUB_OTA_REF` | Opsional. Branch ref untuk dispatch build, default `555`. |
+
+### GitHub Actions secret
+
+- **`OTA_SIGNING_PRIVATE_KEY`** — private key ECDSA P-256 (PEM) untuk menandatangani `.bin`. Set di repo Settings → Secrets and variables → Actions.
+- Public key pasangannya **wajib** ditanam sebagai `OTA_PUBLIC_KEY_PEM` di `GM67_ESP32_BARCODESCANNER.ino`. Mismatch → semua verifikasi tanda tangan di perangkat gagal.
+
+### Verifikasi
+
+1. Pastikan `firebase-rules-strict.json` adalah ruleset yang dideploy.
+2. Build firmware via panel admin (`/admin/devices` → panel OTA) → tunggu GitHub Release `firmware-v*` muncul.
+3. Dispatch ke 1 perangkat dulu (bukan batch) → pantau badge fase di panel + progress OLED.
+4. CI menolak build bila versi dispatch ≠ `FIRMWARE_VERSION` di sketch (sekarang `6.4.1`).

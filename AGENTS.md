@@ -40,7 +40,7 @@ Firebase Realtime Database + Auth is the backend. Client config keys are `NEXT_P
 
 ## Architecture
 
-This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.4.0). The web app and the firmware share one Firebase Realtime Database.
+This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.4.1). The web app and the firmware share one Firebase Realtime Database.
 
 ### Data flow
 
@@ -51,6 +51,7 @@ This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sk
 - **Device liveness**: `hooks/use-realtime-device-status.ts` subscribes to `/devices` via `onValue`, then re-evaluates online/offline client-side every 3 seconds based on the age of `lastHeartbeat`/`lastSeen`. Threshold: 15s. Tidak ada scheduled Firebase Function; status tampilan diturunkan dari usia heartbeat.
 - **Admin server API**: `/api/admin/*` are Next.js Route Handlers running as Vercel Functions (Node.js runtime, `firebase-admin`). `lib/server/firebase-admin.ts` is the server-only Admin SDK singleton; `lib/server/admin-api.ts` holds shared auth/validation/audit helpers. Every request requires `Authorization: Bearer <Firebase ID token>` for an active admin (claim `role: admin` + non-disabled `/users/{uid}` profile). `requireAdmin` verifies via `firebase-admin.verifyIdToken`, and falls back to the Identity Toolkit `accounts:lookup` REST call when the Admin SDK throws an uncoded error (the same verification path `/api/predict` uses). `lib/admin-api.ts` is the typed client wrapper (same-origin `fetch`, forced token refresh + one retry on 401).
 - **Audit scope**: Because Firebase Spark has no database triggers, server-generated `/auditLogs` only covers user/device mutations made through the Vercel admin API. Inventory/transaction/scan writes that go straight to RTDB from the browser or ESP32 are not auto-audited. `writeAudit` strips `undefined` before persisting (RTDB rejects `undefined`; a freshly created user has `lastLoginAt: undefined`).
+- **OTA firmware update**: HTTP-pull. Admin dispatches a signed firmware version → Vercel writes `/deviceCommands/{deviceId}/ota` (commandId, version, binaryUrl, sha256, signature, size) via Admin SDK → ESP32 polls it every 8s, downloads the `.bin`, verifies SHA-256 + ECDSA P-256 (embedded public key), flashes via `Update.h`/`esp_ota_ops.h`, reboots, and auto-rollbacks on 3 failed boots. Device reports phases to `/deviceOtaStatus/{deviceId}`. Firmware is built/signed by GitHub Actions (`.github/workflows/firmware-ota.yml`, secret `OTA_SIGNING_PRIVATE_KEY`) and published as a GitHub Release; `lib/server/firmware-ota.ts` is the GitHub API integration (env: `GITHUB_OTA_REPO`, `GITHUB_OTA_TOKEN`, `GITHUB_OTA_WORKFLOW`, `GITHUB_OTA_REF`). The `binaryUrl` is taken from the release asset list, NOT the manifest, to prevent manifest-tampering redirects. The `/deviceCommands` + `/deviceOtaStatus` paths exist only in `firebase-rules-strict.json`. `OTA_PUBLIC_KEY_PEM` in the sketch must be the pair of the CI private key or all signatures fail.
 
 ### Inventory mode is the only mode
 
@@ -78,7 +79,7 @@ Legacy data migration: if the production database still has `price` on `/invento
 - `app/admin/users/page.tsx` & `app/admin/devices/page.tsx` — admin-only management UIs calling `/api/admin/*` via `lib/admin-api.ts`. Guarded by `components/auth-provider.tsx` (redirects non-admins). One-time secrets shown via `components/credential-dialog.tsx`.
 - `app/audit/page.tsx` — admin-only read view of `/auditLogs`.
 - `/api/predict` — Vercel Python function at `api/predict.py`, not an `app/api/**/route.ts` file. Frontend `fetch("/api/predict", ...)` calls hit the Python handler. Supports single item and batch mode (`mode: 'batch'`) for dashboard top-N risk items.
-- `/api/admin/*` — the only `app/api/*` Next.js routes. `app/api/admin/users/route.ts` (GET list / POST create / PATCH update), `app/api/admin/users/reset-password/route.ts` (POST), `app/api/admin/devices/route.ts` (GET / POST / PATCH / DELETE), `app/api/admin/devices/rotate/route.ts` (POST). All Node.js runtime + Firebase Admin SDK, admin-only. Consumed exclusively by `app/admin/*` pages via `lib/admin-api.ts`. ESP32 never calls these and pushes to Firebase directly.
+- `/api/admin/*` — the only `app/api/*` Next.js routes. `app/api/admin/users/route.ts` (GET list / POST create / PATCH update), `app/api/admin/users/reset-password/route.ts` (POST), `app/api/admin/devices/route.ts` (GET / POST / PATCH / DELETE), `app/api/admin/devices/rotate/route.ts` (POST), `app/api/admin/devices/ota/route.ts` (GET list states / POST dispatch / DELETE cancel), `app/api/admin/firmware/build/route.ts` (POST trigger build), `app/api/admin/firmware/releases/route.ts` (GET valid signed releases), `app/api/admin/firmware/builds/route.ts` (GET workflow run history). All Node.js runtime + Firebase Admin SDK, admin-only. Consumed exclusively by `app/admin/*` pages via `lib/admin-api.ts`. ESP32 never calls these and pushes to Firebase directly. OTA/firmware contracts live in `types/firmware.ts` (`FirmwareManifest`, `OtaCommand`, `OtaStatus`, `DeviceOtaState`, `OtaPhase`); the admin OTA UI is `components/firmware-ota-panel.tsx` rendered in `app/admin/devices/page.tsx`.
 
 ### Prediction pipeline
 
@@ -100,9 +101,11 @@ The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/tab
 
 ### Firmware notes (`GM67_ESP32_BARCODESCANNER.ino`)
 
-Single file, ~1800 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, and `driver/adc` libraries. OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.4.0"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state, including batteryLevel and rssi, to `/devices/{deviceId}` every 8s. Provisioning is scan-only: scan QR WiFi, register the OLED `deviceId`, then scan the one-time PDF417 credential from the admin page.
+Single file, ~1800 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, and `driver/adc` libraries; OTA additionally uses `Update.h`, `esp_ota_ops.h`, `WiFiClientSecure`, and mbedTLS (`mbedtls_sha256`, `mbedtls_pk_verify`). OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.4.1"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state, including batteryLevel and rssi, to `/devices/{deviceId}` every 8s. Provisioning is scan-only: scan QR WiFi, register the OLED `deviceId`, then scan the one-time PDF417 credential from the admin page.
 
 Battery monitoring uses `esp_adc_cal` eFuse Vref calibration, EMA smoothing (alpha=0.05), hysteresis +/-2%, and range 3200-3800mV. OLED shows a 4-bar battery icon and 4-bar WiFi signal icon.
+
+OTA (HTTP-pull) lives in the same sketch: `checkForOtaCommand()` polls `/deviceCommands/{deviceId}/ota.json` every 8s, `performOtaUpdate()` downloads + verifies (SHA-256 + ECDSA via embedded `OTA_PUBLIC_KEY_PEM`) + flashes, `validateOtaBootSuccess()` confirms or rolls back after reboot, `reportOtaStatus()` writes phases to `/deviceOtaStatus/{deviceId}`. Gated on battery >=30% + idle. `OTA_PUBLIC_KEY_PEM` must be the pair of the CI signing key. See the README "OTA Firmware Update" section for the full flow.
 
 ## Coding conventions
 

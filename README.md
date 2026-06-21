@@ -2,7 +2,7 @@
 
 Sistem Manajemen Inventory Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner dan prediksi stok menggunakan Simple Linear Regression.
 
-Updated: 2026-06-18
+Updated: 2026-06-21
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.1.0-blue)](https://reactjs.org/)
@@ -62,7 +62,8 @@ Buka http://localhost:3000
 
 ### Device Management (ESP32)
 - Setiap scanner memakai akun Firebase Auth unik yang dipetakan ke satu `deviceId`
-- Firmware 6.4.0 menyimpan refresh token saja di Preferences/NVS dan memperbarui ID token otomatis
+- Firmware 6.4.1 menyimpan refresh token saja di Preferences/NVS dan memperbarui ID token otomatis
+- **OTA firmware update** — admin dispatch versi dari panel, perangkat HTTP-pull, verifikasi SHA-256 + ECDSA P-256, flash + auto-rollback (lihat bagian OTA Firmware Update)
 - Monitoring realtime via Firebase `onValue` listener (bukan polling)
 - Deteksi online/offline dalam ~16 detik (threshold 15s, re-evaluasi tiap 3s)
 - Battery level monitoring (voltage divider GPIO34, `esp_adc_cal` eFuse Vref, EMA + hysteresis ±2%)
@@ -99,6 +100,8 @@ Firebase Realtime Database
     ├── /auditLogs/{id}       (audit immutable, admin-only)
     ├── /scans/{id}           (barcode, deviceId, timestamp, processed)
     ├── /transactions/{id}    (type, qty, operator, reason, timestamp)
+    ├── /deviceCommands/{id}  (perintah OTA: commandId, version, binaryUrl, sha256, signature, size)
+    ├── /deviceOtaStatus/{id} (fase OTA: downloading/verifying/flashing/success/failed/deferred/rollback)
     └── /analytics            (totalScans, totalItems, lowStockAlerts)
     │
     ▼
@@ -174,7 +177,7 @@ GND           ←    GND                GND          ← GND
 
 ### Firmware
 - File: `GM67_ESP32_BARCODESCANNER/GM67_ESP32_BARCODESCANNER.ino`
-- Version: 6.4.0
+- Version: 6.4.1
 - Mode: Inventory only (single mode)
 - Heartbeat: tiap 8 detik ke Firebase `/devices/{id}`
 - Battery: `esp_adc_cal` eFuse Vref + EMA(α=0.05) + hysteresis ±2%, MIN=3200mV, MAX=3800mV
@@ -183,6 +186,7 @@ GND           ←    GND                GND          ← GND
 - Libraries: WiFi, WebServer, EEPROM, HTTPClient, ArduinoJson v6, Wire, Adafruit_GFX, Adafruit_SSD1306, esp_adc_cal, driver/adc
 - Auth: Firebase Identity Toolkit; refresh token saja disimpan di Preferences/NVS
 - Provisioning: scan QR WiFi, daftarkan `deviceId` di panel admin, lalu scan PDF417 kredensial satu kali
+- OTA: HTTP-pull dari `/deviceCommands/{deviceId}/ota` (poll tiap 8s), `Update.h` + `esp_ota_ops.h`, verifikasi SHA-256 + ECDSA P-256 (public key tertanam), gate baterai ≥30% + idle, auto-rollback bila boot gagal 3x, status ke `/deviceOtaStatus/{deviceId}`
 
 ## Prediksi Stok
 
@@ -244,6 +248,56 @@ npx tsx scripts/generate-honda-dummy.ts --test
 npx tsx scripts/generate-honda-dummy.ts --output honda-dummy.json
 ```
 
+## OTA Firmware Update
+
+Update firmware ESP32 jarak jauh dari panel admin. Mekanisme **HTTP-pull**: perangkat polling perintah, download sendiri, verifikasi, flash, lalu reboot dengan auto-rollback.
+
+### Alur end-to-end
+
+```
+[Admin Panel]  →  [GitHub Actions]  →  [GitHub Release: .bin + manifest.json (signed)]
+     │                                          │
+     │ POST /api/admin/devices/ota              │ binaryUrl, sha256, signature
+     ▼                                          │
+[Firebase RTDB]                                 │
+  /deviceCommands/{deviceId}/ota  ◄─────────────┘
+     │
+     │ ESP32 GET tiap 8 detik
+     ▼
+[ESP32]  download → verify SHA-256 → verify ECDSA → flash → reboot → validate/rollback
+     │
+     │ PUT status tiap fase
+     ▼
+[Firebase RTDB] /deviceOtaStatus/{deviceId}  →  badge fase di panel admin
+```
+
+### Langkah
+
+1. **Build & sign (GitHub Actions)** — admin klik build → `POST /api/admin/firmware/build` trigger workflow `.github/workflows/firmware-ota.yml`. CI: cek versi cocok `FIRMWARE_VERSION` di sketch → compile (arduino-cli, esp32@3.0.7) → cek ukuran ≤95% slot OTA → sign pakai `OTA_SIGNING_PRIVATE_KEY` (ECDSA P-256, `openssl dgst -sha256 -sign`) → publish GitHub Release (tag `firmware-v*`) berisi `.bin` + `manifest.json`.
+2. **Dispatch** — panel admin pilih versi + perangkat (max 50/batch) → `POST /api/admin/devices/ota` → `lib/server/firmware-ota.ts` ambil release dari GitHub → tulis `deviceCommands/{deviceId}/ota` via Firebase Admin SDK → audit `ota-dispatch`. `binaryUrl` diambil dari daftar aset release (bukan manifest) untuk cegah manifest-tampering redirect.
+3. **Poll (ESP32)** — `checkForOtaCommand()` GET `/deviceCommands/{deviceId}/ota.json` tiap 8s. Idempotency via NVS `Preferences` (`doneId`); skip kalau `version == FIRMWARE_VERSION`; gate prasyarat `otaPreconditionsMet()` (baterai ≥30% + idle ≥10s) → lapor `"deferred"` bila belum siap.
+4. **Download → verify → flash** — `performOtaUpdate()`: stream binary HTTPS, hash SHA-256 streaming vs manifest, verifikasi tanda tangan ECDSA `verifyOtaSignature()` pakai public key tertanam, `Update.begin/write/end(true)`, simpan `pendingId`, `ESP.restart()`.
+5. **Validate / rollback** — setelah reboot, `validateOtaBootSuccess()`: heartbeat pertama sukses → `esp_ota_mark_app_valid_cancel_rollback()` (commit). Gagal boot 3x → `Update.rollBack()` balik ke firmware lama (anti-bricking).
+6. **Status** — `reportOtaStatus()` PUT ke `/deviceOtaStatus/{deviceId}` tiap fase; OLED tampil progress; panel admin tampil badge per-perangkat + tombol cancel.
+
+### Prasyarat deploy
+
+- **`OTA_PUBLIC_KEY_PEM`** di firmware (`GM67_ESP32_BARCODESCANNER.ino`) harus pasangan dari `OTA_SIGNING_PRIVATE_KEY` (secret GitHub Actions). Mismatch → semua verifikasi tanda tangan gagal.
+- **Ruleset `firebase-rules-strict.json`** harus aktif — path `/deviceCommands` + `/deviceOtaStatus` hanya ada di sini. Ruleset lain → polling OTA kena 403.
+- **Versi sinkron** — CI menolak build bila versi dispatch ≠ `FIRMWARE_VERSION` di sketch.
+- Env web: `GITHUB_OTA_REPO`, `GITHUB_OTA_TOKEN`, `GITHUB_OTA_WORKFLOW` (default `firmware-ota.yml`), `GITHUB_OTA_REF` (default `555`).
+
+### Endpoint OTA
+
+```
+GET    /api/admin/devices/ota       List status OTA semua perangkat
+POST   /api/admin/devices/ota       Dispatch perintah OTA (per-perangkat, max 50)
+DELETE /api/admin/devices/ota       Batalkan perintah OTA
+POST   /api/admin/firmware/build    Trigger GitHub Actions build
+GET    /api/admin/firmware/releases List release signed yang valid
+GET    /api/admin/firmware/builds   History workflow run
+```
+
 ## Deployment
 
 ### Vercel (Production)
@@ -274,6 +328,10 @@ Set environment variables di Vercel Dashboard → Project Settings → Environme
 | POST | `/api/admin/users/reset-password` | Buat tautan reset kata sandi pengguna. |
 | GET/POST/PATCH/DELETE | `/api/admin/devices` | List, daftar, ubah status, dan cabut scanner. |
 | POST | `/api/admin/devices/rotate` | Rotasi kredensial scanner. |
+| GET/POST/DELETE | `/api/admin/devices/ota` | List status OTA, dispatch perintah OTA, batalkan perintah. |
+| POST | `/api/admin/firmware/build` | Trigger GitHub Actions build firmware. |
+| GET | `/api/admin/firmware/releases` | List release firmware signed yang valid. |
+| GET | `/api/admin/firmware/builds` | History workflow run build. |
 
 Semua `/api/admin/*` berjalan sebagai Vercel Functions, mewajibkan Firebase ID token dengan role admin aktif, dan memakai `FIREBASE_SERVICE_ACCOUNT` hanya di server. ESP32 tetap berkomunikasi langsung dengan Firebase RTDB. Status online/offline dihitung client-side dari usia heartbeat; tidak ada scheduled Firebase Function.
 
@@ -283,11 +341,11 @@ Semua `/api/admin/*` berjalan sebagai Vercel Functions, mewajibkan Firebase ID t
 2. Set `FIREBASE_SERVICE_ACCOUNT` pada Vercel untuk Preview dan Production, lalu deploy aplikasi.
 3. Deploy `firebase-rules-migration.json` dan jalankan bootstrap admin.
 4. Buat akun pengguna dan scanner dari panel admin; operasi admin dicatat ke `/auditLogs` oleh Vercel Functions.
-5. Flash firmware 6.4.0, scan QR WiFi, daftarkan `deviceId` dari OLED, lalu scan PDF417 kredensial yang ditampilkan panel admin.
+5. Flash firmware 6.4.1, scan QR WiFi, daftarkan `deviceId` dari OLED, lalu scan PDF417 kredensial yang ditampilkan panel admin.
 6. Verifikasi login, heartbeat, scan, role, dan audit administrasi.
 7. Jalankan workflow `Deploy Strict Firebase Rules` setelah approval environment.
 
-`firebase.json` sengaja menunjuk rules migrasi. Cutover strict memakai `firebase.strict.json` sehingga request anonim dan firmware lama baru ditolak setelah scanner 6.4.0 diverifikasi. Karena Firebase Spark tidak mendukung blocking/database-trigger Functions, tidak ada self-registration UI dan akun tanpa profil + custom claim yang sah tidak mendapat akses; audit otomatis hanya dijamin untuk operasi admin melalui Vercel Functions.
+`firebase.json` sengaja menunjuk rules migrasi. Cutover strict memakai `firebase.strict.json` sehingga request anonim dan firmware lama baru ditolak setelah scanner 6.4.1 diverifikasi. Karena Firebase Spark tidak mendukung blocking/database-trigger Functions, tidak ada self-registration UI dan akun tanpa profil + custom claim yang sah tidak mendapat akses; audit otomatis hanya dijamin untuk operasi admin melalui Vercel Functions.
 
 ## License
 

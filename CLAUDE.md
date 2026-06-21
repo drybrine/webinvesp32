@@ -37,7 +37,7 @@ Firebase Realtime Database is the only backend. All config keys are `NEXT_PUBLIC
 
 ## Architecture
 
-This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.3). The web app and the firmware share one Firebase Realtime Database.
+This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.4.1). The web app and the firmware share one Firebase Realtime Database.
 
 ### Data flow
 
@@ -110,9 +110,19 @@ The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/tab
 
 ### Firmware notes (`GM67_ESP32_BARCODESCANNER.ino`)
 
-Single file, ~1100 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, `driver/adc` libraries. OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.3"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state (including batteryLevel, rssi) to `/devices/{deviceId}` every 8s.
+Single file, ~1800 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, `driver/adc` libraries; OTA additionally uses `Update.h`, `esp_ota_ops.h`, `WiFiClientSecure`, and mbedTLS (`mbedtls_sha256`, `mbedtls_pk_verify`). OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.4.1"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state (including batteryLevel, rssi) to `/devices/{deviceId}` every 8s.
 
 Battery monitoring: `esp_adc_cal` eFuse Vref calibration, EMA smoothing (α=0.05), hysteresis ±2%, range 3200–3800mV. Battery sampled before HTTP request to avoid WiFi voltage sag. OLED shows 4-bar battery icon + 4-bar WiFi signal icon (RSSI-based).
+
+### OTA firmware update (HTTP-pull)
+
+Remote firmware update dispatched from the admin panel. Flow: admin builds/signs via GitHub Actions (`.github/workflows/firmware-ota.yml`, secret `OTA_SIGNING_PRIVATE_KEY`, published as a GitHub Release `firmware-v*` with `.bin` + `manifest.json`) → admin dispatches a version → `app/api/admin/devices/ota/route.ts` writes `/deviceCommands/{deviceId}/ota` (commandId, version, binaryUrl, sha256, signature, size) via Admin SDK → ESP32 `checkForOtaCommand()` polls every 8s, `performOtaUpdate()` downloads + verifies (SHA-256 + ECDSA P-256 via embedded `OTA_PUBLIC_KEY_PEM`) + flashes (`Update.h`), reboots, `validateOtaBootSuccess()` commits via `esp_ota_mark_app_valid_cancel_rollback()` on first OK heartbeat or `Update.rollBack()` after 3 failed boots → device reports phases to `/deviceOtaStatus/{deviceId}`. Gated on battery ≥30% + idle (else reports `"deferred"`).
+
+- `lib/server/firmware-ota.ts` is the GitHub API integration (env: `GITHUB_OTA_REPO`, `GITHUB_OTA_TOKEN`, `GITHUB_OTA_WORKFLOW` default `firmware-ota.yml`, `GITHUB_OTA_REF` default `555`). It takes `binaryUrl` from the release asset list, NOT the manifest, to prevent manifest-tampering redirects.
+- Admin routes: `app/api/admin/devices/ota` (GET/POST/DELETE), `app/api/admin/firmware/build` (POST), `app/api/admin/firmware/releases` (GET), `app/api/admin/firmware/builds` (GET). UI: `components/firmware-ota-panel.tsx` in `app/admin/devices/page.tsx`. Contracts: `types/firmware.ts`.
+- `/deviceCommands` + `/deviceOtaStatus` rules exist **only** in `firebase-rules-strict.json` — must be the deployed ruleset or OTA polling 403s.
+- `OTA_PUBLIC_KEY_PEM` in the sketch must be the pair of the CI signing key, or all signature verification fails.
+- CI rejects a build whose dispatch version ≠ the sketch's `FIRMWARE_VERSION`.
 
 ## Coding conventions
 
