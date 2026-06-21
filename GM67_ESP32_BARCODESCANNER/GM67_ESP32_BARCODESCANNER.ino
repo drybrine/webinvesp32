@@ -48,7 +48,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.4.0"
+#define FIRMWARE_VERSION   "6.4.1"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
