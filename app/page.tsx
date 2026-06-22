@@ -62,7 +62,8 @@ export default function DashboardPage() {
     deleteItem,
   } = useFirebaseInventory()
   const { loading: scansLoading, error: scansError } = { loading: false, error: null }
-  const { transactions, loading: transactionsLoading } = useFirebaseTransactions(500)
+  // null = semua transaksi untuk akurasi prediksi penuh (lihat CLAUDE.md)
+  const { transactions, loading: transactionsLoading } = useFirebaseTransactions(null)
 
   const {
     devices,
@@ -561,7 +562,7 @@ export default function DashboardPage() {
                     <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                       <div>
                         <div className="text-muted-foreground">Tren</div>
-                        <div className="font-mono font-semibold text-foreground">{prediction.model.slope.toFixed(2)}/hr</div>
+                        <div className="font-mono font-semibold text-foreground">{prediction.model.slope.toFixed(2)}/hari</div>
                       </div>
                       <div>
                         <div className="text-muted-foreground">Terendah</div>
