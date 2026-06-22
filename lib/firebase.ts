@@ -99,7 +99,7 @@ const initializeFirebaseSync = (): void => {
   initInProgress = true
 
   if (!checkNetworkConnectivity()) {
-    console.info("🔥 Browser offline, deferring Firebase init")
+    // offline
     initInProgress = false
     return
   }
@@ -147,13 +147,13 @@ const initializeFirebase = () => {
       onValue(connectedRef, (snapshot) => {
         const connected = snapshot.val()
         if (connected) {
-          console.log('🔥 Firebase WebSocket connected successfully')
+          // Firebase WS connected (omitted from production logs)
         } else {
-          console.info('🔄 Firebase WebSocket disconnected, will retry automatically')
+          // ws disconnected
         }
       }, (error) => {
         // Silently handle connection monitoring errors
-        console.info('🔄 Firebase connection monitoring: will retry automatically')
+        // connection monitor retry
       })
     }
     
@@ -183,7 +183,7 @@ const initializeFirebase = () => {
       }
     }
 
-    console.log("✅ Firebase initialized successfully")
+    // initialized
     
     // Initialize enhanced error handling for WebSocket and deprecated APIs
     if (typeof window !== 'undefined') {
@@ -233,7 +233,7 @@ const initializeFirebaseServer = () => {
       };
     }
 
-    console.log("✅ Firebase initialized successfully (server-side)")
+    // initialized
     return database
   } catch (error) {
     console.error("❌ Failed to initialize Firebase (server-side):", error)
@@ -250,7 +250,7 @@ if (typeof window !== "undefined") {
 
   // Listen for online events to retry connection
   window.addEventListener('online', () => {
-    console.log("🌐 Network came back online, reinitializing Firebase");
+    // online reinit;
     if (!isFirebaseConfigured()) {
       initializeFirebaseSync();
     }
@@ -445,7 +445,7 @@ export const firebaseHelpers = {
       };
       
       await set(newScanRef, esp32CompatibleData);
-      console.log("✅ Scan record added with ESP32 compatible structure:", esp32CompatibleData);
+      /* scan record */
       return newScanRef.key;
     } catch (error) {
       console.error("Error adding scan record:", error);
@@ -549,7 +549,7 @@ export class FirebaseCleanup {
   }
   
   cleanup() {
-    console.log('🔥 Cleaning up Firebase listeners...', this.listeners.length);
+    // cleanup:, this.listeners.length);
     this.listeners.forEach(unsubscribe => {
       try {
         unsubscribe();
@@ -567,7 +567,7 @@ export const firebaseCleanup = new FirebaseCleanup();
 // Auto-cleanup when page lifecycle events occur
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', () => {
-    console.log('🔥 Page hiding, cleaning up Firebase connections...');
+    // page hide;
     firebaseCleanup.cleanup();
   });
 }
@@ -642,7 +642,7 @@ export const getFirebaseAuth = async () => {
     } = await import("firebase/auth")
     auth = getAuthModule(app)
     await setPersistence(auth, browserLocalPersistence)
-    console.log("🔐 Firebase Auth loaded with persistent session")
+    // auth loaded
   }
 
   return auth;

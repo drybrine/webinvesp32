@@ -4,8 +4,8 @@ import { Plus_Jakarta_Sans } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/ui/toaster"
 import ServiceWorkerRegistration from "@/components/service-worker-registration"
-import PerformanceMonitor from "@/components/performance-monitor"
 import { SpeedInsights } from "@vercel/speed-insights/next"
+import { Analytics } from "@vercel/analytics/react"
 import FirebaseDeprecationSuppressor from "./firebase-deprecation-suppressor"
 import { criticalCSS } from "@/lib/critical-css"
 import { AuthProvider } from "@/components/auth-provider"
@@ -87,12 +87,12 @@ export default function RootLayout({
       <body>
         <FirebaseDeprecationSuppressor />
         <ServiceWorkerRegistration />
-        {process.env.NODE_ENV === 'production' && <PerformanceMonitor />}
         <AuthProvider>
           <AppShell>{children}</AppShell>
           <Toaster />
         </AuthProvider>
         <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   )

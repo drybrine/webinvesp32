@@ -75,7 +75,6 @@ class FirebaseErrorSuppressor {
       
       if (suppressPattern) {
         if (suppressPattern.replacement) {
-          console.log(suppressPattern.replacement);
         }
         return;
       }
@@ -90,7 +89,6 @@ class FirebaseErrorSuppressor {
       
       if (suppressPattern) {
         if (suppressPattern.replacement) {
-          console.log(suppressPattern.replacement);
         }
         return;
       }
@@ -107,7 +105,6 @@ class FirebaseErrorSuppressor {
             listenerStr.includes('Database') ||
             listenerStr.includes('firebasedatabase')) {
           // Replace with modern pagehide event
-          console.log('🔄 Intercepted deprecated Firebase event, using pagehide instead');
           return this.originalAddEventListener.call(window, 'pagehide', listener, options);
         }
       }
@@ -127,7 +124,6 @@ class FirebaseErrorSuppressor {
         if (isMatch) {
           event.preventDefault();
           if (pattern.replacement) {
-            console.log(pattern.replacement);
           }
           return;
         }
@@ -142,7 +138,6 @@ class FirebaseErrorSuppressor {
       if (suppressPattern) {
         event.preventDefault();
         if (suppressPattern.replacement) {
-          console.log(suppressPattern.replacement);
         }
         return;
       }
@@ -192,21 +187,17 @@ class WebSocketConnectionMonitor {
           monitor.retryAttempts.set(urlString, attempts + 1);
           
           if (attempts < monitor.maxRetries) {
-            console.log(`🔄 Firebase WebSocket: Retry ${attempts + 1}/${monitor.maxRetries}`);
           } else {
-            console.log('🔄 Firebase WebSocket: Max retries reached, Firebase will handle reconnection');
             monitor.retryAttempts.delete(urlString);
           }
         });
 
         ws.addEventListener('open', () => {
           monitor.retryAttempts.delete(urlString);
-          console.log('✅ Firebase WebSocket: Connected successfully');
         });
 
         ws.addEventListener('close', (event) => {
           if (event.code !== 1000) {
-            console.log('🔄 Firebase WebSocket: Connection closed, will reconnect automatically');
           }
         });
       }
@@ -237,14 +228,11 @@ export const initializeFirebaseErrorHandling = (): (() => void) => {
   // Add modern page lifecycle handlers
   const handlePageLifecycle = () => {
     window.addEventListener('pagehide', () => {
-      console.log('🔄 Page lifecycle: Cleaning up Firebase connections');
     });
 
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
-        console.log('🔄 Page lifecycle: Firebase connections paused');
       } else {
-        console.log('🔄 Page lifecycle: Firebase connections resumed');
       }
     });
   };

@@ -33,9 +33,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
       // Check if popups are globally disabled
       const globallyDisabled = localStorage.getItem('popupsGloballyDisabled') === 'true'
       setPopupsGloballyDisabled(globallyDisabled)
-      
-      console.log('🔥 Firebase-only mode: No localStorage needed')
-      
+
       const checkMobile = () => {
         const userAgent = window.navigator.userAgent
         const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
@@ -50,11 +48,8 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
       
       // FORCE Firebase initialization for mobile immediately
       if (mobileStatus) {
-        console.log('📱 Mobile detected - Force initializing Firebase...')
         import('@/lib/firebase').then(({ waitForFirebaseReady }) => {
-          waitForFirebaseReady(15000).then((ready) => {
-            console.log('📱 Mobile Firebase ready status:', ready)
-          })
+          waitForFirebaseReady(15000)
         })
       }
       
@@ -78,29 +73,19 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
       }
       
       // Modern page lifecycle events (replaces deprecated beforeunload)
-      const handlePageHide = () => {
-        console.log('📱 Page hiding, Firebase listeners will be cleaned up automatically...')
-      }
-      
+      const handlePageHide = () => {}
+
       const handleVisibilityChange = () => {
-        if (document.hidden) {
-          console.log('📱 Page hidden, Firebase listeners paused...')
-        } else {
-          console.log('📱 Page visible, Firebase listeners active...')
-          // Force refresh Firebase connection when page becomes visible
-          // This helps with mobile browsers that may pause connections
-          if (mobileStatus && isFirebaseConfigured() && database) {
-            console.log('🔄 Refreshing Firebase connection for mobile...')
-            // Reset scan state to allow fresh detection
-            setLastProcessedScanId(null)
-            setLastScannedBarcode(null)
-          }
+        if (!document.hidden && mobileStatus && isFirebaseConfigured() && database) {
+          // Refresh scan state when returning to page
+          setLastProcessedScanId(null)
+          setLastScannedBarcode(null)
         }
       }
-      
+
       const handlePageShow = (event: PageTransitionEvent) => {
         if (event.persisted) {
-          console.log('📱 Page restored from bfcache, Firebase listeners reactivated...')
+          // Reactivate listeners after bfcache
         }
       }
       
@@ -134,43 +119,27 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   useEffect(() => {
     setLastProcessedScanId(null)
     setLastScannedBarcode(null)
-    console.log('🔄 Reset scan state for new page:', pathname)
   }, [pathname])
 
   useEffect(() => {
     // Enhanced Firebase initialization check for mobile
     const setupFirebaseListener = async () => {
       if (!isFirebaseConfigured() || !database) {
-        console.log('🔥 Firebase not ready, waiting...')
-        
         // Wait for Firebase to be ready (especially important for mobile)
         const { waitForFirebaseReady } = await import('@/lib/firebase')
         const isReady = await waitForFirebaseReady(10000) // Wait up to 10 seconds
-        
+
         if (!isReady) {
-          console.error('🔥 Firebase failed to initialize within timeout')
           return
         }
-        
-        console.log('🔥 Firebase is now ready, setting up listener...')
       }
-
-      // Setting up Firebase listener for scans
-      console.log('🔥 Setting up Firebase scan listener for mobile:', isMobile)
 
       // Listen to scan events from Firebase Realtime Database
       const scansRef = query(ref(database!, "scans"), orderByChild("timestamp"), limitToLast(1))
 
       const unsubscribe = onValue(scansRef, (snapshot) => {
       const data = snapshot.val()
-      
-      console.log('🔥 Firebase scan data received:', {
-        hasData: !!data,
-        isMobile,
-        pathname,
-        timestamp: new Date().toISOString()
-      })
-      
+
       if (data) {
         // Query is limited to the newest scan, avoiding full scans download/sort on every update.
         const scansArray = Object.keys(data).map((key) => ({
@@ -229,17 +198,6 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
           if (!shouldTriggerPopup) {
             return
           }
-          
-          console.log('🔍 Scan trigger analysis - POPUP WILL SHOW:', {
-            isESP32Device,
-            scanAge,
-            scanId: latestScan.id,
-            lastProcessedId: lastProcessedScanId,
-            processed: latestScan.processed,
-            barcode: latestScan.barcode,
-            deviceId: latestScan.deviceId,
-            isScanFromInventoryMode
-          })
           
           setLastScannedBarcode(latestScan.barcode)
           setLastProcessedScanId(latestScan.id)
@@ -328,7 +286,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
     if (writable && lastProcessedScanId && database) {
       try {
         await firebaseHelpers.markScanProcessed(lastProcessedScanId)
-        console.log('✅ Marked scan as processed in Firebase:', lastProcessedScanId)
+        // scan marked processed
       } catch (error) {
         console.error('❌ Error updating scan processed status:', error)
       }
