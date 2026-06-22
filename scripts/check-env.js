@@ -30,4 +30,11 @@ if (missing.length) {
   process.exit(1)
 }
 
+const hasServerSecret = values.FIREBASE_SERVICE_ACCOUNT || values.FIREBASE_SERVICE_ACCOUNT_BASE64
+if (!hasServerSecret) {
+  console.warn(
+    "Warning: FIREBASE_SERVICE_ACCOUNT(_BASE64) not found in .env.local; /api/admin/* will fail locally if used."
+  )
+}
+
 console.log("Firebase environment variables are present")

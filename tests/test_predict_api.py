@@ -52,6 +52,39 @@ class PredictApiSecurityTests(unittest.TestCase):
         instance.do_POST()
         self.assertEqual(captured[0][0], 400)
 
+    @patch("api.predict.verify_firebase_token", return_value={"uid": "u1", "role": "viewer"})
+    def test_batch_skips_malformed_rows(self, _verify):
+        instance, captured = make_handler({
+            "mode": "batch",
+            "items": [
+                {"id": "bad", "barcode": "BAD", "name": "Bad", "quantity": "x", "minStock": 1},
+                {"id": "ok", "barcode": "OK", "name": "Ok", "quantity": 10, "minStock": 1},
+            ],
+            "transactions": [
+                {"productBarcode": "OK", "timestamp": "not-a-number", "quantity": 1, "type": "out"},
+                {"productBarcode": "OK", "timestamp": 1_700_000_000_000, "quantity": 1, "type": "out"},
+                {"productBarcode": "OK", "timestamp": 1_700_086_400_000, "quantity": 1, "type": "out"},
+            ],
+            "recentDays": 3650,
+        })
+        instance.do_POST()
+        self.assertEqual(captured[0][0], 200)
+        self.assertIn("risks", captured[0][1])
+
+    @patch("api.predict.verify_firebase_token", return_value={"uid": "u1", "role": "viewer"})
+    @patch("api.predict.predict_stock", side_effect=RuntimeError("secret path /tmp/private"))
+    def test_generic_500_masks_exception_text(self, _predict, _verify):
+        instance, captured = make_handler({
+            "transactions": [
+                {"timestamp": 1_700_000_000_000, "quantity": 1, "type": "out"},
+                {"timestamp": 1_700_086_400_000, "quantity": 1, "type": "out"},
+            ],
+            "currentQuantity": 10,
+        })
+        instance.do_POST()
+        self.assertEqual(captured[0][0], 500)
+        self.assertNotIn("secret", captured[0][1]["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

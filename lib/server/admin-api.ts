@@ -47,13 +47,6 @@ export interface AdminActor {
   email?: string
 }
 
-interface VerifiedIdentity {
-  uid: string
-  email?: string
-  role?: unknown
-  disabled?: unknown
-}
-
 export interface AuditInput {
   entity: "user" | "device" | "firmware"
   entityId: string
@@ -62,49 +55,6 @@ export interface AuditInput {
   before: unknown
   after: unknown
   operationId?: string
-}
-
-async function verifyWithIdentityToolkit(token: string): Promise<VerifiedIdentity> {
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-  if (!apiKey) throw new AdminApiError("internal", "Konfigurasi Firebase API belum lengkap")
-
-  let response: Response
-  try {
-    response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({idToken: token}),
-      cache: "no-store",
-      signal: AbortSignal.timeout(8000),
-    })
-  } catch {
-    throw new AdminApiError("internal", "Layanan verifikasi Firebase tidak dapat dijangkau")
-  }
-  if (!response.ok) throw new AdminApiError("unauthorized", "Token Firebase tidak valid atau kedaluwarsa")
-
-  const payload = await response.json() as {
-    users?: Array<{
-      localId?: string
-      email?: string
-      disabled?: boolean
-      customAttributes?: string
-    }>
-  }
-  const identity = payload.users?.[0]
-  if (!identity?.localId) throw new AdminApiError("unauthorized", "Token Firebase tidak valid")
-
-  let claims: Record<string, unknown> = {}
-  try {
-    claims = JSON.parse(identity.customAttributes || "{}") as Record<string, unknown>
-  } catch {
-    claims = {}
-  }
-  return {
-    uid: identity.localId,
-    email: identity.email,
-    role: claims.role,
-    disabled: identity.disabled === true || claims.disabled === true,
-  }
 }
 
 export async function requireAdmin(request: Request): Promise<AdminActor> {
@@ -116,15 +66,9 @@ export async function requireAdmin(request: Request): Promise<AdminActor> {
   const token = authorization.slice(7).trim()
   if (!token) throw new AdminApiError("unauthorized", "Token Firebase diperlukan")
 
-  let identity: VerifiedIdentity
+  let identity: DecodedIdToken
   try {
-    const decoded: DecodedIdToken = await getAdminAuth().verifyIdToken(token, true)
-    identity = {
-      uid: decoded.uid,
-      email: decoded.email,
-      role: decoded.role,
-      disabled: decoded.disabled,
-    }
+    identity = await getAdminAuth().verifyIdToken(token, true)
   } catch (error) {
     const code = typeof error === "object" && error !== null && "code" in error
       ? String((error as {code: unknown}).code)
@@ -139,7 +83,7 @@ export async function requireAdmin(request: Request): Promise<AdminActor> {
     if (code === "auth/argument-error") {
       throw new AdminApiError("unauthorized", "Token Firebase tidak valid")
     }
-    identity = await verifyWithIdentityToolkit(token)
+    throw new AdminApiError("unauthorized", "Verifikasi token gagal. Silakan coba lagi")
   }
 
   if (identity.role !== "admin" || identity.disabled === true) {

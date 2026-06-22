@@ -6,9 +6,18 @@ const eslintConfig = [
   ...nextTypescript,
   {
     ignores: [
+      ".claude/**",
+      ".next/**",
+      ".vercel/**",
+      "build/**",
+      "coverage/**",
+      "dist/**",
+      "out/**",
       "api/__pycache__/**",
       "functions/**",
-      "public/sw.js",
+      "node_modules/**",
+      "public/**/*.js",
+      "**/*.min.js",
     ],
   },
   {

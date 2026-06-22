@@ -152,6 +152,31 @@ test("transactions are append-only", async () => {
   await assertFails(remove(ref(db, "transactions/tx-1")))
 })
 
+test("inventory and transactions reject legacy price fields", async () => {
+  const db = human("operator-1", "operator")
+  const now = Date.now()
+  await assertFails(set(ref(db, "inventory/item-price"), {
+    ...inventoryItem,
+    id: "item-price",
+    operationId: "operation-price-1",
+    updatedByUid: "operator-1",
+    price: 1000,
+  }))
+  await assertFails(set(ref(db, "transactions/tx-price"), {
+    id: "tx-price",
+    type: "in",
+    productName: "Busi",
+    productBarcode: "8990001",
+    quantity: 1,
+    reason: "Test",
+    operator: "Dashboard",
+    operatorUid: "operator-1",
+    operationId: "operation-ledger-2",
+    timestamp: now,
+    unitPrice: 1000,
+  }))
+})
+
 test("device can read inventory and write only its own heartbeat and scans", async () => {
   const db = device()
   const now = Date.now()
@@ -159,6 +184,26 @@ test("device can read inventory and write only its own heartbeat and scans", asy
   await assertSucceeds(set(ref(db, "devices/ESP32-1234ABCD"), {
     status: "online",
     lastSeen: now,
+    lastHeartbeat: now,
+    ipAddress: "192.168.1.20",
+    batteryLevel: 87,
+    rssi: -55,
+    version: "6.4.1",
+    scanCount: 12,
+    freeHeap: 120000,
+    currentMode: "inventory",
+    uptime: 5000,
+    name: "Gudang",
+  }))
+  await assertFails(set(ref(db, "devices/ESP32-1234ABCD"), {
+    status: "online",
+    lastSeen: now,
+    batteryLevel: 101,
+  }))
+  await assertFails(set(ref(db, "devices/ESP32-1234ABCD"), {
+    status: "online",
+    lastSeen: now,
+    price: 1000,
   }))
   await assertFails(set(ref(db, "devices/ESP32-FFFFFFFF"), {
     status: "online",
@@ -229,9 +274,17 @@ test("device reads only its own OTA command and writes only its own OTA status",
   await assertSucceeds(get(ref(db, "deviceCommands/ESP32-1234ABCD/ota")))
   await assertFails(get(ref(db, "deviceCommands/ESP32-FFFFFFFF/ota")))
   await assertFails(set(ref(db, "deviceCommands/ESP32-1234ABCD/ota"), {commandId: "x", version: "6.4.0", issuedAt: now}))
-  await assertSucceeds(set(ref(db, "deviceOtaStatus/ESP32-1234ABCD"), {phase: "downloading", progress: 40, updatedAt: now}))
+  await assertSucceeds(set(ref(db, "deviceOtaStatus/ESP32-1234ABCD"), {
+    phase: "downloading",
+    progress: 40,
+    updatedAt: now,
+    version: "6.4.1",
+    commandId: "cmd-1",
+    message: "Downloading",
+  }))
   await assertFails(set(ref(db, "deviceOtaStatus/ESP32-FFFFFFFF"), {phase: "downloading", updatedAt: now}))
   await assertFails(set(ref(db, "deviceOtaStatus/ESP32-1234ABCD"), {phase: "haxor", updatedAt: now}))
+  await assertFails(set(ref(db, "deviceOtaStatus/ESP32-1234ABCD"), {phase: "success", updatedAt: now, price: 1}))
 })
 
 test("admin can read OTA status but cannot forge a device command or status", async () => {

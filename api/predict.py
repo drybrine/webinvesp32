@@ -123,6 +123,13 @@ def bounded_float(value, default, minimum, maximum, field):
     return parsed
 
 
+def safe_int(value, default=0):
+    try:
+        return int(value if value is not None else default)
+    except (TypeError, ValueError):
+        return default
+
+
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
@@ -171,7 +178,8 @@ class handler(BaseHTTPRequestHandler):
         except ValueError as e:
             self._send_json(400, {'error': str(e), 'source': 'lr-consumption-py'})
         except Exception as e:
-            self._send_json(500, {'error': str(e), 'source': 'lr-consumption-py'})
+            print(f"[predict] internal error: {e}")
+            self._send_json(500, {'error': 'Terjadi kesalahan internal', 'source': 'lr-consumption-py'})
 
     def _handle_batch(self, data):
         items = data.get('items', [])
@@ -192,7 +200,10 @@ class handler(BaseHTTPRequestHandler):
             return
 
         cutoff = (datetime.now().timestamp() * 1000) - recent_days * MS_PER_DAY
-        recent_tx = [t for t in transactions if int(t.get('timestamp', 0)) >= cutoff]
+        recent_tx = [
+            t for t in transactions
+            if safe_int(t.get('timestamp'), -1) >= cutoff
+        ]
 
         tx_by_barcode = {}
         for tx in recent_tx:
@@ -205,13 +216,13 @@ class handler(BaseHTTPRequestHandler):
             if item.get('deleted') or not item.get('barcode'):
                 continue
 
-            item_tx = tx_by_barcode.get(item['barcode'], [])
-            current_qty = int(item.get('quantity', 0))
-            series = build_daily_series(item_tx, current_qty)
-            if len(series) < 2:
-                continue
-
             try:
+                item_tx = tx_by_barcode.get(item['barcode'], [])
+                current_qty = int(item.get('quantity', 0))
+                series = build_daily_series(item_tx, current_qty)
+                if len(series) < 2:
+                    continue
+
                 result = predict_stock(series, horizon_days, train_ratio)
                 if 'error' in result:
                     continue

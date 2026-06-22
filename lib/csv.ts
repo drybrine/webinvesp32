@@ -1,14 +1,11 @@
+function escapeCsvCell(cell: unknown): string {
+  const value = cell === null || cell === undefined ? "" : String(cell)
+  const safe = /^[=+\-@\t\r]/.test(value) ? `\t${value}` : value
+  return `"${safe.replace(/"/g, '""')}"`
+}
+
 export function buildCsv(rows: unknown[][]): string {
-  return rows
-    .map((row) =>
-      row
-        .map((cell) => {
-          const value = cell === null || cell === undefined ? "" : String(cell)
-          return `"${value.replace(/"/g, '""')}"`
-        })
-        .join(","),
-    )
-    .join("\n")
+  return rows.map((row) => row.map(escapeCsvCell).join(",")).join("\n")
 }
 
 export function downloadCsv(filename: string, rows: unknown[][]): void {

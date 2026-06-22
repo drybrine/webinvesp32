@@ -7,7 +7,23 @@
       ".indexOn": ["barcode", "category", "name", "lastUpdated", "quantity", "minStock"],
       "$itemId": {
         ".write": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && (auth.token.role == 'admin' || auth.token.role == 'operator') && newData.exists()",
-        ".validate": "newData.hasChildren(['name', 'category', 'quantity', 'barcode', 'lastUpdated', 'operationId', 'updatedByUid']) && (!newData.hasChild('id') || newData.child('id').val() == $itemId) && newData.child('name').isString() && newData.child('category').isString() && newData.child('barcode').isString() && newData.child('quantity').isNumber() && newData.child('quantity').val() >= 0 && (!newData.hasChild('minStock') || (newData.child('minStock').isNumber() && newData.child('minStock').val() >= 0)) && newData.child('lastUpdated').isNumber() && newData.child('operationId').isString() && newData.child('operationId').val().length > 8 && newData.child('updatedByUid').val() == auth.uid && (!data.exists() || newData.child('createdAt').val() == data.child('createdAt').val())"
+        ".validate": "newData.hasChildren(['name', 'category', 'quantity', 'barcode', 'lastUpdated', 'operationId', 'updatedByUid']) && (!newData.hasChild('id') || newData.child('id').val() == $itemId) && (!data.exists() || newData.child('createdAt').val() == data.child('createdAt').val())",
+        "id": { ".validate": "newData.val() == $itemId" },
+        "name": { ".validate": "newData.isString()" },
+        "description": { ".validate": "newData.isString()" },
+        "category": { ".validate": "newData.isString()" },
+        "quantity": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "barcode": { ".validate": "newData.isString()" },
+        "minStock": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "location": { ".validate": "newData.isString()" },
+        "supplier": { ".validate": "newData.isString()" },
+        "lastUpdated": { ".validate": "newData.isNumber()" },
+        "operationId": { ".validate": "newData.isString() && newData.val().length > 8" },
+        "updatedByUid": { ".validate": "newData.val() == auth.uid" },
+        "createdAt": { ".validate": "!data.exists() || newData.val() == data.val()" },
+        "updatedAt": { ".validate": "newData.isNumber()" },
+        "deleted": { ".validate": "newData.isBoolean()" },
+        "$other": { ".validate": false }
       }
     },
     "transactions": {
@@ -15,7 +31,19 @@
       ".indexOn": ["timestamp", "type", "productBarcode", "operatorUid", "operationId"],
       "$transactionId": {
         ".write": "auth != null && auth.token.disabled != true && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && (auth.token.role == 'admin' || auth.token.role == 'operator') && !data.exists() && newData.exists() && newData.child('operatorUid').val() == auth.uid",
-        ".validate": "newData.hasChildren(['id', 'type', 'productName', 'productBarcode', 'quantity', 'reason', 'operator', 'operatorUid', 'operationId', 'timestamp']) && newData.child('id').val() == $transactionId && newData.child('type').val().matches(/^(in|out|adjustment)$/) && newData.child('productName').isString() && newData.child('productBarcode').isString() && newData.child('quantity').isNumber() && newData.child('quantity').val() != 0 && newData.child('reason').isString() && newData.child('operator').isString() && newData.child('operatorUid').val() == auth.uid && newData.child('operationId').isString() && newData.child('operationId').val().length > 8 && newData.child('timestamp').isNumber()"
+        ".validate": "newData.hasChildren(['id', 'type', 'productName', 'productBarcode', 'quantity', 'reason', 'operator', 'operatorUid', 'operationId', 'timestamp']) && newData.child('id').val() == $transactionId",
+        "id": { ".validate": "newData.val() == $transactionId" },
+        "type": { ".validate": "newData.val().matches(/^(in|out|adjustment)$/)" },
+        "productName": { ".validate": "newData.isString()" },
+        "productBarcode": { ".validate": "newData.isString()" },
+        "quantity": { ".validate": "newData.isNumber() && newData.val() != 0" },
+        "reason": { ".validate": "newData.isString()" },
+        "operator": { ".validate": "newData.isString()" },
+        "operatorUid": { ".validate": "newData.val() == auth.uid" },
+        "operationId": { ".validate": "newData.isString() && newData.val().length > 8" },
+        "timestamp": { ".validate": "newData.isNumber()" },
+        "notes": { ".validate": "newData.isString()" },
+        "$other": { ".validate": false }
       }
     },
     "scans": {
@@ -31,7 +59,20 @@
       ".indexOn": ["lastSeen", "status"],
       "$deviceId": {
         ".write": "auth != null && auth.token.disabled != true && auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false && newData.exists()",
-        ".validate": "newData.hasChildren(['status', 'lastSeen']) && newData.child('status').val().matches(/^(online|offline)$/) && newData.child('lastSeen').isNumber() && (!newData.hasChild('ipAddress') || newData.child('ipAddress').isString())"
+        ".validate": "newData.hasChildren(['status', 'lastSeen']) && newData.child('lastSeen').val() <= now + 30000",
+        "status": { ".validate": "newData.val().matches(/^(online|offline)$/)" },
+        "lastSeen": { ".validate": "newData.isNumber()" },
+        "lastHeartbeat": { ".validate": "newData.isNumber()" },
+        "ipAddress": { ".validate": "newData.isString()" },
+        "batteryLevel": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+        "rssi": { ".validate": "newData.isNumber() && newData.val() >= -120 && newData.val() <= 0" },
+        "version": { ".validate": "newData.isString()" },
+        "scanCount": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "freeHeap": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "currentMode": { ".validate": "newData.val() == 'inventory'" },
+        "uptime": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "name": { ".validate": "newData.isString()" },
+        "$other": { ".validate": false }
       }
     },
     "deviceCommands": {
@@ -44,7 +85,14 @@
       "$deviceId": {
         ".read": "auth != null && auth.token.disabled != true && ((auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false) || (auth.token.role == 'admin' && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false))",
         ".write": "auth != null && auth.token.disabled != true && auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false && newData.exists()",
-        ".validate": "newData.hasChildren(['phase', 'updatedAt']) && newData.child('phase').val().matches(/^(pending|deferred|downloading|verifying|flashing|success|failed|rollback)$/) && newData.child('updatedAt').isNumber() && (!newData.hasChild('progress') || (newData.child('progress').isNumber() && newData.child('progress').val() >= 0 && newData.child('progress').val() <= 100))"
+        ".validate": "newData.hasChildren(['phase', 'updatedAt']) && newData.child('updatedAt').val() <= now + 30000",
+        "phase": { ".validate": "newData.val().matches(/^(pending|deferred|downloading|verifying|flashing|success|failed|rollback)$/)" },
+        "updatedAt": { ".validate": "newData.isNumber()" },
+        "progress": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+        "version": { ".validate": "newData.isString()" },
+        "commandId": { ".validate": "newData.isString()" },
+        "message": { ".validate": "newData.isString() && newData.val().length <= 240" },
+        "$other": { ".validate": false }
       }
     },
     "users": {
