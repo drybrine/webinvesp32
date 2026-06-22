@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app"
-import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference, onValue, increment } from "firebase/database" // Added update, onValue, increment
+import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference, onValue, increment, get } from "firebase/database" // Added update, onValue, increment, get, orderByChild
 import { initializeFirebaseErrorHandling } from "./firebase-error-suppressor" // Use new enhanced error suppressor
 
 // Firebase configuration from environment variables
@@ -504,6 +504,17 @@ export const firebaseHelpers = {
       console.error("Error adding analytics data:", error);
       throw error;
     }
+  },
+
+  // One-time fetch of all transactions — uses get() not onValue().
+  // Prediction needs the full history; do NOT subscribe to everything.
+  fetchAllTransactions: async () => {
+    if (!database || !dbRefs || !dbRefs.transactions) throw new Error("Firebase not available")
+    const allQuery = ref(database, "transactions") // orderByChild("timestamp") — skip ordering, faster
+    const snapshot = await get(allQuery)
+    const data = snapshot.val()
+    if (!data) return []
+    return Object.keys(data).map((key) => ({ ...data[key], id: key }))
   },
 
   addTransaction: async (transactionData: any) => {

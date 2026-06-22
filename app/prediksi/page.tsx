@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label"
 import { AlertTriangle, TrendingDown, TrendingUp, Activity, ArrowLeft } from "lucide-react"
 
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase"
+import { firebaseHelpers } from "@/lib/firebase"
 import {
   buildDailySeriesFromTransactions,
   predictStock,
@@ -43,7 +44,7 @@ function fmt(ts: number): string {
 export default function PrediksiPage() {
   const { getIdToken } = useAuth()
   const { items: inventory, loading: inventoryLoading } = useFirebaseInventory()
-  const { transactions, loading: txLoading } = useFirebaseTransactions(null)
+  const { transactions, loading: txLoading } = useFirebaseTransactions(500)
 
   const [selectedId, setSelectedId] = useState<string>("")
   const [horizonDays, setHorizonDays] = useState<number>(14)
@@ -86,17 +87,25 @@ export default function PrediksiPage() {
 
     const controller = new AbortController()
 
-    const itemTx = transactions
-      .filter((t) => t.productBarcode === selectedItem.barcode)
-      .map((t) => ({
-        timestamp: Number(t.timestamp) || Date.now(),
-        quantity: Number(t.quantity) || 0,
-        type: t.type as "in" | "out" | "adjustment",
-      }))
-
     const fetchFromAPI = async () => {
       setPredictionError(null)
       try {
+        // One-time fetch of all transactions for accurate prediction
+        const allTxData = await firebaseHelpers.fetchAllTransactions()
+        const allTxs = allTxData as Array<Record<string, unknown>>
+        const itemTx = allTxs
+          .filter((t: Record<string, unknown>) => t.productBarcode === selectedItem.barcode)
+          .map((t: Record<string, unknown>) => ({
+            timestamp: Number(t.timestamp) || Date.now(),
+            quantity: Number(t.quantity) || 0,
+            type: t.type as "in" | "out" | "adjustment",
+          }))
+
+        if (itemTx.length < 2) {
+          setPrediction(null)
+          setPredictionSource(null)
+          return
+        }
         const token = await getIdToken()
         const res = await fetch("/api/predict", {
           method: "POST",

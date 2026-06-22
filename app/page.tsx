@@ -62,8 +62,8 @@ export default function DashboardPage() {
     deleteItem,
   } = useFirebaseInventory()
   const { loading: scansLoading, error: scansError } = { loading: false, error: null }
-  // null = semua transaksi untuk akurasi prediksi penuh (lihat CLAUDE.md)
-  const { transactions, loading: transactionsLoading } = useFirebaseTransactions(null)
+  // 500 transaksi terbaru untuk UI cepat — prediksi batch pakai one-time fetch
+  const { transactions, loading: transactionsLoading } = useFirebaseTransactions(500)
 
   const {
     devices,
@@ -175,7 +175,7 @@ export default function DashboardPage() {
       setStockRisksLoading(true)
       return
     }
-    if (inventory.length === 0 || transactions.length === 0) {
+    if (inventory.length === 0) {
       setStockRisks([])
       setStockRisksLoading(false)
       return
@@ -196,7 +196,10 @@ export default function DashboardPage() {
             minStock: Number(i.minStock) || 0,
           }))
 
-        const txs = transactions.map(t => ({
+        // One-time fetch of ALL transactions for accurate prediction
+        // (realtime subscription only gets latest 500)
+        const allTxData = await firebaseHelpers.fetchAllTransactions()
+        const txs = (allTxData as Array<Record<string, unknown>>).map(t => ({
           productBarcode: t.productBarcode,
           type: t.type,
           quantity: Number(t.quantity) || 0,
