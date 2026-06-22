@@ -82,74 +82,36 @@ interface DbRefs {
 }
 export let dbRefs: DbRefs | null = null; // Initialize as null
 
-// Network connectivity checker
-const checkNetworkConnectivity = async (): Promise<boolean> => {
-  if (typeof window === "undefined") return true; // Assume server has connectivity
-  
-  try {
-    // Check if navigator.onLine is available and true
-    if (!navigator.onLine) {
-      console.log("🌐 Browser reports offline");
-      return false;
-    }
-    
-    // Try a simple fetch to verify actual connectivity
-    const response = await fetch('https://www.google.com/favicon.ico', {
-      mode: 'no-cors',
-      cache: 'no-cache',
-      signal: AbortSignal.timeout(5000), // 5 second timeout
-    });
-    return true;
-  } catch (error) {
-    console.log("🌐 Network connectivity check failed:", error);
-    return false;
-  }
-};
+// Network connectivity checker — uses navigator.onLine only.
+// Firebase SDK handles reconnection internally; fetching google.com/favicon.ico
+// added 1-5s latency on every cold start for no benefit.
+const checkNetworkConnectivity = (): boolean => {
+  if (typeof window === "undefined") return true
+  return navigator.onLine !== false
+}
 
-// Delayed Firebase initialization with network checking
+// Synchronous Firebase initialization — no network fetch, no async delay.
+// Firebase SDK handles offline/reconnect internally.
 let initInProgress = false;
-const initializeFirebaseWithRetry = async (retryCount = 0): Promise<void> => {
-  const maxRetries = 3;
+const initializeFirebaseSync = (): void => {
+  if (firebaseInitialized) return
+  if (initInProgress) return
+  initInProgress = true
 
-  // Guard against concurrent retry chains (initial load + 'online' event).
-  // Already initialized → nothing to do.
-  if (firebaseInitialized) {
-    return;
-  }
-  // Another chain is mid-flight → don't start a second one.
-  if (initInProgress && retryCount === 0) {
-    return;
-  }
-
-  if (retryCount > maxRetries) {
-    console.warn("🔥 Max retries reached for Firebase initialization");
-    initInProgress = false;
-    return;
-  }
-
-  initInProgress = true;
-
-  // Check network connectivity first
-  const hasConnectivity = await checkNetworkConnectivity();
-  if (!hasConnectivity && retryCount < maxRetries) {
-    console.log(`🔥 No network connectivity, retrying in ${(retryCount + 1) * 2}s...`);
-    setTimeout(() => initializeFirebaseWithRetry(retryCount + 1), (retryCount + 1) * 2000);
-    return;
+  if (!checkNetworkConnectivity()) {
+    console.info("🔥 Browser offline, deferring Firebase init")
+    initInProgress = false
+    return
   }
 
   try {
-    initializeFirebase();
-    initInProgress = false;
-    console.log("🔥 Firebase initialized successfully with network check");
+    initializeFirebase()
+    initInProgress = false
   } catch (error) {
-    console.error("🔥 Firebase initialization failed:", error);
-    if (retryCount < maxRetries) {
-      setTimeout(() => initializeFirebaseWithRetry(retryCount + 1), (retryCount + 1) * 2000);
-    } else {
-      initInProgress = false;
-    }
+    console.error("🔥 Firebase initialization failed:", error)
+    initInProgress = false
   }
-};
+}
 
 // Only initialize Firebase on the client side
 const initializeFirebase = () => {
@@ -282,16 +244,15 @@ const initializeFirebaseServer = () => {
   }
 }
 
-// Initialize Firebase with network checking and retry logic
+// Initialize Firebase synchronously for instant startup
 if (typeof window !== "undefined") {
-  // Initialize immediately for better UX on dashboard
-  initializeFirebaseWithRetry();
-  
+  initializeFirebaseSync();
+
   // Listen for online events to retry connection
   window.addEventListener('online', () => {
     console.log("🌐 Network came back online, reinitializing Firebase");
     if (!isFirebaseConfigured()) {
-      initializeFirebaseWithRetry();
+      initializeFirebaseSync();
     }
   });
   
@@ -606,6 +567,8 @@ export const isFirebaseConfigured = (): boolean => {
 };
 
 // Function to wait for Firebase to be ready
+// With synchronous init, this resolves immediately if configured.
+// Keeps the polling fallback for edge cases (e.g. online event re-init).
 export const waitForFirebaseReady = (timeout: number = 5000): Promise<boolean> => {
   return new Promise((resolve) => {
     if (!validateFirebaseConfig(false)) {
@@ -613,17 +576,22 @@ export const waitForFirebaseReady = (timeout: number = 5000): Promise<boolean> =
       return;
     }
 
+    // Try sync init if not yet done
+    if (typeof window !== "undefined" && !isFirebaseConfigured()) {
+      initializeFirebaseSync()
+    }
+
     if (isFirebaseConfigured()) {
       resolve(true);
       return;
     }
-    
-    const checkInterval = 100;
+
+    const checkInterval = 50; // ponytail: reduced from 100ms; upgrade to event-driven if needed
     let elapsed = 0;
-    
+
     const interval = setInterval(() => {
       elapsed += checkInterval;
-      
+
       if (isFirebaseConfigured()) {
         clearInterval(interval);
         resolve(true);
@@ -647,11 +615,14 @@ export const getFirebaseStatus = () => {
   };
 };
 
-// Lazy load Firebase Auth only when needed (saves ~55KB)
+// Lazy load Firebase Auth only when needed (saves ~55KB on cold bundle),
+// but prefetch it in parallel at module load so the dynamic import resolves
+// before AuthProvider calls getFirebaseAuth(). Removes the ~200ms import
+// latency from the critical auth-init path without bloating the main bundle.
 export const getFirebaseAuth = async () => {
   if (!app) initializeFirebase()
   if (!app) throw new Error("Firebase app not initialized")
-  
+
   if (!auth) {
     const {
       browserLocalPersistence,
@@ -662,9 +633,15 @@ export const getFirebaseAuth = async () => {
     await setPersistence(auth, browserLocalPersistence)
     console.log("🔐 Firebase Auth loaded with persistent session")
   }
-  
+
   return auth;
 };
+
+// Prefetch auth module in parallel on the client — fire and forget.
+// By the time any auth call runs, the import is already resolved.
+if (typeof window !== "undefined" && validateFirebaseConfig(false)) {
+  void getFirebaseAuth().catch(() => { /* surfaced by caller */ })
+}
 
 // Export auth functions that lazy-load the auth module
 export const firebaseAuth = {

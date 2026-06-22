@@ -180,8 +180,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [getIdToken, loading, profile, role, signOut, user],
   )
 
-  if (loading) return <LoadingScreen />
+  // Login page renders immediately — the form is self-contained and calls
+  // signIn() directly. Don't block it behind the auth-state resolution.
   if (isLoginPage) return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  if (loading) return <LoadingScreen />
   if (!user || !profile) return <LoadingScreen />
   if (isAdminRoute && role !== "admin") return <LoadingScreen />
 
