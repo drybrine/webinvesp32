@@ -2,7 +2,6 @@
 
 import {
   Package,
-  Activity,
   AlertCircle,
   Smartphone,
   BatteryFull,
@@ -16,7 +15,6 @@ import { cn } from "@/lib/utils"
 
 interface StatsCardsProps {
   totalItems: number
-  totalTransactions: number
   lowStockItems: InventoryItem[]
   inventory: InventoryItem[]
   onlineDevices: number
@@ -26,7 +24,6 @@ interface StatsCardsProps {
 
 export default function StatsCards({
   totalItems,
-  totalTransactions,
   lowStockItems,
   inventory,
   onlineDevices,
@@ -81,16 +78,6 @@ export default function StatsCards({
         </div>
         <div className="text-3xl font-bold text-foreground tabular-nums">{totalItems}</div>
         <p className="text-[11px] text-muted-foreground mt-0.5">Jenis barang unik</p>
-      </div>
-
-      {/* Total Transactions */}
-      <div className="rounded-lg border border-border bg-card p-4 card-hover">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Transaksi</span>
-          <Activity className="h-3.5 w-3.5 text-primary/50" />
-        </div>
-        <div className="text-3xl font-bold text-foreground tabular-nums">{totalTransactions}</div>
-        <p className="text-[11px] text-muted-foreground mt-0.5">Riwayat pergerakan stok</p>
       </div>
 
       {/* Low Stock */}

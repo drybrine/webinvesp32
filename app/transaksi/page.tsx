@@ -45,7 +45,7 @@ export default function TransaksiPage() {
     transactions,
     loading: transactionsLoading,
     error: transactionsError,
-  } = useFirebaseTransactions(500)
+  } = useFirebaseTransactions(null)
 
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedType, setSelectedType] = useState("all")

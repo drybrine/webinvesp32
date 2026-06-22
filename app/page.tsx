@@ -470,7 +470,6 @@ export default function DashboardPage() {
   }
 
   const totalItems = inventory.length
-  const totalTransactions = transactions.length
   const lowStockItems = inventory.filter((item) => item.quantity <= item.minStock)
 
   const exportToCSV = () => {
@@ -515,7 +514,6 @@ export default function DashboardPage() {
         {/* Stats Cards */}
         <StatsCards
           totalItems={totalItems}
-          totalTransactions={totalTransactions}
           lowStockItems={lowStockItems}
           inventory={inventory}
           onlineDevices={onlineDevices}
