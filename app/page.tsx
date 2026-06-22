@@ -515,7 +515,6 @@ export default function DashboardPage() {
         <StatsCards
           totalItems={totalItems}
           lowStockItems={lowStockItems}
-          inventory={inventory}
           onlineDevices={onlineDevices}
           totalDevices={totalDevices}
           devices={devices}

@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { limitToLast, off, onValue, orderByChild, query, ref } from "firebase/database"
 import { database, firebaseHelpers, isFirebaseConfigured } from "@/lib/firebase"
-import { ESP32_CONFIG, ESP32_HELPERS } from "@/lib/esp32-config"
 import { UnifiedQuickActionPopup } from "./unified-quick-action-popup"
 import { RealtimeScanContext, type RealtimeScanContextType } from "@/hooks/use-realtime-scan"
 import { logger } from "@/lib/logger"
@@ -66,7 +65,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
         // Test Firebase connection
         const testRef = ref(database, '.info/connected')
         const unsubscribeTest = onValue(testRef, (snapshot) => {
-          const connected = snapshot.val()
+          snapshot.val() // fire connection listener
           // Firebase connection status available
         })
         
@@ -204,21 +203,11 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
           // ESP32 might have wrong timestamp due to NTP sync issues
           // We'll detect "new" ESP32 scans by checking if this scan ID is different from last processed
           const isNewScanFromESP32 = isESP32Device && (latestScan.id !== lastProcessedScanId)
-          
+
           const timeWindow = isESP32Device ? 30000 : 60000 // 30 sec for ESP32 (faster), 1 min for others
           const isRecentScan = scanAge < timeWindow
-          
-          // For ESP32 devices with timestamp issues, we'll be more lenient
-          const isRecentOrNewESP32 = isESP32Device && (isRecentScan || isNewScanFromESP32)
-          
-          // Enhanced barcode comparison - check if this is truly a new scan event
-          const isNewBarcode = latestScan.barcode !== lastScannedBarcode
-          
-          // Additional check: if scan is very recent (< 2 seconds) and from ESP32, always consider it new
-          const isVeryRecentESP32 = isESP32Device && scanAge < 2000
-          
-          // SPECIAL CASE: ESP32 with old timestamp but new scan ID (timestamp sync issue)
-          const isNewESP32ScanDespiteOldTimestamp = isESP32Device && (latestScan.id !== lastProcessedScanId)
+
+          // Simplified trigger: is this a new, unprocessed scan from an ESP32?
           
           // Check if the scan is from inventory mode based on actual Firebase data structure
           const isScanFromInventoryMode = (
@@ -280,7 +269,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
             if (isMobile && 'navigator' in window && 'vibrate' in navigator) {
               try {
                 navigator.vibrate([200, 100, 200])
-              } catch (e) {
+              } catch {
                 logger.warn('Vibration not supported')
               }
             }

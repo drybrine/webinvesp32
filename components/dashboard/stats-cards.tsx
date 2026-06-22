@@ -16,7 +16,6 @@ import { cn } from "@/lib/utils"
 interface StatsCardsProps {
   totalItems: number
   lowStockItems: InventoryItem[]
-  inventory: InventoryItem[]
   onlineDevices: number
   totalDevices: number
   devices: DeviceStatus[]
@@ -25,7 +24,6 @@ interface StatsCardsProps {
 export default function StatsCards({
   totalItems,
   lowStockItems,
-  inventory,
   onlineDevices,
   totalDevices,
   devices,
@@ -69,7 +67,7 @@ export default function StatsCards({
   const batteryLabel = lowestBatteryLevel === null ? "Belum terbaca" : `${lowestBatteryLevel}%`
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
+    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 stagger-children">
       {/* Total Items */}
       <div className="rounded-lg border border-border bg-card p-4 card-hover">
         <div className="flex items-center justify-between mb-2">
