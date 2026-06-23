@@ -35,7 +35,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   const { role } = useAuth()
   const writable = canWrite(role)
   const { scanMode } = useScanMode()
-  const { items: inventoryItems } = useFirebaseInventory()
+  const { items: inventoryItems, loading: inventoryLoading } = useFirebaseInventory()
   const pathname = usePathname()
   const [isScanning, setIsScanning] = useState(false)
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null)
@@ -233,10 +233,10 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
             isScanFromInventoryMode
           )
           
-          if (!shouldTriggerPopup) {
+          if (!shouldTriggerPopup || inventoryLoading) {
             return
           }
-          
+
           setLastScannedBarcode(latestScan.barcode)
           setLastProcessedScanId(latestScan.id)
           setCurrentBarcode(latestScan.barcode)
@@ -325,7 +325,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
         cleanup()
       }
     }
-  }, [autoExecuteStock, inventoryItems, isPopupDisabled, isMobile, lastProcessedScanId, pathname, popupsGloballyDisabled, scanMode, writable])
+  }, [autoExecuteStock, inventoryItems, inventoryLoading, isPopupDisabled, isMobile, lastProcessedScanId, pathname, popupsGloballyDisabled, scanMode, writable])
 
   const disablePopupsGlobally = () => {
     setPopupsGloballyDisabled(true)
