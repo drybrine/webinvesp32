@@ -33,7 +33,7 @@ export function AuditTimeline({ entityId }: { entityId: string }) {
             <div key={entry.id} className="text-xs mt-1">
               <span className="font-semibold">{entry.action}</span>{" "}
               <span className="text-muted-foreground">{entry.changedFields.join(", ") || entry.entity}</span>
-              <div className="text-[10px] text-muted-foreground">{new Date(entry.timestamp).toLocaleString("id-ID")} · {entry.actorUid}</div>
+              <div className="text-[10px] text-muted-foreground">{new Date(entry.timestamp || Date.now()).toLocaleString("id-ID")} · {entry.actorUid}</div>
             </div>
           ))}
         </div>

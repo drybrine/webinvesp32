@@ -1,6 +1,27 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app"
-import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference, onValue, increment, get } from "firebase/database" // Added update, onValue, increment, get, orderByChild
+import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference, increment, get } from "firebase/database"
 import { initializeFirebaseErrorHandling } from "./firebase-error-suppressor" // Use new enhanced error suppressor
+import type { Auth } from "firebase/auth"
+import type { InventoryItem, ScanRecord, DeviceStatus } from "@/hooks/use-firebase"
+// Input types: omit fields generated server-side by the helper function itself.
+export type AddInventoryInput = Omit<InventoryItem, "id" | "createdAt" | "updatedAt" | "lastUpdated" | "deleted">
+export type UpdateInventoryInput = Partial<Omit<InventoryItem, "id" | "createdAt" | "updatedAt" | "lastUpdated" | "quantity">>
+export type AddScanInput = Omit<ScanRecord, "id" | "timestamp" | "processed"> & {
+  timestamp?: number | object
+  processed?: boolean
+  mode?: string
+  type?: string
+}
+export type AddTransactionInput = {
+  type: "in" | "out" | "adjustment"
+  productName?: string
+  productBarcode?: string
+  quantity: number
+  reason: string
+  operator: string
+  notes?: string
+}
+export type UpdateDeviceInput = Partial<Omit<DeviceStatus, "deviceId" | "lastSeen">>
 
 // Firebase configuration from environment variables
 // These values are loaded from .env file for security
@@ -67,9 +88,8 @@ const validateFirebaseConfig = (logIssues = true) => {
 // Initialize Firebase with error handling
 let app: FirebaseApp | null = null // Use FirebaseApp type
 export let database: Database | null = null
-let auth: any = null // Auth will be lazy loaded
+let auth: Auth | null = null // Auth will be lazy loaded
 let firebaseInitialized = false
-let connectionListenerRegistered = false
 
 // Define a type for dbRefs
 interface DbRefs {
@@ -140,23 +160,9 @@ const initializeFirebase = () => {
     // Don't initialize auth unless explicitly needed - saves ~55KB
     // auth = getAuth(app)
     
-    // Add connection monitoring for WebSocket issues (register only once)
-    if (database && !connectionListenerRegistered) {
-      connectionListenerRegistered = true
-      const connectedRef = ref(database, '.info/connected')
-      onValue(connectedRef, (snapshot) => {
-        const connected = snapshot.val()
-        if (connected) {
-          // Firebase WS connected (omitted from production logs)
-        } else {
-          // ws disconnected
-        }
-      }, (error) => {
-        // Silently handle connection monitoring errors
-        // connection monitor retry
-      })
-    }
-    
+    // Firebase SDK handles reconnection internally.
+    // No-op onValue subscriber was removed — leaked Unsubscribe.
+
     firebaseInitialized = true
 
     // Populate dbRefs now that database is initialized
@@ -305,7 +311,7 @@ export const firebaseHelpers = {
   getMutationActor,
 
   // Add new inventory item
-  addInventoryItem: async (item: any, source: "Dashboard" | "Scanner" = "Dashboard") => {
+  addInventoryItem: async (item: AddInventoryInput, source: "Dashboard" | "Scanner" = "Dashboard") => {
     if (!database || !dbRefs || !dbRefs.inventory) {
       console.error("Firebase not available or inventory ref not initialized for addInventoryItem");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -351,9 +357,9 @@ export const firebaseHelpers = {
 
   updateInventoryItem: async (
     id: string,
-    updates: Partial<any>,
+    updates: UpdateInventoryInput,
     operationId = createOperationId(),
-  ) => { // Menggunakan Partial<InventoryItem> jika interface InventoryItem tersedia di sini
+  ) => {
     if (!database) {
       console.error("Firebase database not available for updateInventoryItem");
       throw new Error("Firebase not available - operation failed");
@@ -381,7 +387,7 @@ export const firebaseHelpers = {
   adjustStock: async (
     itemId: string,
     delta: number,
-    transactionData?: Record<string, any>,
+    transactionData?: AddTransactionInput,
     suppliedOperationId?: string,
   ) => {
     if (!Number.isFinite(delta) || delta === 0) {
@@ -394,7 +400,7 @@ export const firebaseHelpers = {
     try {
       const actor = await getMutationActor()
       const operationId = suppliedOperationId || createOperationId()
-      const updates: Record<string, any> = {
+      const updates: Record<string, unknown> = {
         [`inventory/${itemId}/quantity`]: increment(delta),
         [`inventory/${itemId}/operationId`]: operationId,
         [`inventory/${itemId}/updatedByUid`]: actor.uid,
@@ -422,7 +428,7 @@ export const firebaseHelpers = {
   },
 
   // Add scan record (matching ESP32 .ino structure exactly)
-  addScanRecord: async (scanData: any) => {
+  addScanRecord: async (scanData: AddScanInput) => {
     if (!database || !dbRefs || !dbRefs.scans) {
       console.error("Firebase not available or scans ref not initialized for addScanRecord");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -466,7 +472,7 @@ export const firebaseHelpers = {
   },
 
   // Update device status
-  updateDeviceStatus: async (deviceId: string, status: any) => {
+  updateDeviceStatus: async (deviceId: string, status: UpdateDeviceInput) => {
     if (!database) { // dbRefs.devices might not be directly needed
       console.error("Firebase database not available for updateDeviceStatus");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -487,7 +493,7 @@ export const firebaseHelpers = {
   },
 
   // Add analytics data
-  addAnalytics: async (type: string, data: any) => {
+  addAnalytics: async (type: string, data: Record<string, unknown>) => {
     if (!database || !dbRefs || !dbRefs.analytics) {
       console.error("Firebase not available or analytics ref not initialized for addAnalytics");
       throw new Error("Firebase not available - using local storage or operation failed");
@@ -517,7 +523,7 @@ export const firebaseHelpers = {
     return Object.keys(data).map((key) => ({ ...data[key], id: key }))
   },
 
-  addTransaction: async (transactionData: any) => {
+  addTransaction: async (transactionData: AddTransactionInput) => {
     if (!database || !dbRefs || !dbRefs.transactions) {
       console.error("Firebase not available or transactions ref not initialized for addTransaction");
       throw new Error("Firebase not available - operation failed");
@@ -630,7 +636,7 @@ export const getFirebaseStatus = () => {
 // but prefetch it in parallel at module load so the dynamic import resolves
 // before AuthProvider calls getFirebaseAuth(). Removes the ~200ms import
 // latency from the critical auth-init path without bloating the main bundle.
-export const getFirebaseAuth = async () => {
+export const getFirebaseAuth = async (): Promise<Auth> => {
   if (!app) initializeFirebase()
   if (!app) throw new Error("Firebase app not initialized")
 

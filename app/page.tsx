@@ -8,7 +8,7 @@ import { AlertCircle, TrendingDown } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, InventoryItem, useFirebaseTransactions } from "@/hooks/use-firebase"
 import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
-import { firebaseHelpers } from "@/lib/firebase"
+import { firebaseHelpers, type AddInventoryInput } from "@/lib/firebase"
 import { downloadCsv } from "@/lib/csv"
 import StatsCards from "@/components/dashboard/stats-cards"
 import InventoryTable from "@/components/dashboard/inventory-table"
@@ -85,7 +85,7 @@ export default function DashboardPage() {
 
   const { toast } = useToast()
 
-  const [newItem, setNewItem] = useState<Omit<InventoryItem, "id" | "createdAt" | "updatedAt">>({
+  const [newItem, setNewItem] = useState<AddInventoryInput>({
     barcode: "",
     name: "",
     description: "",
@@ -94,7 +94,6 @@ export default function DashboardPage() {
     minStock: 5,
     supplier: "",
     location: "",
-    lastUpdated: Date.now(),
   })
 
   const categories = useMemo(() => {
@@ -383,7 +382,7 @@ export default function DashboardPage() {
     }
     try {
       await addItem(newItem)
-      setNewItem({ barcode: "", name: "", description: "", category: "", quantity: 0, minStock: 5, supplier: "", location: "", lastUpdated: Date.now() })
+      setNewItem({ barcode: "", name: "", description: "", category: "", quantity: 0, minStock: 5, supplier: "", location: "" })
       setIsAddItemOpen(false)
       toast({ title: "Berhasil", description: "Item berhasil ditambahkan" })
     } catch {
@@ -398,8 +397,8 @@ export default function DashboardPage() {
       // Write only metadata — never the absolute quantity, to avoid clobbering
       // concurrent stock changes (scanner/other tabs) that happened while the
       // dialog was open.
-      const { quantity, id, ...metadata } = editingItem
-      await updateItem(id, metadata as Partial<InventoryItem>, operationId)
+      const { quantity, id, lastUpdated, updatedAt, createdAt, ...metadata } = editingItem
+      await updateItem(id, metadata, operationId)
 
       // If the user changed quantity in the dialog, apply it as an atomic delta
       // relative to what they saw when the dialog opened (not the live value).

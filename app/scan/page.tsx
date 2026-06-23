@@ -39,7 +39,7 @@ export default function ScanPage() {
 
   // Calculate stats
   const todayScans = scans.filter(scan =>
-    new Date(scan.timestamp).toDateString() === new Date().toDateString()
+    new Date(scan.timestamp || Date.now()).toDateString() === new Date().toDateString()
   ).length
 
   const processedScans = scans.filter(scan => scan.processed).length
@@ -83,7 +83,7 @@ export default function ScanPage() {
       itemName: s.itemFound ? 'Item Ditemukan' : 'Tidak Ditemukan',
       itemCategory: 'Unknown',
       itemLocation: s.location || 'Unknown',
-      timeAgo: new Date(s.timestamp).toLocaleString(),
+      timeAgo: new Date(s.timestamp || Date.now()).toLocaleString(),
       status: s.processed ? 'processed' : 'new' as 'new' | 'processed' | 'error'
     }));
 
@@ -93,7 +93,7 @@ export default function ScanPage() {
       s.id,
       s.barcode || "",
       s.deviceId || "",
-      new Date(s.timestamp).toLocaleString(),
+      new Date(s.timestamp || Date.now()).toLocaleString(),
       s.processed ? "Ya" : "Tidak",
       s.location || "",
     ])

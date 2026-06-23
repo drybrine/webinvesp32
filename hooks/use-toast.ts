@@ -303,9 +303,10 @@ function useToastHistory() {
   )
 
   React.useEffect(() => {
-    HISTORY_LISTENERS.push(() => setEntries(loadHistoryFromStorage()))
+    const listener = () => setEntries(loadHistoryFromStorage())
+    HISTORY_LISTENERS.push(listener)
     return () => {
-      const idx = HISTORY_LISTENERS.indexOf(setEntries as unknown as () => void)
+      const idx = HISTORY_LISTENERS.indexOf(listener)
       if (idx > -1) HISTORY_LISTENERS.splice(idx, 1)
     }
   }, [])

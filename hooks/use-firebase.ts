@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react"; // Add useMemo
 import { ref, onValue, DataSnapshot, query, orderByChild, limitToLast, Unsubscribe } from "firebase/database";
-import { firebaseHelpers, isFirebaseConfigured, database, dbRefs, firebaseCleanup, waitForFirebaseReady } from "@/lib/firebase"; // Ensure all are imported
+import { firebaseHelpers, isFirebaseConfigured, database, dbRefs, waitForFirebaseReady } from "@/lib/firebase";
+import type { AddInventoryInput, UpdateInventoryInput, AddScanInput } from "@/lib/firebase";
 
 export interface InventoryItem {
   id: string
@@ -112,10 +113,8 @@ export function useFirebaseInventory() {
           return;
         }
 
-        // Register listener for global cleanup
-        if (unsubscribe) {
-          firebaseCleanup.addListener(unsubscribe);
-        }
+        // Effect cleanup handles unsubscribe on unmount; pagehide in lib/firebase.ts handles tab-close.
+        // firebaseCleanup.addListener was removed — it accumulated on dep changes with no pruning.
       } catch (err: any) {
         console.error("Error setting up inventory listener:", err);
         setError(err.message || "Failed to setup inventory listener");
@@ -134,7 +133,7 @@ export function useFirebaseInventory() {
   }, []);
 
   const addItem = async (
-    item: Omit<InventoryItem, "id" | "createdAt" | "updatedAt">,
+    item: AddInventoryInput,
     source: "Dashboard" | "Scanner" = "Dashboard",
   ): Promise<string | undefined> => {
     if (!isFirebaseConfigured()) {
@@ -150,7 +149,7 @@ export function useFirebaseInventory() {
     }
   };
 
-  const updateItem = async (id: string, updates: Partial<InventoryItem>, operationId?: string) => {
+  const updateItem = async (id: string, updates: UpdateInventoryInput, operationId?: string) => {
     if (!isFirebaseConfigured()) {
       throw new Error("Firebase tidak tersedia")
     }
@@ -247,15 +246,9 @@ export function useFirebaseScans() {
           }
         );
 
-        // If the effect was cleaned up while we awaited, unsubscribe immediately
         if (cancelled && unsubscribe) {
           unsubscribe();
           return;
-        }
-
-        // Register listener for global cleanup
-        if (unsubscribe) {
-          firebaseCleanup.addListener(unsubscribe);
         }
       } catch (err: any) {
         console.error("Error setting up scans listener:", err);
@@ -274,7 +267,7 @@ export function useFirebaseScans() {
     };
   }, []);
 
-  const addScan = async (scanData: Omit<ScanRecord, "id" | "timestamp" | "processed">) => {
+  const addScan = async (scanData: AddScanInput) => {
     if (!isFirebaseConfigured()) {
       throw new Error("Firebase tidak tersedia")
     }
@@ -412,10 +405,6 @@ export function useFirebaseTransactions(limit: number | null = 5000) {
       if (cancelled && unsubscribe) {
         unsubscribe();
         return;
-      }
-
-      if (unsubscribe) {
-        firebaseCleanup.addListener(unsubscribe);
       }
     };
 

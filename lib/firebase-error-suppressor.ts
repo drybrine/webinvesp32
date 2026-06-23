@@ -171,45 +171,40 @@ class WebSocketConnectionMonitor {
     const OriginalWebSocket = window.WebSocket;
     const monitor = this;
 
-    // Create a proper WebSocket wrapper to avoid TypeScript issues
-    (window as any).WebSocket = function(url: string | URL, protocols?: string | string[]) {
-      const urlString = url.toString();
-      const ws = new OriginalWebSocket(url, protocols);
-      const isFirebaseConnection = urlString.includes('firebasedatabase.app');
+    // Preserve instanceof checks by extending the native WebSocket
+    class WebSocketWrapper extends OriginalWebSocket {
+      constructor(url: string | URL, protocols?: string | string[]) {
+        super(url, protocols);
+        const urlString = url.toString();
+        const isFirebaseConnection = urlString.includes('firebasedatabase.app');
 
-      if (isFirebaseConnection) {
-        // Add Firebase-specific handlers
-        ws.addEventListener('error', (event) => {
-          event.stopImmediatePropagation();
-          event.preventDefault();
-          
-          const attempts = monitor.retryAttempts.get(urlString) || 0;
-          monitor.retryAttempts.set(urlString, attempts + 1);
-          
-          if (attempts < monitor.maxRetries) {
-          } else {
+        if (isFirebaseConnection) {
+          this.addEventListener('error', (event) => {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+
+            const attempts = monitor.retryAttempts.get(urlString) || 0;
+            monitor.retryAttempts.set(urlString, attempts + 1);
+
+            if (attempts < monitor.maxRetries) {
+            } else {
+              monitor.retryAttempts.delete(urlString);
+            }
+          });
+
+          this.addEventListener('open', () => {
             monitor.retryAttempts.delete(urlString);
-          }
-        });
+          });
 
-        ws.addEventListener('open', () => {
-          monitor.retryAttempts.delete(urlString);
-        });
-
-        ws.addEventListener('close', (event) => {
-          if (event.code !== 1000) {
-          }
-        });
+          this.addEventListener('close', (event) => {
+            if (event.code !== 1000) {
+            }
+          });
+        }
       }
+    }
 
-      return ws;
-    };
-
-    // Copy static properties
-    (window as any).WebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
-    (window as any).WebSocket.OPEN = OriginalWebSocket.OPEN;
-    (window as any).WebSocket.CLOSING = OriginalWebSocket.CLOSING;
-    (window as any).WebSocket.CLOSED = OriginalWebSocket.CLOSED;
+    (window as any).WebSocket = WebSocketWrapper;
   }
 }
 

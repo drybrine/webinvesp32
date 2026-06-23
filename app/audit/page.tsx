@@ -33,7 +33,7 @@ export default function AuditPage() {
     const actorMatch = !actor || log.actorUid.toLowerCase().includes(actor.toLowerCase())
     const actionMatch = action === "all" || log.action === action
     const entityMatch = entity === "all" || log.entity === entity
-    const dateMatch = !date || new Date(log.timestamp).toISOString().slice(0, 10) === date
+    const dateMatch = !date || new Date(log.timestamp || 0).toISOString().slice(0, 10) === date
     return actorMatch && actionMatch && entityMatch && dateMatch
   }), [action, actor, date, entity, logs])
 
@@ -54,7 +54,7 @@ export default function AuditPage() {
           <TableHeader><TableRow><TableHead>Waktu</TableHead><TableHead>Aktor</TableHead><TableHead>Entitas</TableHead><TableHead>Aksi</TableHead><TableHead>Perubahan</TableHead><TableHead>Operation ID</TableHead></TableRow></TableHeader>
           <TableBody>{filtered.map((log) => (
             <TableRow key={log.id}>
-              <TableCell className="whitespace-nowrap text-sm">{new Date(log.timestamp).toLocaleString("id-ID")}</TableCell>
+              <TableCell className="whitespace-nowrap text-sm">{new Date(log.timestamp || Date.now()).toLocaleString("id-ID")}</TableCell>
               <TableCell><div className="font-mono text-xs">{log.actorUid}</div><div className="text-xs text-muted-foreground">{log.actorType}</div></TableCell>
               <TableCell><div className="font-medium">{log.entity}</div><div className="font-mono text-xs text-muted-foreground">{log.entityId}</div></TableCell>
               <TableCell><Badge variant="outline">{log.action}</Badge></TableCell>

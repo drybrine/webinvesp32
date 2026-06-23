@@ -196,7 +196,6 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
         location: newProduct.location.trim(),
         supplier: newProduct.supplier?.trim() || "",
         barcode: barcode || "",
-        lastUpdated: Date.now(),
       }
 
       await addItem(productData, "Scanner")
