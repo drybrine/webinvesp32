@@ -43,6 +43,8 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   const [scanCount, setScanCount] = useState(0)
   const [showPopup, setShowPopup] = useState(false)
   const [currentBarcode, setCurrentBarcode] = useState("")
+  const [currentScanId, setCurrentScanId] = useState("")
+  const [currentDeviceId, setCurrentDeviceId] = useState("")
   const [isMobile, setIsMobile] = useState(false)
   const [popupsGloballyDisabled, setPopupsGloballyDisabled] = useState(false)
 
@@ -240,6 +242,8 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
           setLastScannedBarcode(latestScan.barcode)
           setLastProcessedScanId(latestScan.id)
           setCurrentBarcode(latestScan.barcode)
+          setCurrentScanId(latestScan.id)
+          setCurrentDeviceId(latestScan.deviceId || "")
           setScanCount(prev => prev + 1)
           setIsScanning(true)
 
@@ -349,7 +353,9 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
     
     setShowPopup(false)
     setCurrentBarcode("")
-    
+    setCurrentScanId("")
+    setCurrentDeviceId("")
+
     // Remove body class and restore scroll
     if (typeof document !== 'undefined') {
       document.body.classList.remove('dialog-open')
@@ -381,6 +387,8 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
       {/* Unified popup that automatically adapts to mobile/desktop */}
       <UnifiedQuickActionPopup
         barcode={currentBarcode}
+        scanId={currentScanId}
+        deviceId={currentDeviceId}
         isOpen={showPopup}
         onClose={handleClosePopup}
       />

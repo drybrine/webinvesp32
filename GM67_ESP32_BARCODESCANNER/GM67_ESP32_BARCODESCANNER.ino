@@ -143,6 +143,13 @@ uint8_t       authRetryCount = 0;
 String        provisioningPin = "";
 uint8_t       provisioningFailures = 0;
 unsigned long provisioningLockedUntil = 0;
+String        lastFirebaseScanId = "";
+String        pendingLookupScanId = "";
+String        pendingLookupBarcode = "";
+unsigned long pendingLookupDeadline = 0;
+unsigned long lastLookupPoll = 0;
+#define LOOKUP_POLL_INTERVAL_MS 1000UL
+#define LOOKUP_TIMEOUT_MS       10000UL
 
 // --- OTA state ---------------------------------------------------------------
 unsigned long lastOtaCheck       = 0;
@@ -164,6 +171,7 @@ void          startWebServer();
 void          processBarcodeInput(String input);
 void          processProvisioningBarcode(String input);
 void          processInventoryBarcode(String barcode);
+void          checkDeviceLookupStatus();
 bool          connectToWiFi();
 bool          sendScanToFirebase(String barcode);
 bool          sendHeartbeatToFirebase();
@@ -192,6 +200,9 @@ void          oledShowBoot();
 void          oledShowStatus();
 void          oledShowBarcode(String barcode, String itemName, bool sent);
 void          oledShowInventoryFound(String name, int qty, int minStock);
+void          oledShowProductLookupSearching(String barcode);
+void          oledShowProductLookupFound(String name, String category);
+void          oledShowProductLookupNotFound(String barcode, String message);
 void          oledShowWiFiConnecting(String ssid);
 void          oledShowWiFiConnected(String ip);
 void          oledShowNoWiFi();
@@ -502,6 +513,52 @@ void oledShowInventoryFound(String name, int qty, int minStock) {
 
   display.display();
   delay(2000);
+}
+
+void oledShowProductLookupSearching(String barcode) {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(20, 0); display.println("- DATA BARANG -");
+  if (barcode.length() > 21) barcode = barcode.substring(0, 21);
+  display.setCursor(0, 10); display.println(barcode);
+  display.drawLine(0, 20, 127, 20, SSD1306_WHITE);
+  display.setCursor(0, 26); display.println("Mencari data...");
+  display.setCursor(0, 38); display.println("Honda Cengkareng");
+  display.setCursor(0, 54); display.println("Mohon tunggu");
+  display.display();
+  lastBarcodeOnOled = millis();
+}
+
+void oledShowProductLookupFound(String name, String category) {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(12, 0); display.println("DATA DITEMUKAN");
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  if (name.length() > 21) name = name.substring(0, 21);
+  display.setCursor(0, 18); display.println(name);
+  if (category.length() > 21) category = category.substring(0, 21);
+  display.setCursor(0, 32); display.println(category);
+  display.setCursor(0, 48); display.println("Cek form di website");
+  display.display();
+  lastBarcodeOnOled = millis();
+}
+
+void oledShowProductLookupNotFound(String barcode, String message) {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(4, 0); display.println("DATA TIDAK DITEMUKAN");
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  if (barcode.length() > 21) barcode = barcode.substring(0, 21);
+  display.setCursor(0, 18); display.println(barcode);
+  if (message.length() == 0) message = "Isi manual di web";
+  if (message.length() > 21) message = message.substring(0, 21);
+  display.setCursor(0, 36); display.println(message);
+  display.setCursor(0, 52); display.println("Tambah via popup");
+  display.display();
+  lastBarcodeOnOled = millis();
 }
 
 // Menampilkan layar proses koneksi WiFi.
@@ -977,6 +1034,7 @@ String firebaseUrlWithAuth(String pathAndQuery) {
 // Mengirim hasil scan barcode ke node /scans di Firebase Realtime Database.
 // Record dibuat sebagai inventory_scan agar web dapat menampilkan popup scan dengan cepat.
 bool sendScanToFirebase(String barcode) {
+  lastFirebaseScanId = "";
   if (!isWiFiConnected) {
     Serial.println("Tidak bisa kirim scan: no WiFi");
     return false;
@@ -1005,7 +1063,8 @@ bool sendScanToFirebase(String barcode) {
   bool ok  = (code >= 200 && code < 300);
   if (ok) {
     DynamicJsonDocument res(256); deserializeJson(res, http.getString());
-    Serial.println("Scan ID: " + res["name"].as<String>());
+    lastFirebaseScanId = res["name"].as<String>();
+    Serial.println("Scan ID: " + lastFirebaseScanId);
   } else {
     Serial.printf("/scans HTTP error: %d\n", code);
     if (code == 401 || code == 403) {
@@ -1071,6 +1130,53 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
   }
   http.end();
   return item;
+}
+
+void checkDeviceLookupStatus() {
+  if (pendingLookupScanId.length() == 0) return;
+  if (!isWiFiConnected) return;
+  if ((long)(millis() - pendingLookupDeadline) > 0) {
+    oledShowProductLookupNotFound(pendingLookupBarcode, "Lookup timeout");
+    pendingLookupScanId = "";
+    pendingLookupBarcode = "";
+    return;
+  }
+  if (millis() - lastLookupPoll < LOOKUP_POLL_INTERVAL_MS) return;
+  lastLookupPoll = millis();
+
+  HTTPClient http;
+  String url = firebaseUrlWithAuth("/deviceLookupStatus/" + String(deviceConfig.deviceId) + ".json");
+  if (url.length() == 0) return;
+  http.begin(url);
+  http.setTimeout(3000);
+  int code = http.GET();
+  if (code != 200) {
+    http.end();
+    return;
+  }
+
+  String body = http.getString();
+  http.end();
+  if (body == "null" || body.length() < 5) return;
+
+  DynamicJsonDocument doc(768);
+  if (deserializeJson(doc, body)) return;
+  String scanId = doc["scanId"] | "";
+  if (scanId != pendingLookupScanId) return;
+
+  String status = doc["status"] | "";
+  if (status == "found") {
+    String name = doc["name"] | "Produk ditemukan";
+    String category = doc["category"] | "Honda Cengkareng";
+    oledShowProductLookupFound(name, category);
+    pendingLookupScanId = "";
+    pendingLookupBarcode = "";
+  } else if (status == "not_found" || status == "failed") {
+    String message = doc["message"] | "Isi manual di web";
+    oledShowProductLookupNotFound(pendingLookupBarcode, message);
+    pendingLookupScanId = "";
+    pendingLookupBarcode = "";
+  }
 }
 
 // Mengirim heartbeat berkala ke /devices/{deviceId}.
@@ -1496,9 +1602,17 @@ void processInventoryBarcode(String barcode) {
   // Lookup inventory setelah scan terkirim (untuk OLED display)
   InventoryItem item = lookupInventoryByBarcode(barcode);
   if (item.found) {
+    pendingLookupScanId = "";
+    pendingLookupBarcode = "";
     Serial.printf("Item: %s | Qty: %d | MinStock: %d\n",
                   item.name.c_str(), item.quantity, item.minStock);
     oledShowInventoryFound(item.name, item.quantity, item.minStock);
+  } else if (sent && lastFirebaseScanId.length() > 0) {
+    pendingLookupScanId = lastFirebaseScanId;
+    pendingLookupBarcode = barcode;
+    pendingLookupDeadline = millis() + LOOKUP_TIMEOUT_MS;
+    lastLookupPoll = 0;
+    oledShowProductLookupSearching(barcode);
   } else {
     oledShowBarcode(barcode, "", sent);
   }
@@ -1837,6 +1951,8 @@ void loop() {
     }
     lastHeartbeat = millis();
   }
+
+  checkDeviceLookupStatus();
 
   // Poll for a pending OTA command; gated internally on idle + battery.
   checkForOtaCommand();

@@ -17,6 +17,8 @@ import { useScanMode, MODE_LABELS, type ScanMode } from "@/hooks/use-scan-mode"
 
 interface UnifiedQuickActionPopupProps {
   barcode: string | null
+  scanId?: string
+  deviceId?: string
   isOpen: boolean
   onClose: () => void
 }
@@ -39,7 +41,7 @@ type ProductLookupResponse = {
   product?: Partial<Pick<NewProductDraft, "name" | "category" | "description" | "supplier">> | null
 }
 
-export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQuickActionPopupProps) {
+export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onClose }: UnifiedQuickActionPopupProps) {
   const { role } = useAuth()
   const writable = canWrite(role)
   const { items, addItem } = useFirebaseInventory()
@@ -91,29 +93,65 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
     setNewProduct(createNewProductDraft(barcode))
     setLookupStatus("loading")
 
+    // Write "searching" status to Firebase so firmware OLED can show progress
+    if (scanId && deviceId) {
+      firebaseHelpers.updateDeviceLookupStatus(deviceId, {
+        scanId,
+        barcode,
+        status: "searching",
+      }).catch(() => {})
+    }
+
     fetch(`/api/products/lookup?barcode=${encodeURIComponent(barcode)}`, { signal: controller.signal })
       .then(async (res) => (res.ok ? (await res.json() as ProductLookupResponse) : null))
       .then((data) => {
         const lookup = data?.product
         if (!lookup?.name) {
           setLookupStatus("not-found")
+          if (scanId && deviceId) {
+            firebaseHelpers.updateDeviceLookupStatus(deviceId, {
+              scanId,
+              barcode,
+              status: "not_found",
+            }).catch(() => {})
+          }
           return
         }
+        const name = lookup.name.trim()
+        const category = lookup.category?.trim() || "Suku Cadang Honda"
         setNewProduct((prev) => ({
           ...prev,
-          name: lookup.name?.trim() || prev.name,
-          category: lookup.category?.trim() || prev.category,
+          name: name || prev.name,
+          category: category || prev.category,
           description: lookup.description?.trim() || prev.description,
           supplier: lookup.supplier?.trim() || prev.supplier,
         }))
         setLookupStatus("found")
+        if (scanId && deviceId) {
+          firebaseHelpers.updateDeviceLookupStatus(deviceId, {
+            scanId,
+            barcode,
+            status: "found",
+            name,
+            category,
+          }).catch(() => {})
+        }
       })
       .catch((error) => {
-        if (error?.name !== "AbortError") setLookupStatus("not-found")
+        if (error?.name === "AbortError") return
+        setLookupStatus("not-found")
+        if (scanId && deviceId) {
+          firebaseHelpers.updateDeviceLookupStatus(deviceId, {
+            scanId,
+            barcode,
+            status: "failed",
+            message: "lookup failed",
+          }).catch(() => {})
+        }
       })
 
     return () => controller.abort()
-  }, [barcode, items, isOpen])
+  }, [barcode, deviceId, items, isOpen, scanId])
 
   // Handle body scroll prevention
   useEffect(() => {
@@ -471,17 +509,17 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
       </div>
 
       {/* Add Button */}
-      <Button 
-        onClick={handleAddNewProduct} 
+      <Button
+        onClick={handleAddNewProduct}
         disabled={isLoading || !newProduct.name.trim()}
-        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground h-12 text-sm"
+        className={`w-full h-12 text-sm text-white ${lookupStatus === "found" ? "bg-green-600 hover:bg-green-700" : "bg-primary hover:bg-primary/90 text-primary-foreground"}`}
       >
         {isLoading ? (
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
         ) : (
           <Plus className="h-4 w-4 mr-2" />
         )}
-        Tambah Produk
+        {lookupStatus === "found" ? "Tambah Barang Otomatis" : "Tambah Produk"}
       </Button>
     </div>
   )

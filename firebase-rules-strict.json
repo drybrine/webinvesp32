@@ -75,6 +75,22 @@
         "$other": { ".validate": false }
       }
     },
+    "deviceLookupStatus": {
+      "$deviceId": {
+        ".read": "auth != null && auth.token.disabled != true && ((auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false) || ((auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer') && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false))",
+        ".write": "auth != null && auth.token.disabled != true && (auth.token.role == 'admin' || auth.token.role == 'operator') && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false && newData.exists() && newData.child('updatedByUid').val() == auth.uid",
+        ".validate": "newData.hasChildren(['scanId', 'barcode', 'status', 'updatedAt', 'updatedByUid']) && newData.child('scanId').isString() && newData.child('barcode').isString() && newData.child('status').val().matches(/^(searching|found|not_found|failed)$/) && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 30000",
+        "scanId": { ".validate": "newData.isString()" },
+        "barcode": { ".validate": "newData.isString()" },
+        "status": { ".validate": "newData.val().matches(/^(searching|found|not_found|failed)$/)" },
+        "updatedAt": { ".validate": "newData.isNumber()" },
+        "updatedByUid": { ".validate": "newData.val() == auth.uid" },
+        "name": { ".validate": "newData.isString() && newData.val().length <= 120" },
+        "category": { ".validate": "newData.isString() && newData.val().length <= 80" },
+        "message": { ".validate": "newData.isString() && newData.val().length <= 120" },
+        "$other": { ".validate": false }
+      }
+    },
     "deviceCommands": {
       "$deviceId": {
         ".read": "auth != null && auth.token.disabled != true && auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false",

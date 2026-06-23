@@ -471,6 +471,25 @@ export const firebaseHelpers = {
     })
   },
 
+  // Tulis status lookup produk Honda ke /deviceLookupStatus/{deviceId} agar
+  // firmware ESP32 bisa membaca hasil pencarian dan menampilkannya di OLED.
+  updateDeviceLookupStatus: async (deviceId: string, payload: {
+    scanId: string
+    barcode: string
+    status: "searching" | "found" | "not_found" | "failed"
+    name?: string
+    category?: string
+    message?: string
+  }) => {
+    if (!database) throw new Error("Firebase not available - operation failed")
+    const actor = await getMutationActor()
+    await set(ref(database, `deviceLookupStatus/${deviceId}`), {
+      ...payload,
+      updatedByUid: actor.uid,
+      updatedAt: Date.now(),
+    })
+  },
+
   // Update device status
   updateDeviceStatus: async (deviceId: string, status: UpdateDeviceInput) => {
     if (!database) { // dbRefs.devices might not be directly needed
