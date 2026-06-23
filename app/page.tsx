@@ -36,6 +36,7 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/components/auth-provider"
 import { canWrite } from "@/types/security"
 import { AuditTimeline } from "@/components/audit-timeline"
+import { useScanMode, MODE_LABELS } from "@/hooks/use-scan-mode"
 
 const BarcodeComponent = dynamic(() => import("@/components/pdf417-barcode"), {
   ssr: false,
@@ -83,6 +84,7 @@ export default function DashboardPage() {
   const [filterCategory, setFilterCategory] = useState("all")
   const [sortOrder, setSortOrder] = useState("name-asc")
 
+  const { scanMode, cycleMode } = useScanMode()
   const { toast } = useToast()
 
   const [newItem, setNewItem] = useState<AddInventoryInput>({
@@ -508,6 +510,30 @@ export default function DashboardPage() {
             <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">Dashboard Inventory</h1>
             <p className="text-sm text-muted-foreground mt-1">Kelola stok barang dengan prediksi otomatis</p>
           </div>
+          {/* Scan Mode Indicator */}
+          <button
+            onClick={cycleMode}
+            title={`Mode Scanner: ${MODE_LABELS[scanMode]} — klik untuk ganti`}
+            className={`
+              flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
+              border transition-all shrink-0
+              ${scanMode === "ask"
+                ? "bg-muted border-border text-muted-foreground hover:bg-accent"
+                : scanMode === "in"
+                  ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                  : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+              }
+            `}
+          >
+            <span className={
+              "w-1.5 h-1.5 rounded-full inline-block " + (
+                scanMode === "ask" ? "bg-muted-foreground"
+                : scanMode === "in" ? "bg-green-500"
+                : "bg-red-500"
+              )
+            } />
+            {MODE_LABELS[scanMode]}
+          </button>
         </div>
 
         {/* Stats Cards */}

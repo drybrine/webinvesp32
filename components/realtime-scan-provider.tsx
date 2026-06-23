@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { limitToLast, off, onValue, orderByChild, query, ref } from "firebase/database"
 import { database, firebaseHelpers, isFirebaseConfigured } from "@/lib/firebase"
@@ -9,14 +9,33 @@ import { RealtimeScanContext, type RealtimeScanContextType } from "@/hooks/use-r
 import { logger } from "@/lib/logger"
 import { useAuth } from "@/components/auth-provider"
 import { canWrite } from "@/types/security"
+import { toast } from "@/hooks/use-toast"
+import { useScanMode } from "@/hooks/use-scan-mode"
+import { useFirebaseInventory, type InventoryItem } from "@/hooks/use-firebase"
 
 interface RealtimeScanProviderProps {
   children: React.ReactNode
 }
 
+type IncomingScan = {
+  id: string
+  barcode: string
+  deviceId?: string
+  location?: string
+  mode?: string
+  type?: string
+  processed?: boolean
+  timestamp?: number | object
+}
+
+const scanTimestampMs = (timestamp: IncomingScan["timestamp"]) =>
+  typeof timestamp === "number" ? timestamp : 0
+
 export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   const { role } = useAuth()
   const writable = canWrite(role)
+  const { scanMode } = useScanMode()
+  const { items: inventoryItems } = useFirebaseInventory()
   const pathname = usePathname()
   const [isScanning, setIsScanning] = useState(false)
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null)
@@ -26,6 +45,36 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   const [currentBarcode, setCurrentBarcode] = useState("")
   const [isMobile, setIsMobile] = useState(false)
   const [popupsGloballyDisabled, setPopupsGloballyDisabled] = useState(false)
+
+  // Auto-execute stock adjustment for auto mode (fire-and-forget)
+  const autoExecuteStock = useCallback(async (scan: IncomingScan, item: InventoryItem, delta: number, type: "in" | "out") => {
+    const txDir = delta > 0 ? "in" : "out"
+    try {
+      await firebaseHelpers.adjustStock(item.id, delta, {
+        type: txDir,
+        productName: item.name,
+        productBarcode: item.barcode || scan.barcode || "",
+        quantity: Math.abs(delta),
+        reason: `Stock ${txDir === "in" ? "In" : "Out"} via Scanner (Auto Mode)`,
+        operator: "ESP32 Scanner",
+        notes: `Auto mode via ESP32 scanner - ${isMobile ? "Mobile" : "Desktop"}`,
+      })
+      await firebaseHelpers.markScanProcessed(scan.id)
+      toast({
+        title: type === "in" ? "✅ Auto Stock In" : "✅ Auto Stock Out",
+        description: `${item.name} ${delta > 0 ? "+" : ""}${delta} unit.`,
+        duration: 2000,
+      })
+    } catch (err) {
+      console.error("auto stock failed:", err)
+      toast({
+        title: "❌ Auto Stock Gagal",
+        description: err instanceof Error ? err.message : "Terjadi kesalahan",
+        variant: "destructive",
+        duration: 4000,
+      })
+    }
+  }, [isMobile])
 
   // Detect mobile device and setup
   useEffect(() => {
@@ -142,7 +191,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
 
       if (data) {
         // Query is limited to the newest scan, avoiding full scans download/sort on every update.
-        const scansArray = Object.keys(data).map((key) => ({
+        const scansArray: IncomingScan[] = Object.keys(data).map((key) => ({
           id: key,
           ...data[key],
         }))
@@ -152,7 +201,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
           
           // Enhanced scan detection logic
           const now = Date.now()
-          const scanTime = latestScan.timestamp || 0
+          const scanTime = scanTimestampMs(latestScan.timestamp)
           const scanAge = now - scanTime
           
           // Enhanced ESP32 device detection based on actual Firebase data structure
@@ -166,18 +215,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
             // Fallback: if no deviceId specified but has recent timestamp, assume ESP32
             (!latestScan.deviceId && scanAge < 2000)
           )
-          
-          
-          // SPECIAL HANDLING for ESP32 timestamp issues
-          // ESP32 might have wrong timestamp due to NTP sync issues
-          // We'll detect "new" ESP32 scans by checking if this scan ID is different from last processed
-          const isNewScanFromESP32 = isESP32Device && (latestScan.id !== lastProcessedScanId)
 
-          const timeWindow = isESP32Device ? 30000 : 60000 // 30 sec for ESP32 (faster), 1 min for others
-          const isRecentScan = scanAge < timeWindow
-
-          // Simplified trigger: is this a new, unprocessed scan from an ESP32?
-          
           // Check if the scan is from inventory mode based on actual Firebase data structure
           const isScanFromInventoryMode = (
             latestScan.mode === 'inventory' || 
@@ -204,15 +242,32 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
           setCurrentBarcode(latestScan.barcode)
           setScanCount(prev => prev + 1)
           setIsScanning(true)
-          
-          // Show popup regardless of device type - popup akan menyesuaikan dengan ukuran layar
-          if (!isPopupDisabled && !popupsGloballyDisabled) {
+
+          // Auto mode: handle stock in/out without popup
+          const foundItem = inventoryItems.find(i => i.barcode === latestScan.barcode)
+          const isAutoMode = scanMode === "in" || scanMode === "out"
+          let autoHandled = false
+
+          if (isAutoMode && foundItem && writable) {
+            if (scanMode === "in") {
+              autoHandled = true
+              autoExecuteStock(latestScan, foundItem, 1, "in")
+            } else if (scanMode === "out" && foundItem.quantity >= 1) {
+              autoHandled = true
+              autoExecuteStock(latestScan, foundItem, -1, "out")
+            }
+            // out with insufficient stock → fall through to popup
+          }
+
+          if (autoHandled) {
+            // Auto mode executed — no popup
+          } else if (!isPopupDisabled && !popupsGloballyDisabled) {
             setShowPopup(true)
-            
+
             // Enhanced mobile scroll prevention
             if (typeof document !== 'undefined') {
               document.body.classList.add('dialog-open')
-              
+
               // Only apply fixed positioning on actual mobile devices
               if (isMobile) {
                 document.body.style.overflow = 'hidden'
@@ -222,7 +277,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
                 document.body.style.touchAction = 'none'
               }
             }
-            
+
             // Auto-vibrate on mobile if supported
             if (isMobile && 'navigator' in window && 'vibrate' in navigator) {
               try {
@@ -270,7 +325,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
         cleanup()
       }
     }
-  }, [lastScannedBarcode, lastProcessedScanId, isPopupDisabled, pathname, isMobile, popupsGloballyDisabled, writable])
+  }, [autoExecuteStock, inventoryItems, isPopupDisabled, isMobile, lastProcessedScanId, pathname, popupsGloballyDisabled, scanMode, writable])
 
   const disablePopupsGlobally = () => {
     setPopupsGloballyDisabled(true)
