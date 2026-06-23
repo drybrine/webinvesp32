@@ -109,7 +109,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
         scanId,
         barcode,
         status: "searching",
-      }).catch(() => {})
+      }).catch((e: unknown) => console.error("[lookup] write searching failed:", e))
     }
 
     fetch(`/api/lookup?barcode=${encodeURIComponent(barcode)}`, { signal: controller.signal })
@@ -125,7 +125,8 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
               scanId,
               barcode,
               status: "not_found",
-            }).catch(() => {})
+              message: "Isi manual di web",
+            }).catch((e: unknown) => console.error("[lookup] write not_found failed:", e))
           }
           return
         }
@@ -146,11 +147,12 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
             status: "found",
             name,
             category,
-          }).catch(() => {})
+          }).catch((e: unknown) => console.error("[lookup] write found failed:", e))
         }
       })
       .catch((error) => {
         if (error?.name === "AbortError") return
+        console.error("[lookup] fetch error:", error)
         setLookupStatus("not-found")
         if (scanId && deviceId) {
           firebaseHelpers.updateDeviceLookupStatus(deviceId, {
@@ -158,7 +160,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
             barcode,
             status: "failed",
             message: "lookup failed",
-          }).catch(() => {})
+          }).catch((e: unknown) => console.error("[lookup] write failed status:", e))
         }
       })
 
