@@ -518,6 +518,20 @@ export const firebaseHelpers = {
     }
   },
 
+  // Update scan mode (web → device command path, ESP32 polls this)
+  updateDeviceScanMode: async (deviceId: string, mode: string) => {
+    if (!database) { console.error("Firebase not available"); return }
+    try {
+      const modeRef = ref(database, `deviceCommands/${deviceId}/scanMode`);
+      await set(modeRef, {
+        mode,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.warn("[scanMode] write failed:", e);
+    }
+  },
+
   // Add analytics data
   addAnalytics: async (type: string, data: Record<string, unknown>) => {
     if (!database || !dbRefs || !dbRefs.analytics) {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import dynamic from "next/dynamic"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
@@ -36,7 +36,7 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/components/auth-provider"
 import { canWrite } from "@/types/security"
 import { AuditTimeline } from "@/components/audit-timeline"
-import { useScanMode, MODE_LABELS } from "@/hooks/use-scan-mode"
+import { useScanMode, MODE_LABELS, nextMode } from "@/hooks/use-scan-mode"
 
 const BarcodeComponent = dynamic(() => import("@/components/pdf417-barcode"), {
   ssr: false,
@@ -86,6 +86,21 @@ export default function DashboardPage() {
 
   const { scanMode, cycleMode } = useScanMode()
   const { toast } = useToast()
+
+  // Sync scan mode to connected device(s) — first online device
+  const activeDeviceId = useMemo(() => {
+    const online = devices.filter((d) => d.status === "online")
+    return online.length > 0 ? online[0].deviceId : ""
+  }, [devices])
+
+  const handleCycleMode = useCallback(() => {
+    const next = nextMode(scanMode)
+    cycleMode()
+    if (activeDeviceId) {
+      const modeLabel = next === "ask" ? "Manual" : next === "in" ? "Auto IN" : "Auto OUT"
+      firebaseHelpers.updateDeviceScanMode(activeDeviceId, modeLabel).catch(() => {})
+    }
+  }, [scanMode, cycleMode, activeDeviceId])
 
   const [newItem, setNewItem] = useState<AddInventoryInput>({
     barcode: "",
@@ -512,7 +527,7 @@ export default function DashboardPage() {
           </div>
           {/* Scan Mode Indicator */}
           <button
-            onClick={cycleMode}
+            onClick={handleCycleMode}
             title={`Mode Scanner: ${MODE_LABELS[scanMode]} — klik untuk ganti`}
             className={`
               flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium

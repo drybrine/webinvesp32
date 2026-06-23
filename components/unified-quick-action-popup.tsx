@@ -10,10 +10,9 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, type InventoryItem } from "@/hooks/use-firebase"
 import { firebaseHelpers } from "@/lib/firebase"
-import { Package, Plus, Minus, Zap, AlertTriangle, PackageOpen, X, ArrowRightLeft } from "lucide-react"
+import { Package, Plus, Minus, Zap, AlertTriangle, PackageOpen, X } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { canWrite } from "@/types/security"
-import { useScanMode, MODE_LABELS, type ScanMode } from "@/hooks/use-scan-mode"
 
 interface UnifiedQuickActionPopupProps {
   barcode: string | null
@@ -52,7 +51,6 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
   const writable = canWrite(role)
   const { items, addItem } = useFirebaseInventory()
   const { toast } = useToast()
-  const { scanMode, setScanMode } = useScanMode()
   const [product, setProduct] = useState<InventoryItem | null>(null)
   const [quickActionAmount, setQuickActionAmount] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
@@ -642,31 +640,6 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
           </DialogDescription>
         </DialogHeader>
 
-        {/* Mode Toggle: Manual / Auto IN / Auto OUT */}
-        <div className="flex items-center gap-1.5 mb-3 px-1">
-          <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <div className="flex rounded-lg border border-border p-0.5 bg-muted/50 w-full">
-            {(["ask", "in", "out"] as ScanMode[]).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setScanMode(mode)}
-                className={`
-                  flex-1 text-xs font-medium py-1.5 px-2 rounded-md transition-all
-                  ${scanMode === mode
-                    ? mode === "ask"
-                      ? "bg-background shadow-sm text-foreground"
-                      : mode === "in"
-                        ? "bg-green-600 text-white shadow-sm"
-                        : "bg-red-600 text-white shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                  }
-                `}
-              >
-                {MODE_LABELS[mode]}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {product ? renderExistingProduct() : renderAddNewProduct()}
         

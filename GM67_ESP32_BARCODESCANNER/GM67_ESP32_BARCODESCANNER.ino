@@ -148,8 +148,11 @@ String        pendingLookupScanId = "";
 String        pendingLookupBarcode = "";
 unsigned long pendingLookupDeadline = 0;
 unsigned long lastLookupPoll = 0;
+String        activeScanMode = "Manual";       // dari web: "Manual", "Auto IN", "Auto OUT"
+unsigned long lastScanModePoll = 0;
 #define LOOKUP_POLL_INTERVAL_MS 1000UL
 #define LOOKUP_TIMEOUT_MS       10000UL
+#define SCAN_MODE_POLL_INTERVAL_MS 3000UL
 
 // --- OTA state ---------------------------------------------------------------
 unsigned long lastOtaCheck       = 0;
@@ -172,6 +175,7 @@ void          processBarcodeInput(String input);
 void          processProvisioningBarcode(String input);
 void          processInventoryBarcode(String barcode);
 void          checkDeviceLookupStatus();
+void          checkDeviceScanMode();
 bool          connectToWiFi();
 bool          sendScanToFirebase(String barcode);
 bool          sendHeartbeatToFirebase();
@@ -428,8 +432,10 @@ void oledShowStatus() {
   // -- Separator 2 (y=55)
   display.drawLine(0, 55, 127, 55, SSD1306_WHITE);
 
-  // -- Row 6 (y=57): Ready status
-  display.setCursor(0, 57); display.println("Ready");
+  // -- Row 6 (y=57): Scan mode status
+  display.setCursor(0, 57); display.print("Mode: ");
+  if (activeScanMode.length() > 0) display.print(activeScanMode);
+  else display.print("Manual");
 
   display.display();
 }
@@ -1179,6 +1185,31 @@ void checkDeviceLookupStatus() {
   }
 }
 
+void checkDeviceScanMode() {
+  if (!isWiFiConnected) return;
+  if (millis() - lastScanModePoll < SCAN_MODE_POLL_INTERVAL_MS) return;
+  lastScanModePoll = millis();
+
+  HTTPClient http;
+  String url = firebaseUrlWithAuth("/deviceCommands/" + String(deviceConfig.deviceId) + "/scanMode.json");
+  if (url.length() == 0) return;
+  http.begin(url);
+  http.setTimeout(3000);
+  int code = http.GET();
+  if (code != 200) { http.end(); return; }
+  String body = http.getString();
+  http.end();
+  if (body == "null" || body.length() < 5) return;
+
+  DynamicJsonDocument doc(256);
+  if (deserializeJson(doc, body)) return;
+  String mode = doc["mode"] | "";
+  if (mode.length() > 0) {
+    activeScanMode = mode;
+    Serial.println("Scan mode: " + activeScanMode);
+  }
+}
+
 // Mengirim heartbeat berkala ke /devices/{deviceId}.
 // Payload berisi status koneksi, uptime, heap, baterai, RSSI, versi firmware, dan mode.
 bool sendHeartbeatToFirebase() {
@@ -1209,6 +1240,7 @@ bool sendHeartbeatToFirebase() {
   doc["version"]       = FIRMWARE_VERSION;
   doc["lastHeartbeat"] = millis();
   doc["currentMode"]   = "inventory";
+  if (activeScanMode.length() > 0) doc["scanMode"] = activeScanMode;
   JsonObject ls        = doc.createNestedObject("lastSeen");
   ls[".sv"]            = "timestamp";
 
@@ -1953,6 +1985,9 @@ void loop() {
   }
 
   checkDeviceLookupStatus();
+
+  // Poll for scan mode changes from web dashboard.
+  checkDeviceScanMode();
 
   // Poll for a pending OTA command; gated internally on idle + battery.
   checkForOtaCommand();

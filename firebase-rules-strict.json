@@ -94,7 +94,10 @@
     "deviceCommands": {
       "$deviceId": {
         ".read": "auth != null && auth.token.disabled != true && auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false",
-        ".write": false
+        ".write": false,
+        "scanMode": {
+          ".write": "auth != null && auth.token.disabled != true && (auth.token.role == 'admin' || auth.token.role == 'operator') && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false"
+        }
       }
     },
     "deviceOtaStatus": {
