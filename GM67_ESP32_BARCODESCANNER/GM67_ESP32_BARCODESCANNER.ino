@@ -1185,8 +1185,6 @@ void checkDeviceLookupStatus() {
 }
 
 
-}
-
 // Mengirim heartbeat berkala ke /devices/{deviceId}.
 // Payload berisi status koneksi, uptime, heap, baterai, RSSI, versi firmware, dan mode.
 bool sendHeartbeatToFirebase() {
