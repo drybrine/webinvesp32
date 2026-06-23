@@ -48,7 +48,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.4.3"
+#define FIRMWARE_VERSION   "6.4.4"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -1189,10 +1189,13 @@ void checkDeviceScanMode() {
   if (!isWiFiConnected) return;
   if (millis() - lastScanModePoll < SCAN_MODE_POLL_INTERVAL_MS) return;
   lastScanModePoll = millis();
+  // Jangan panggil firebaseUrlWithAuth() / ensureFirebaseAuth() — cukup pakai
+  // token yg sudah ada agar refresh token gagal tidak trigger authRejected.
+  if (firebaseIdToken.length() == 0 || firebaseRefreshToken.length() == 0) return;
 
   HTTPClient http;
-  String url = firebaseUrlWithAuth("/deviceCommands/" + String(deviceConfig.deviceId) + "/scanMode.json");
-  if (url.length() == 0) return;
+  String url = String(FIREBASE_DATABASE_URL) + "/deviceCommands/"
+    + String(deviceConfig.deviceId) + "/scanMode.json?auth=" + firebaseIdToken;
   http.begin(url);
   http.setTimeout(3000);
   int code = http.GET();
@@ -1204,7 +1207,7 @@ void checkDeviceScanMode() {
   DynamicJsonDocument doc(256);
   if (deserializeJson(doc, body)) return;
   String mode = doc["mode"] | "";
-  if (mode.length() > 0) {
+  if (mode.length() > 0 && mode != activeScanMode) {
     activeScanMode = mode;
     Serial.println("Scan mode: " + activeScanMode);
   }
