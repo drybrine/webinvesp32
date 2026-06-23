@@ -48,7 +48,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.4.4"
+#define FIRMWARE_VERSION   "6.4.5"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -152,7 +152,7 @@ String        activeScanMode = "Manual";       // dari web: "Manual", "Auto IN",
 unsigned long lastScanModePoll = 0;
 #define LOOKUP_POLL_INTERVAL_MS 1000UL
 #define LOOKUP_TIMEOUT_MS       10000UL
-#define SCAN_MODE_POLL_INTERVAL_MS 3000UL
+#define SCAN_MODE_POLL_INTERVAL_MS 10000UL
 
 // --- OTA state ---------------------------------------------------------------
 unsigned long lastOtaCheck       = 0;
@@ -175,7 +175,6 @@ void          processBarcodeInput(String input);
 void          processProvisioningBarcode(String input);
 void          processInventoryBarcode(String barcode);
 void          checkDeviceLookupStatus();
-void          checkDeviceScanMode();
 bool          connectToWiFi();
 bool          sendScanToFirebase(String barcode);
 bool          sendHeartbeatToFirebase();
@@ -1185,32 +1184,7 @@ void checkDeviceLookupStatus() {
   }
 }
 
-void checkDeviceScanMode() {
-  if (!isWiFiConnected) return;
-  if (millis() - lastScanModePoll < SCAN_MODE_POLL_INTERVAL_MS) return;
-  lastScanModePoll = millis();
-  // Jangan panggil firebaseUrlWithAuth() / ensureFirebaseAuth() — cukup pakai
-  // token yg sudah ada agar refresh token gagal tidak trigger authRejected.
-  if (firebaseIdToken.length() == 0 || firebaseRefreshToken.length() == 0) return;
 
-  HTTPClient http;
-  String url = String(FIREBASE_DATABASE_URL) + "/deviceCommands/"
-    + String(deviceConfig.deviceId) + "/scanMode.json?auth=" + firebaseIdToken;
-  http.begin(url);
-  http.setTimeout(3000);
-  int code = http.GET();
-  if (code != 200) { http.end(); return; }
-  String body = http.getString();
-  http.end();
-  if (body == "null" || body.length() < 5) return;
-
-  DynamicJsonDocument doc(256);
-  if (deserializeJson(doc, body)) return;
-  String mode = doc["mode"] | "";
-  if (mode.length() > 0 && mode != activeScanMode) {
-    activeScanMode = mode;
-    Serial.println("Scan mode: " + activeScanMode);
-  }
 }
 
 // Mengirim heartbeat berkala ke /devices/{deviceId}.
@@ -1266,6 +1240,31 @@ bool sendHeartbeatToFirebase() {
     }
   }
   http.end();
+
+  // After successful heartbeat, poll scan mode (every ~8s, no extra auth).
+  // Gagal membaca scanMode tidak memengaruhi OTA validation karena ok sudah true.
+  if (ok && millis() - lastScanModePoll >= SCAN_MODE_POLL_INTERVAL_MS) {
+    lastScanModePoll = millis();
+    HTTPClient sh;
+    String surl = String(FIREBASE_DATABASE_URL) + "/deviceCommands/"
+      + String(deviceConfig.deviceId) + "/scanMode.json?auth=" + firebaseIdToken;
+    sh.begin(surl);
+    sh.setTimeout(3000);
+    int scode = sh.GET();
+    if (scode == 200) {
+      String sbody = sh.getString();
+      DynamicJsonDocument sdoc(256);
+      if (!deserializeJson(sdoc, sbody) && sdoc.containsKey("mode")) {
+        String mode = sdoc["mode"].as<String>();
+        if (mode.length() > 0 && mode != activeScanMode) {
+          activeScanMode = mode;
+          Serial.println("Scan mode: " + activeScanMode);
+        }
+      }
+    }
+    sh.end();
+  }
+
   return ok;
 }
 
@@ -1988,9 +1987,6 @@ void loop() {
   }
 
   checkDeviceLookupStatus();
-
-  // Poll for scan mode changes from web dashboard.
-  checkDeviceScanMode();
 
   // Poll for a pending OTA command; gated internally on idle + battery.
   checkForOtaCommand();
