@@ -481,13 +481,19 @@ export const firebaseHelpers = {
     category?: string
     message?: string
   }) => {
-    if (!database) throw new Error("Firebase not available - operation failed")
-    const actor = await getMutationActor()
-    await set(ref(database, `deviceLookupStatus/${deviceId}`), {
-      ...payload,
-      updatedByUid: actor.uid,
-      updatedAt: Date.now(),
-    })
+    if (!database) return
+    try {
+      const authInstance = await getFirebaseAuth()
+      const user = authInstance.currentUser
+      if (!user) return
+      await set(ref(database, `deviceLookupStatus/${deviceId}`), {
+        ...payload,
+        updatedByUid: user.uid,
+        updatedAt: serverTimestamp(),
+      })
+    } catch (e) {
+      console.warn("[lookup] deviceLookupStatus write skipped:", e)
+    }
   },
 
   // Update device status
