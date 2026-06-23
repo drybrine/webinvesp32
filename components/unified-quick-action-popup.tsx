@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,8 +37,14 @@ function createNewProductDraft(barcode?: string | null): NewProductDraft {
   }
 }
 
+type CatalogItem = {
+  name: string
+  sourceUrl: string
+}
+
 type ProductLookupResponse = {
   product?: Partial<Pick<NewProductDraft, "name" | "category" | "description" | "supplier">> | null
+  catalog?: CatalogItem[]
 }
 
 export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onClose }: UnifiedQuickActionPopupProps) {
@@ -52,6 +58,8 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
   const [isLoading, setIsLoading] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [lookupStatus, setLookupStatus] = useState<"idle" | "loading" | "found" | "not-found">("idle")
+  const [catalog, setCatalog] = useState<CatalogItem[]>([])
+  const [catalogSearch, setCatalogSearch] = useState("")
 
   const [newProduct, setNewProduct] = useState<NewProductDraft>(createNewProductDraft())
 
@@ -92,6 +100,8 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
     const controller = new AbortController()
     setNewProduct(createNewProductDraft(barcode))
     setLookupStatus("loading")
+    setCatalog([])
+    setCatalogSearch("")
 
     // Write "searching" status to Firebase so firmware OLED can show progress
     if (scanId && deviceId) {
@@ -102,12 +112,14 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
       }).catch(() => {})
     }
 
-    fetch(`/api/products/lookup?barcode=${encodeURIComponent(barcode)}`, { signal: controller.signal })
+    fetch(`/api/lookup?barcode=${encodeURIComponent(barcode)}`, { signal: controller.signal })
       .then(async (res) => (res.ok ? (await res.json() as ProductLookupResponse) : null))
       .then((data) => {
         const lookup = data?.product
+        const cat = data?.catalog || []
         if (!lookup?.name) {
           setLookupStatus("not-found")
+          if (cat.length > 0) setCatalog(cat)
           if (scanId && deviceId) {
             firebaseHelpers.updateDeviceLookupStatus(deviceId, {
               scanId,
@@ -386,16 +398,56 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
     </div>
   )
 
+  // Filter catalog by search text
+  const filteredCatalog = useMemo(() => {
+    if (!catalog || catalog.length === 0 || !catalogSearch.trim()) return catalog
+    const q = catalogSearch.toLowerCase()
+    return catalog.filter((item) => item.name.toLowerCase().includes(q))
+  }, [catalog, catalogSearch])
+
+  const handleSelectCatalogItem = (item: CatalogItem) => {
+    setNewProduct((prev) => ({
+      ...prev,
+      name: item.name,
+      category: "Suku Cadang Honda",
+      supplier: "Honda Cengkareng",
+      description: `Data dari Honda Cengkareng. ${item.sourceUrl ? item.sourceUrl : ""}`,
+    }))
+    setLookupStatus("found")
+  }
+
+  // Reset catalog search on close
+  useEffect(() => {
+    if (!isOpen) {
+      setCatalog([])
+      setCatalogSearch("")
+    }
+  }, [isOpen])
+
   const renderAddNewProduct = () => (
     <div className="space-y-4">
-      {/* Product Not Found Header */}
-      <div className="flex items-center justify-center p-4 bg-amber-50/60 rounded-lg border border-amber-200/60">
+      {/* Product Not Found Header — dim when catalog item selected */}
+      <div className={`flex items-center justify-center p-4 rounded-lg border ${
+        lookupStatus === "found" && catalog.length > 0
+          ? "bg-green-50/60 border-green-200/60"
+          : "bg-amber-50/60 border-amber-200/60"
+      }`}>
         <div className="flex flex-col items-center text-center">
-          <AlertTriangle className="h-8 w-8 text-amber-500 mb-2" />
-          <h2 className="text-sm font-medium text-amber-800">Produk Tidak Ditemukan</h2>
-          <p className="text-xs text-amber-600 mt-1">
-            Barcode <span className="font-mono font-bold bg-amber-100 px-1 py-0.5 rounded">{barcode}</span> belum terdaftar.
-          </p>
+          {lookupStatus === "found" && catalog.length > 0 ? (
+            <>
+              <Package className="h-8 w-8 text-green-500 mb-2" />
+              <h2 className="text-sm font-medium text-green-800">Produk Dipilih dari Katalog</h2>
+              <p className="text-xs text-green-600 mt-1">Data produk dari Honda Cengkareng</p>
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="h-8 w-8 text-amber-500 mb-2" />
+              <h2 className="text-sm font-medium text-amber-800">Produk Tidak Ditemukan</h2>
+              <p className="text-xs text-amber-600 mt-1">
+                Barcode <span className="font-mono font-bold bg-amber-100 px-1 py-0.5 rounded">{barcode}</span> belum terdaftar.
+              </p>
+            </>
+          )}
         </div>
       </div>
 
@@ -403,7 +455,38 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
         <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           {lookupStatus === "loading" && "Mencari data produk di Honda Cengkareng..."}
           {lookupStatus === "found" && "Data produk ditemukan dan form otomatis diisi. Periksa sebelum menyimpan."}
-          {lookupStatus === "not-found" && "Data produk tidak ditemukan otomatis. Isi manual."}
+          {lookupStatus === "not-found" && "Data produk tidak ditemukan otomatis. Pilih dari katalog atau isi manual."}
+        </div>
+      )}
+
+      {/* Catalog picker — shown when barcode search fails but catalog available */}
+      {lookupStatus === "not-found" && catalog.length > 0 && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Pilih dari Katalog Honda</Label>
+          <Input
+            value={catalogSearch}
+            onChange={(e) => setCatalogSearch(e.target.value)}
+            placeholder="Cari produk..."
+            className="h-9 text-sm"
+          />
+          <div className="max-h-40 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+            {filteredCatalog && filteredCatalog.length > 0 ? (
+              filteredCatalog.map((item, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => handleSelectCatalogItem(item)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors truncate"
+                >
+                  {item.name}
+                </button>
+              ))
+            ) : (
+              <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                {catalogSearch ? "Tidak ditemukan" : "Daftar produk kosong"}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
