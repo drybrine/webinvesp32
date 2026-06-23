@@ -35,6 +35,10 @@ function createNewProductDraft(barcode?: string | null): NewProductDraft {
   }
 }
 
+type ProductLookupResponse = {
+  product?: Partial<Pick<NewProductDraft, "name" | "category" | "description" | "supplier">> | null
+}
+
 export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQuickActionPopupProps) {
   const { role } = useAuth()
   const writable = canWrite(role)
@@ -45,6 +49,7 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
   const [quickActionAmount, setQuickActionAmount] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [lookupStatus, setLookupStatus] = useState<"idle" | "loading" | "found" | "not-found">("idle")
 
   const [newProduct, setNewProduct] = useState<NewProductDraft>(createNewProductDraft())
 
@@ -72,14 +77,42 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
 
   // Reset state when popup opens
   useEffect(() => {
-    if (isOpen && barcode) {
-      const foundProduct = items.find((item) => item.barcode === barcode)
-      setProduct(foundProduct || null)
-      setQuickActionAmount(1)
-      setIsLoading(false)
-      
-      if (!foundProduct) setNewProduct(createNewProductDraft(barcode))
-    }
+    if (!isOpen || !barcode) return
+
+    const foundProduct = items.find((item) => item.barcode === barcode)
+    setProduct(foundProduct || null)
+    setQuickActionAmount(1)
+    setIsLoading(false)
+    setLookupStatus("idle")
+
+    if (foundProduct) return
+
+    const controller = new AbortController()
+    setNewProduct(createNewProductDraft(barcode))
+    setLookupStatus("loading")
+
+    fetch(`/api/products/lookup?barcode=${encodeURIComponent(barcode)}`, { signal: controller.signal })
+      .then(async (res) => (res.ok ? (await res.json() as ProductLookupResponse) : null))
+      .then((data) => {
+        const lookup = data?.product
+        if (!lookup?.name) {
+          setLookupStatus("not-found")
+          return
+        }
+        setNewProduct((prev) => ({
+          ...prev,
+          name: lookup.name?.trim() || prev.name,
+          category: lookup.category?.trim() || prev.category,
+          description: lookup.description?.trim() || prev.description,
+          supplier: lookup.supplier?.trim() || prev.supplier,
+        }))
+        setLookupStatus("found")
+      })
+      .catch((error) => {
+        if (error?.name !== "AbortError") setLookupStatus("not-found")
+      })
+
+    return () => controller.abort()
   }, [barcode, items, isOpen])
 
   // Handle body scroll prevention
@@ -327,6 +360,14 @@ export function UnifiedQuickActionPopup({ barcode, isOpen, onClose }: UnifiedQui
           </p>
         </div>
       </div>
+
+      {lookupStatus !== "idle" && (
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {lookupStatus === "loading" && "Mencari data produk di Honda Cengkareng..."}
+          {lookupStatus === "found" && "Data produk ditemukan dan form otomatis diisi. Periksa sebelum menyimpan."}
+          {lookupStatus === "not-found" && "Data produk tidak ditemukan otomatis. Isi manual."}
+        </div>
+      )}
 
       {!writable && <div className="text-sm text-muted-foreground text-center">Akun viewer hanya dapat melihat data scan.</div>}
       {/* Add New Product Form */}
