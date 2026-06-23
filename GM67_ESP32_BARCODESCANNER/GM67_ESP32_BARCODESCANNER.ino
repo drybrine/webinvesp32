@@ -48,7 +48,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.4.1"
+#define FIRMWARE_VERSION   "6.4.2"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -1749,7 +1749,7 @@ void handleRoot() {
   String html = R"rawliteral(
 <!DOCTYPE html><html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESP32 Scanner v6.4</title>
+<title>ESP32 Scanner v6.4.2</title>
 <style>
   body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);color:#eee;margin:0;padding:20px;min-height:100vh}
   .card{background:rgba(255,255,255,.08);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:20px;margin:12px 0}
@@ -1772,7 +1772,7 @@ void handleRoot() {
 <h1>ESP32 Scanner <span class="badge )rawliteral";
   html += isOnline ? "online\">ONLINE" : "offline\">OFFLINE";
   html += R"rawliteral(</span></h1>
-<p style="text-align:center;color:#94a3b8;font-size:.8em">v6.4 - Inventory Mode - )rawliteral";
+<p style="text-align:center;color:#94a3b8;font-size:.8em">v6.4.2 - Inventory Mode - )rawliteral";
   html += String(deviceConfig.deviceId);
   html += R"rawliteral(</p>
 

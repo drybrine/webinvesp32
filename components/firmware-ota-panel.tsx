@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin-api"
 import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
 import type { DeviceOtaState, FirmwareBuild, FirmwareRelease, OtaPhase } from "@/types/firmware"
+import { ESP32_CONFIG } from "@/lib/esp32-config"
 import type { RegisteredDevice } from "@/types/security"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -164,7 +165,7 @@ export function FirmwareOtaPanel({ registeredDevices }: { registeredDevices: Reg
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Versi (semver)</Label>
-              <Input placeholder="6.4.0" value={version} onChange={(event) => setVersion(event.target.value)} />
+              <Input placeholder={ESP32_CONFIG.VERSION} value={version} onChange={(event) => setVersion(event.target.value)} />
               <p className="text-xs text-muted-foreground">Harus sama dengan FIRMWARE_VERSION pada sketch.</p>
             </div>
             <div className="space-y-2">
