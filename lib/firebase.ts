@@ -327,6 +327,7 @@ export const firebaseHelpers = {
         id: newItemRef.key, // Store the generated key as id
         operationId,
         updatedByUid: actor.uid,
+        lastUpdated: serverTimestamp(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }
@@ -489,7 +490,7 @@ export const firebaseHelpers = {
       await set(ref(database, `deviceLookupStatus/${deviceId}`), {
         ...payload,
         updatedByUid: user.uid,
-        updatedAt: serverTimestamp(),
+        updatedAt: Date.now(),
       })
     } catch (e) {
       console.warn("[lookup] deviceLookupStatus write skipped:", e)

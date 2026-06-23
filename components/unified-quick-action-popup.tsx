@@ -596,7 +596,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
       {/* Add Button */}
       <Button
         onClick={handleAddNewProduct}
-        disabled={isLoading || !newProduct.name.trim()}
+        disabled={isLoading || !newProduct.name.trim() || !writable}
         className={`w-full h-12 text-sm text-white ${lookupStatus === "found" ? "bg-green-600 hover:bg-green-700" : "bg-primary hover:bg-primary/90 text-primary-foreground"}`}
       >
         {isLoading ? (
