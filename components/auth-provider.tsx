@@ -48,7 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileReady, setProfileReady] = useState(false)
 
   const currentUserRef = useRef<User | null>(null)
-  currentUserRef.current = user
+  useEffect(() => {
+    currentUserRef.current = user
+  }, [user])
 
   useEffect(() => {
     let unsubscribeAuth: (() => void) | undefined
