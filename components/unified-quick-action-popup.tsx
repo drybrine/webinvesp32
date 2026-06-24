@@ -211,6 +211,13 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
       // Atomic: server-side increment + transaction in one multi-path update
       await firebaseHelpers.adjustStock(product.id, quickActionAmount, transactionData)
 
+      // Mark scan as processed immediately to prevent duplicate popups during re-renders
+      if (scanId) {
+        await firebaseHelpers.markScanProcessed(scanId).catch((e) => {
+          console.error("Failed to mark scan processed:", e)
+        })
+      }
+
       toast({
         title: "Stock in berhasil",
         description: `${product.name} +${quickActionAmount} unit.`,
@@ -247,6 +254,13 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
 
       // Atomic: server-side decrement + transaction in one multi-path update
       await firebaseHelpers.adjustStock(product.id, -quickActionAmount, transactionData)
+
+      // Mark scan as processed immediately to prevent duplicate popups during re-renders
+      if (scanId) {
+        await firebaseHelpers.markScanProcessed(scanId).catch((e) => {
+          console.error("Failed to mark scan processed:", e)
+        })
+      }
 
       toast({
         title: "Stock out berhasil",
@@ -285,12 +299,19 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
 
       await addItem(productData, "Scanner")
 
+      // Mark scan as processed immediately to prevent duplicate popups during re-renders
+      if (scanId) {
+        await firebaseHelpers.markScanProcessed(scanId).catch((e) => {
+          console.error("Failed to mark scan processed:", e)
+        })
+      }
+
       toast({
         title: "Produk ditambahkan",
         description: `${productData.name} berhasil ditambahkan dengan stok ${productData.quantity}`,
         duration: 3000,
       })
-      
+
       onClose()
     } catch (error) {
       console.error("Error adding product:", error)
