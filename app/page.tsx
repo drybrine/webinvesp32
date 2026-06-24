@@ -520,35 +520,35 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-muted/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in-up">
-          <div>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 animate-fade-in-up">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">Dashboard Inventory</h1>
-            <p className="text-sm text-muted-foreground mt-1">Kelola stok barang dengan prediksi otomatis</p>
+            {/* Scan Mode Indicator adjacent to title */}
+            <button
+              onClick={handleCycleMode}
+              title={`Mode Scanner: ${MODE_LABELS[scanMode]} — klik untuk ganti`}
+              className={`
+                flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium
+                border transition-all shrink-0 mt-1 sm:mt-0
+                ${scanMode === "ask"
+                  ? "bg-muted border-border text-muted-foreground hover:bg-accent"
+                  : scanMode === "in"
+                    ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                    : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                }
+              `}
+            >
+              <span className={
+                "w-1.5 h-1.5 rounded-full inline-block " + (
+                  scanMode === "ask" ? "bg-muted-foreground"
+                  : scanMode === "in" ? "bg-green-500"
+                  : "bg-red-500"
+                )
+              } />
+              {MODE_LABELS[scanMode]}
+            </button>
           </div>
-          {/* Scan Mode Indicator */}
-          <button
-            onClick={handleCycleMode}
-            title={`Mode Scanner: ${MODE_LABELS[scanMode]} — klik untuk ganti`}
-            className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
-              border transition-all shrink-0
-              ${scanMode === "ask"
-                ? "bg-muted border-border text-muted-foreground hover:bg-accent"
-                : scanMode === "in"
-                  ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
-                  : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
-              }
-            `}
-          >
-            <span className={
-              "w-1.5 h-1.5 rounded-full inline-block " + (
-                scanMode === "ask" ? "bg-muted-foreground"
-                : scanMode === "in" ? "bg-green-500"
-                : "bg-red-500"
-              )
-            } />
-            {MODE_LABELS[scanMode]}
-          </button>
+          <p className="text-sm text-muted-foreground md:self-end">Kelola stok barang dengan prediksi otomatis</p>
         </div>
 
         {/* Stats Cards */}
@@ -560,64 +560,98 @@ export default function DashboardPage() {
           devices={devices}
         />
 
-        <div className="bg-primary/[0.03] border border-primary/10 rounded-xl p-5 shadow-sm animate-fade-in-up">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
-            <div>
-              <div className="flex items-center gap-2">
-                <TrendingDown className="w-5 h-5 text-primary" />
-                <h2 className="text-lg font-bold text-foreground tracking-tight">Prediksi Stok</h2>
+        {/* Two Column Section: Predictions & Device Status Overview */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Predictions Summary Card (Stretched to span 2 columns on lg) */}
+          <div className="lg:col-span-2 bg-primary/[0.03] border border-primary/10 rounded-xl p-5 shadow-sm animate-fade-in-up">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <TrendingDown className="w-5 h-5 text-primary" />
+                  <h2 className="text-lg font-bold text-foreground tracking-tight">Prediksi Stok</h2>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Barang paling berisiko berdasarkan histori transaksi.
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                Barang paling berisiko berdasarkan histori transaksi.
-              </p>
+              <Button asChild variant="outline" size="sm" className="border-primary/20 text-primary hover:bg-primary/5">
+                <Link href="/prediksi">Detail Prediksi</Link>
+              </Button>
             </div>
-            <Button asChild variant="outline" size="sm" className="border-primary/20 text-primary hover:bg-primary/5">
-              <Link href="/prediksi">Detail Prediksi</Link>
-            </Button>
+
+            {transactionsLoading || stockRisksLoading ? (
+              <div className="text-sm text-muted-foreground py-3">
+                Memuat ringkasan prediksi...
+              </div>
+            ) : stockRisks.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-3">
+                Belum cukup data transaksi untuk menghitung prediksi. Minimal 2 transaksi per barang.
+              </div>
+            ) : (
+              <div className="stagger-children grid grid-cols-1 md:grid-cols-3 gap-3">
+                {stockRisks.map(({ item, prediction, predictedLowest, daysToStockout }) => {
+                  const belowMin = predictedLowest <= item.minStock
+                  return (
+                    <div key={item.id} className="rounded-lg border border-border/60 bg-card p-4 transition-all duration-200 hover:border-primary/20 hover:shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-semibold text-foreground line-clamp-1 text-sm">{item.name}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">Stok: <span className="font-mono font-medium text-foreground">{item.quantity}</span></div>
+                        </div>
+                        <span className={belowMin ? "text-[11px] px-2 py-0.5 rounded-full bg-destructive/10 text-destructive font-semibold" : "text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 font-semibold"}>
+                          {belowMin ? "Risiko" : "Aman"}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <div className="text-muted-foreground">Tren</div>
+                          <div className="font-mono font-semibold text-foreground">{prediction.model.slope.toFixed(2)}/hari</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Terendah</div>
+                          <div className="font-mono font-semibold text-foreground">{predictedLowest.toFixed(0)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Habis</div>
+                          <div className="font-mono font-semibold text-foreground">{daysToStockout === null ? "—" : `${daysToStockout}h`}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
-          {transactionsLoading || stockRisksLoading ? (
-            <div className="text-sm text-muted-foreground py-3">
-              Memuat ringkasan prediksi...
+          {/* Sidebar widget explaining scanning modes / quick tools (Takes 1 column on lg) */}
+          <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between animate-fade-in-up">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-2">Panduan Mode Scanner</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Hubungkan scanner ESP32 untuk memproses scan barcode secara instan. Mode yang aktif menentukan perilaku database:
+              </p>
+              <ul className="mt-3 space-y-2 text-xs">
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground mt-1.5" />
+                  <span><strong>Manual (Ask):</strong> Menampilkan popup detail untuk item baru/tidak dikenal.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5" />
+                  <span><strong>Auto IN:</strong> Otomatis menambahkan 1 ke jumlah stok item yang dikenal.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5" />
+                  <span><strong>Auto OUT:</strong> Otomatis mengurangi 1 dari jumlah stok item yang dikenal.</span>
+                </li>
+              </ul>
             </div>
-          ) : stockRisks.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-3">
-              Belum cukup data transaksi untuk menghitung prediksi. Minimal 2 transaksi per barang.
+            <div className="mt-4 pt-3 border-t text-[11px] text-muted-foreground flex justify-between items-center">
+              <span>Status ESP32:</span>
+              <span className={`font-semibold ${onlineDevices > 0 ? "text-green-600" : "text-amber-600"}`}>
+                {onlineDevices > 0 ? `${onlineDevices} Online` : "Offline"}
+              </span>
             </div>
-          ) : (
-            <div className="stagger-children grid grid-cols-1 md:grid-cols-3 gap-3">
-              {stockRisks.map(({ item, prediction, predictedLowest, daysToStockout }) => {
-                const belowMin = predictedLowest <= item.minStock
-                return (
-                  <div key={item.id} className="rounded-lg border border-border/60 bg-card p-4 transition-all duration-200 hover:border-primary/20 hover:shadow-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-semibold text-foreground line-clamp-1 text-sm">{item.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">Stok: <span className="font-mono font-medium text-foreground">{item.quantity}</span></div>
-                      </div>
-                      <span className={belowMin ? "text-[11px] px-2 py-0.5 rounded-full bg-destructive/10 text-destructive font-semibold" : "text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 font-semibold"}>
-                        {belowMin ? "Risiko" : "Aman"}
-                      </span>
-                    </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <div className="text-muted-foreground">Tren</div>
-                        <div className="font-mono font-semibold text-foreground">{prediction.model.slope.toFixed(2)}/hari</div>
-                      </div>
-                      <div>
-                        <div className="text-muted-foreground">Terendah</div>
-                        <div className="font-mono font-semibold text-foreground">{predictedLowest.toFixed(0)}</div>
-                      </div>
-                      <div>
-                        <div className="text-muted-foreground">Habis</div>
-                        <div className="font-mono font-semibold text-foreground">{daysToStockout === null ? "—" : `${daysToStockout}h`}</div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Inventory Table */}

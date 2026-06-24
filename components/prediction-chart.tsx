@@ -30,6 +30,29 @@ function buildStatus(value: number | null, minStock: number): { label: string; c
   return { label: "Aman", color: "hsl(152 38% 38%)" }
 }
 
+// Opposed-line smoothing helper for cubic Bezier control points
+function getControlPoint(
+  current: [number, number],
+  prev: [number, number],
+  next: [number, number],
+  isReverse: boolean
+): [number, number] {
+  const p = prev || current
+  const n = next || current
+  const smoothing = 0.15 // Tension factor (0.15 works well for line charts)
+
+  const dx = n[0] - p[0]
+  const dy = n[1] - p[1]
+
+  const angle = Math.atan2(dy, dx)
+  const length = Math.sqrt(dx * dx + dy * dy) * smoothing
+
+  const x = current[0] + Math.cos(angle + (isReverse ? Math.PI : 0)) * length
+  const y = current[1] + Math.sin(angle + (isReverse ? Math.PI : 0)) * length
+
+  return [x, y]
+}
+
 export default function PredictionChart({ data, minStock }: Props) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
 
@@ -54,19 +77,74 @@ export default function PredictionChart({ data, minStock }: Props) {
     const yAt = (v: number) =>
       PADDING.top + innerH - ((v - yMin) / (yMax - yMin)) * innerH
 
-    const buildPath = (key: "actual" | "predicted") => {
-      const segments: string[] = []
-      let pen: "M" | "L" = "M"
+    // Generates smooth Bezier path line and closed area under the line
+    const buildBezierPaths = (key: "actual" | "predicted") => {
+      // Find contiguous segments of non-null values
+      const segments: { x: number; y: number }[][] = []
+      let currentSegment: { x: number; y: number }[] = []
+
       data.forEach((d, i) => {
         const val = d[key]
         if (val === null || Number.isNaN(val)) {
-          pen = "M"
+          if (currentSegment.length > 0) {
+            segments.push(currentSegment)
+            currentSegment = []
+          }
+        } else {
+          currentSegment.push({ x: xAt(i), y: yAt(val) })
+        }
+      })
+      if (currentSegment.length > 0) {
+        segments.push(currentSegment)
+      }
+
+      const linePaths: string[] = []
+      const areaPaths: string[] = []
+
+      segments.forEach((seg) => {
+        if (seg.length === 0) return
+        if (seg.length === 1) {
+          linePaths.push(`M ${seg[0].x.toFixed(1)} ${seg[0].y.toFixed(1)}`)
           return
         }
-        segments.push(`${pen} ${xAt(i).toFixed(1)} ${yAt(val).toFixed(1)}`)
-        pen = "L"
+
+        // 1. Generate line path using Cubic Bezier
+        let linePath = `M ${seg[0].x.toFixed(1)} ${seg[0].y.toFixed(1)}`
+        for (let i = 0; i < seg.length - 1; i++) {
+          const current = seg[i]
+          const next = seg[i + 1]
+
+          const prev = seg[i - 1] || current
+          const nextNext = seg[i + 2] || next
+
+          const cp1 = getControlPoint(
+            [current.x, current.y],
+            [prev.x, prev.y],
+            [next.x, next.y],
+            false
+          )
+          const cp2 = getControlPoint(
+            [next.x, next.y],
+            [current.x, current.y],
+            [nextNext.x, nextNext.y],
+            true
+          )
+
+          linePath += ` C ${cp1[0].toFixed(1)} ${cp1[1].toFixed(1)}, ${cp2[0].toFixed(1)} ${cp2[1].toFixed(1)}, ${next.x.toFixed(1)} ${next.y.toFixed(1)}`
+        }
+        linePaths.push(linePath)
+
+        // 2. Generate closed area path for gradient fill
+        const firstX = seg[0].x.toFixed(1)
+        const lastX = seg[seg.length - 1].x.toFixed(1)
+        const areaPath = `${linePath} L ${lastX} ${chartBottom.toFixed(1)} L ${firstX} ${chartBottom.toFixed(1)} Z`
+        areaPaths.push(areaPath)
       })
-      return segments.join(" ")
+
+      return {
+        linePath: linePaths.filter(Boolean).join(" "),
+        areaPath: areaPaths.filter(Boolean).join(" "),
+      }
     }
 
     const ticks = 5
@@ -88,9 +166,14 @@ export default function PredictionChart({ data, minStock }: Props) {
     const maxVisibleValue = Math.max(...values, minStock)
 
     const hitWidth = Math.max(14, innerW / Math.max(1, data.length))
+    const { linePath: actualPath, areaPath: actualAreaPath } = buildBezierPaths("actual")
+    const { linePath: predictedPath, areaPath: predictedAreaPath } = buildBezierPaths("predicted")
+
     return {
-      actualPath: buildPath("actual"),
-      predictedPath: buildPath("predicted"),
+      actualPath,
+      actualAreaPath,
+      predictedPath,
+      predictedAreaPath,
       points: data.map((d, i) => ({
         index: i,
         x: xAt(i),
@@ -129,7 +212,9 @@ export default function PredictionChart({ data, minStock }: Props) {
 
   const {
     actualPath,
+    actualAreaPath,
     predictedPath,
+    predictedAreaPath,
     points,
     yTicks,
     xLabels,
@@ -168,6 +253,18 @@ export default function PredictionChart({ data, minStock }: Props) {
         aria-label="Grafik prediksi stok"
         onPointerLeave={() => setActiveIndex(null)}
       >
+        <defs>
+          <linearGradient id="actualAreaGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="hsl(152 32% 38%)" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="hsl(152 32% 38%)" stopOpacity="0.0" />
+          </linearGradient>
+          <linearGradient id="predictedAreaGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="hsl(158 28% 48%)" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="hsl(158 28% 48%)" stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
+
+        {/* Min Stock Danger Zone Highlight */}
         <rect
           x={PADDING.left}
           y={minStockY}
@@ -177,6 +274,7 @@ export default function PredictionChart({ data, minStock }: Props) {
           opacity={0.06}
         />
 
+        {/* Forecast Area Highlight */}
         {forecastStartX !== null && (
           <>
             <rect
@@ -208,6 +306,23 @@ export default function PredictionChart({ data, minStock }: Props) {
           </>
         )}
 
+        {/* Faded Area Gradients under Curves */}
+        {actualAreaPath && (
+          <path
+            d={actualAreaPath}
+            fill="url(#actualAreaGradient)"
+            pointerEvents="none"
+          />
+        )}
+        {predictedAreaPath && (
+          <path
+            d={predictedAreaPath}
+            fill="url(#predictedAreaGradient)"
+            pointerEvents="none"
+          />
+        )}
+
+        {/* Y Grid Ticks */}
         {yTicks.map((t, i) => (
           <g key={`y-${i}`}>
             <line
@@ -231,6 +346,7 @@ export default function PredictionChart({ data, minStock }: Props) {
           </g>
         ))}
 
+        {/* Axes */}
         <line
           x1={PADDING.left}
           x2={WIDTH - PADDING.right}
@@ -248,6 +364,7 @@ export default function PredictionChart({ data, minStock }: Props) {
           className="text-border"
         />
 
+        {/* Min Stock Dotted Line */}
         <line
           x1={PADDING.left}
           x2={WIDTH - PADDING.right}
@@ -267,6 +384,7 @@ export default function PredictionChart({ data, minStock }: Props) {
           Min Stok ({minStock})
         </text>
 
+        {/* X Axis Labels */}
         {xLabels.map((l) => (
           <text
             key={`x-${l.i}`}
@@ -280,6 +398,7 @@ export default function PredictionChart({ data, minStock }: Props) {
           </text>
         ))}
 
+        {/* Axes Titles */}
         <text
           x={PADDING.left}
           y={HEIGHT - 8}
@@ -299,12 +418,13 @@ export default function PredictionChart({ data, minStock }: Props) {
           Stok
         </text>
 
+        {/* Smooth Curves */}
         {actualPath && (
           <path
             d={actualPath}
             fill="none"
             stroke="hsl(152 32% 38%)"
-            strokeWidth={2}
+            strokeWidth={2.5}
             strokeLinejoin="round"
             strokeLinecap="round"
           />
@@ -314,13 +434,14 @@ export default function PredictionChart({ data, minStock }: Props) {
             d={predictedPath}
             fill="none"
             stroke="hsl(158 28% 48%)"
-            strokeWidth={2}
+            strokeWidth={2.5}
             strokeDasharray="6 4"
             strokeLinejoin="round"
             strokeLinecap="round"
           />
         )}
 
+        {/* Individual Points on the curve */}
         {points.map((p, i) => (
           <g key={`pt-${i}`}>
             {p.actualY !== null && (
@@ -336,6 +457,7 @@ export default function PredictionChart({ data, minStock }: Props) {
           </g>
         ))}
 
+        {/* Interactive Hit Areas */}
         {points.map((p) => (
           <rect
             key={`hit-${p.index}`}
@@ -354,6 +476,7 @@ export default function PredictionChart({ data, minStock }: Props) {
           />
         ))}
 
+        {/* Tooltip Overlay */}
         {activePoint && activeY !== null && (
           <g pointerEvents="none">
             <line
@@ -396,9 +519,9 @@ export default function PredictionChart({ data, minStock }: Props) {
             </g>
           </g>
         )}
-
       </svg>
 
+      {/* Legends */}
       <div className="flex items-center gap-4 justify-center text-xs text-muted-foreground mt-2 flex-wrap">
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block w-4 h-0.5 rounded-full" style={{ background: "hsl(152 32% 38%)" }} /> Historis
@@ -416,6 +539,7 @@ export default function PredictionChart({ data, minStock }: Props) {
         )}
       </div>
 
+      {/* Meta Stats Panel */}
       <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <div className="rounded-md border bg-muted/20 px-3 py-2">
           <div className="text-muted-foreground">Titik historis</div>

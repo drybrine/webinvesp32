@@ -133,7 +133,17 @@
   }
 
   .card-hover {
-    @apply transition-all duration-200 hover:shadow-md;
+    @apply transition-all duration-300 hover:shadow-md hover:-translate-y-[2px] hover:border-primary/20;
+  }
+
+  .glow-active {
+    box-shadow: 0 0 12px 1px hsl(var(--primary) / 0.08);
+    border-color: hsl(var(--primary) / 0.3);
+  }
+
+  .glow-danger {
+    box-shadow: 0 0 12px 1px hsl(var(--destructive) / 0.08);
+    border-color: hsl(var(--destructive) / 0.3);
   }
 
   .heading-1 {

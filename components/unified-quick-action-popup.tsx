@@ -10,8 +10,29 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, type InventoryItem } from "@/hooks/use-firebase"
 import { firebaseHelpers } from "@/lib/firebase"
-import { Package, Plus, Minus, Zap, AlertTriangle, PackageOpen, X } from "lucide-react"
+import { 
+  Package, 
+  Plus, 
+  Minus, 
+  Zap, 
+  AlertTriangle, 
+  PackageOpen, 
+  X,
+  Check,
+  AlertCircle,
+  MapPin,
+  Building2,
+  Tag,
+  FileText,
+  Barcode,
+  Search,
+  ArrowRight,
+  Info,
+  Sparkles,
+  Database
+} from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
+import { useScanMode } from "@/hooks/use-scan-mode"
 import { canWrite } from "@/types/security"
 
 interface UnifiedQuickActionPopupProps {
@@ -51,6 +72,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
   const writable = canWrite(role)
   const { items, addItem } = useFirebaseInventory()
   const { toast } = useToast()
+  const { scanMode } = useScanMode()
   const [product, setProduct] = useState<InventoryItem | null>(null)
   const [quickActionAmount, setQuickActionAmount] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
@@ -94,6 +116,20 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
     setLookupStatus("idle")
 
     if (foundProduct) return
+
+    // If barcode is unknown and we are in "out" mode, abort lookup and set status
+    if (scanMode === "out") {
+      setLookupStatus("not-found")
+      if (scanId && deviceId) {
+        firebaseHelpers.updateDeviceLookupStatus(deviceId, {
+          scanId,
+          barcode,
+          status: "not_found",
+          message: "Gagal: Barang belum terdaftar",
+        }).catch((e: unknown) => console.error("[lookup] write not_found failed:", e))
+      }
+      return
+    }
 
     const controller = new AbortController()
     setNewProduct(createNewProductDraft(barcode))
@@ -163,7 +199,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
       })
 
     return () => controller.abort()
-  }, [barcode, deviceId, items, isOpen, scanId])
+  }, [barcode, deviceId, items, isOpen, scanId, scanMode])
 
   // Handle body scroll prevention
   useEffect(() => {
@@ -173,7 +209,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
         document.body.classList.add('dialog-open')
         document.body.style.overflow = 'hidden'
         document.body.style.position = 'fixed'
-        document.body.style.width = '100%'
+        document.body.style.width = '105%'
         document.body.style.top = '0'
       } else {
         // Desktop: Simple overflow hidden
@@ -325,100 +361,6 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
     }
   }
 
-  const renderExistingProduct = () => (
-    <div className="space-y-4">
-      {/* Product Header */}
-      <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
-        <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-          <Package className="h-6 w-6 text-primary" />
-        </div>
-        <div className="flex-1">
-          <h2 className="font-semibold text-sm">{product?.name}</h2>
-          <p className="text-xs text-muted-foreground">Barcode: {barcode}</p>
-          <div className="flex gap-2 mt-1">
-            <Badge variant={product && product.quantity <= product.minStock ? "destructive" : "default"} className="text-xs">
-              Stok: {product?.quantity} unit
-            </Badge>
-            <Badge variant="outline" className="text-xs">
-              Minimum: {product?.minStock ?? 0}
-            </Badge>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Amount Controls */}
-      <div className="space-y-2">
-        <Label className="text-sm font-medium">Jumlah</Label>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setQuickActionAmount(Math.max(1, quickActionAmount - 1))}
-            disabled={isLoading}
-            className="h-10 w-10 p-0"
-          >
-            <Minus className="h-4 w-4" />
-          </Button>
-          <Input
-            type="number"
-            value={quickActionAmount}
-            onChange={(e) => setQuickActionAmount(Math.max(1, parseInt(e.target.value) || 1))}
-            className="text-center h-10 w-16"
-            min="1"
-            disabled={isLoading}
-          />
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setQuickActionAmount(quickActionAmount + 1)}
-            disabled={isLoading}
-            className="h-10 w-10 p-0"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      {writable && <div className="grid grid-cols-2 gap-3 pt-2">
-        <Button 
-          onClick={handleStockIn} 
-          disabled={isLoading}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground h-12 text-sm"
-        >
-          {isLoading ? (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-          ) : (
-            <Plus className="h-4 w-4 mr-2" />
-          )}
-          Stock In
-        </Button>
-        <Button 
-          onClick={handleStockOut} 
-          disabled={isLoading || !!(product && product.quantity < quickActionAmount)}
-          className="bg-destructive hover:bg-destructive/90 text-destructive-foreground h-12 text-sm"
-        >
-          {isLoading ? (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-          ) : (
-            <Minus className="h-4 w-4 mr-2" />
-          )}
-          Stock Out
-        </Button>
-      </div>}
-
-      {/* Stock Warning */}
-      {product && product.quantity < quickActionAmount && (
-        <div className="p-3 bg-amber-50/60 border border-amber-200/60 rounded-lg">
-          <div className="flex items-center gap-2 text-amber-800">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="text-xs">Stok tidak mencukupi untuk stock out {quickActionAmount} unit</span>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-
   // Filter catalog by search text
   const filteredCatalog = useMemo(() => {
     if (!catalog || catalog.length === 0 || !catalogSearch.trim()) return catalog
@@ -445,170 +387,473 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
     }
   }, [isOpen])
 
-  const renderAddNewProduct = () => (
-    <div className="space-y-4">
-      {/* Product Not Found Header — dim when catalog item selected */}
-      <div className={`flex items-center justify-center p-4 rounded-lg border ${
-        lookupStatus === "found" && catalog.length > 0
-          ? "bg-green-50/60 border-green-200/60"
-          : "bg-amber-50/60 border-amber-200/60"
-      }`}>
-        <div className="flex flex-col items-center text-center">
-          {lookupStatus === "found" && catalog.length > 0 ? (
-            <>
-              <Package className="h-8 w-8 text-green-500 mb-2" />
-              <h2 className="text-sm font-medium text-green-800">Produk Dipilih dari Katalog</h2>
-              <p className="text-xs text-green-600 mt-1">Data produk dari Honda Cengkareng</p>
-            </>
-          ) : (
-            <>
-              <AlertTriangle className="h-8 w-8 text-amber-500 mb-2" />
-              <h2 className="text-sm font-medium text-amber-800">Produk Tidak Ditemukan</h2>
-              <p className="text-xs text-amber-600 mt-1">
-                Barcode <span className="font-mono font-bold bg-amber-100 px-1 py-0.5 rounded">{barcode}</span> belum terdaftar.
+  const renderExistingProduct = () => {
+    const isLowStock = product && product.quantity <= product.minStock
+    
+    return (
+      <div className="space-y-5 pt-3">
+        {/* Product Card with Glowing Gradient Border */}
+        <div className={`relative overflow-hidden rounded-xl border p-4 transition-all duration-300 shadow-md ${
+          isLowStock 
+            ? "border-destructive/30 bg-gradient-to-br from-destructive/5 via-background to-destructive/5 shadow-destructive/5 animate-scale-in" 
+            : "border-primary/10 bg-gradient-to-br from-primary/5 via-background to-primary/5 shadow-primary/5 animate-scale-in"
+        }`}>
+          {/* Subtle background glow */}
+          <div className={`absolute -right-16 -top-16 w-32 h-32 rounded-full blur-3xl opacity-20 ${
+            isLowStock ? "bg-destructive" : "bg-primary"
+          }`} />
+          
+          <div className="relative flex items-start gap-4 z-10">
+            <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-inner border flex-shrink-0 ${
+              isLowStock 
+                ? "bg-destructive/10 border-destructive/20 text-destructive" 
+                : "bg-primary/10 border-primary/20 text-primary"
+            }`}>
+              <Package className="h-7 w-7" />
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-sm text-foreground tracking-tight leading-snug line-clamp-2">
+                {product?.name}
+              </h3>
+              <div className="flex items-center gap-1 mt-1">
+                <Barcode className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-mono text-muted-foreground select-all">{barcode}</span>
+              </div>
+              
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                <Badge 
+                  variant={isLowStock ? "destructive" : "secondary"} 
+                  className={`text-[10px] font-bold px-2 py-0.5 shadow-sm ${
+                    !isLowStock && "bg-primary/10 text-primary hover:bg-primary/10 border border-primary/20"
+                  }`}
+                >
+                  Stok: {product?.quantity} unit
+                </Badge>
+                <Badge variant="outline" className="text-[10px] font-semibold bg-background/50 text-muted-foreground px-2 py-0.5 border-border/85">
+                  Min. Stok: {product?.minStock ?? 0}
+                </Badge>
+                {isLowStock && (
+                  <Badge variant="destructive" className="text-[9px] bg-red-500/10 text-red-600 border border-red-500/20 px-2 py-0.5 font-bold animate-pulse hover:bg-red-500/10">
+                    Stok Menipis
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Amount Controls */}
+        <div className="space-y-2.5 bg-muted/30 p-3.5 rounded-xl border border-border/50">
+          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Jumlah Stock In / Out
+          </Label>
+          <div className="flex items-center justify-between gap-3">
+            <Button 
+              variant="outline" 
+              onClick={() => setQuickActionAmount(Math.max(1, quickActionAmount - 1))}
+              disabled={isLoading}
+              className="h-10 w-10 p-0 rounded-lg border-border/60 hover:bg-accent hover:text-accent-foreground active:scale-95 transition-all shadow-sm flex-shrink-0"
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+            <div className="relative flex-1 max-w-[120px]">
+              <Input
+                type="number"
+                value={quickActionAmount}
+                onChange={(e) => setQuickActionAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                className="text-center h-10 w-full font-bold text-base rounded-lg border-border/60 focus-visible:ring-primary shadow-sm"
+                min="1"
+                disabled={isLoading}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground pointer-events-none uppercase">
+                unit
+              </span>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => setQuickActionAmount(quickActionAmount + 1)}
+              disabled={isLoading}
+              className="h-10 w-10 p-0 rounded-lg border-border/60 hover:bg-accent hover:text-accent-foreground active:scale-95 transition-all shadow-sm flex-shrink-0"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        {writable && (
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <Button 
+              onClick={handleStockIn} 
+              disabled={isLoading}
+              className="bg-primary hover:bg-primary/95 text-primary-foreground h-11 text-xs font-bold rounded-xl shadow-lg shadow-primary/10 transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-1.5"
+            >
+              {isLoading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Stok Masuk</span>
+                </>
+              )}
+            </Button>
+            <Button 
+              onClick={handleStockOut} 
+              disabled={isLoading || !!(product && product.quantity < quickActionAmount)}
+              className="bg-destructive hover:bg-destructive/95 text-destructive-foreground h-11 text-xs font-bold rounded-xl shadow-lg shadow-destructive/10 transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-1.5"
+            >
+              {isLoading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <Minus className="h-3.5 w-3.5" />
+                  <span>Stok Keluar</span>
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+
+        {/* Stock Warning */}
+        {product && product.quantity < quickActionAmount && (
+          <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-xl flex items-start gap-2.5 text-red-600 animate-in fade-in slide-in-from-top-1 duration-200 shadow-sm shadow-destructive/5">
+            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <div className="space-y-0.5">
+              <p className="text-xs font-bold leading-none">Stok Kurang</p>
+              <p className="text-[10px] text-red-500/80 leading-normal">
+                Stok saat ini ({product.quantity} unit) tidak mencukupi untuk melakukan stock out sebesar {quickActionAmount} unit.
               </p>
-            </>
-          )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderUnknownProductWarning = () => (
+    <div className="space-y-5 pt-3">
+      {/* Warning Card */}
+      <div className="relative overflow-hidden rounded-xl border border-destructive/20 bg-gradient-to-br from-destructive/10 via-background to-destructive/5 p-5 text-center shadow-md animate-scale-in">
+        <div className="absolute -right-10 -top-10 w-24 h-24 rounded-full bg-destructive/15 blur-2xl" />
+        
+        <div className="relative z-10 flex flex-col items-center">
+          <div className="w-12 h-12 bg-destructive/10 rounded-full border border-destructive/20 flex items-center justify-center mb-3.5 shadow-inner">
+            <AlertTriangle className="h-5 w-5 text-destructive animate-bounce" />
+          </div>
+          <h2 className="text-sm font-bold text-destructive tracking-tight uppercase">Gagal: Barang Belum Terdaftar</h2>
+          
+          <div className="flex items-center gap-1.5 mt-2 bg-destructive/10 border border-destructive/15 rounded-lg px-2.5 py-1">
+            <Barcode className="h-3.5 w-3.5 text-destructive" />
+            <span className="text-xs font-mono font-bold text-destructive select-all">{barcode}</span>
+          </div>
         </div>
       </div>
 
+      {/* Explanatory Info */}
+      <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3.5 shadow-inner animate-fade-in-up">
+        <div className="flex items-start gap-2.5">
+          <Info className="h-4.5 w-4.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-muted-foreground leading-normal">
+            Anda saat ini sedang menggunakan mode <strong className="text-foreground font-semibold">Auto KELUAR (Out)</strong>. Sistem tidak diizinkan untuk mengurangi stok barang yang belum terdaftar.
+          </p>
+        </div>
+        
+        <div className="border-t border-border/40 pt-3">
+          <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+            Langkah-Langkah Solusi:
+          </h4>
+          <ol className="space-y-2 text-xs">
+            <li className="flex items-start gap-2 text-muted-foreground">
+              <span className="flex-shrink-0 w-4.5 h-4.5 rounded-full bg-muted border border-border/80 flex items-center justify-center text-[10px] font-bold text-foreground shadow-sm">
+                1
+              </span>
+              <span className="leading-tight mt-0.5">Tutup popup peringatan ini.</span>
+            </li>
+            <li className="flex items-start gap-2 text-muted-foreground">
+              <span className="flex-shrink-0 w-4.5 h-4.5 rounded-full bg-muted border border-border/80 flex items-center justify-center text-[10px] font-bold text-foreground shadow-sm">
+                2
+              </span>
+              <span className="leading-tight mt-0.5">
+                Ubah mode scanner di dashboard menjadi <strong className="text-foreground font-semibold">Manual</strong> atau <strong className="text-foreground font-semibold text-primary">Auto MASUK (In)</strong>.
+              </span>
+            </li>
+            <li className="flex items-start gap-2 text-muted-foreground">
+              <span className="flex-shrink-0 w-4.5 h-4.5 rounded-full bg-muted border border-border/80 flex items-center justify-center text-[10px] font-bold text-foreground shadow-sm">
+                3
+              </span>
+              <span className="leading-tight mt-0.5">
+                Pindai ulang barcode untuk membuka form pendaftaran barang baru.
+              </span>
+            </li>
+          </ol>
+        </div>
+      </div>
+
+      <Button 
+        onClick={onClose}
+        className="w-full h-11 text-xs font-bold bg-destructive hover:bg-destructive/90 text-white rounded-xl shadow-lg shadow-destructive/10 transition-all active:scale-[0.98]"
+      >
+        Tutup Peringatan
+      </Button>
+    </div>
+  )
+
+  const renderAddNewProduct = () => (
+    <div className="space-y-5 pt-3">
+      {/* Product Not Found / Found Header */}
+      <div className={`relative overflow-hidden rounded-xl border p-4 transition-all duration-300 shadow-md animate-scale-in ${
+        lookupStatus === "found" && catalog.length > 0
+          ? "border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-background to-emerald-500/5 shadow-emerald-500/5"
+          : lookupStatus === "found"
+            ? "border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-background to-emerald-500/5 shadow-emerald-500/5"
+            : "border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-background to-amber-500/5 shadow-amber-500/5"
+      }`}>
+        {/* Decorative backdrop glow */}
+        <div className={`absolute -right-16 -top-16 w-32 h-32 rounded-full blur-3xl opacity-20 ${
+          lookupStatus === "found" ? "bg-emerald-500" : "bg-amber-500"
+        }`} />
+
+        <div className="relative z-10 flex items-start gap-3.5">
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-inner border flex-shrink-0 ${
+            lookupStatus === "found"
+              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600"
+              : "bg-amber-500/10 border-amber-500/20 text-amber-600"
+          }`}>
+            {lookupStatus === "found" ? (
+              <Check className="h-6 w-6 animate-in zoom-in duration-300" />
+            ) : (
+              <AlertTriangle className="h-6 w-6 animate-pulse" />
+            )}
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <h3 className={`font-bold text-sm tracking-tight ${
+              lookupStatus === "found" ? "text-emerald-800" : "text-amber-800"
+            }`}>
+              {lookupStatus === "found" 
+                ? "Data Produk Ditemukan" 
+                : "Produk Belum Terdaftar"
+              }
+            </h3>
+            
+            <p className={`text-xs mt-0.5 leading-normal ${
+              lookupStatus === "found" ? "text-emerald-600" : "text-amber-600"
+            }`}>
+              {lookupStatus === "found"
+                ? "Informasi produk berhasil ditarik otomatis dari database katalog Honda."
+                : `Barcode ${barcode} belum terdaftar. Isi form di bawah untuk mendaftarkan.`
+              }
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Lookup Status Banner */}
       {lookupStatus !== "idle" && (
-        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          {lookupStatus === "loading" && "Mencari data produk di Honda Cengkareng..."}
-          {lookupStatus === "found" && "Data produk ditemukan dan form otomatis diisi. Periksa sebelum menyimpan."}
-          {lookupStatus === "not-found" && "Data produk tidak ditemukan otomatis. Pilih dari katalog atau isi manual."}
+        <div className="rounded-xl border border-border/80 bg-muted/30 px-3.5 py-2.5 text-xs text-muted-foreground flex items-center gap-2 animate-fade-in-up">
+          {lookupStatus === "loading" && (
+            <>
+              <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary"></div>
+              <span>Mencari data produk di Honda Cengkareng...</span>
+            </>
+          )}
+          {lookupStatus === "found" && (
+            <>
+              <Sparkles className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />
+              <span>Form telah diisi otomatis. Silakan verifikasi kembali sebelum menyimpan.</span>
+            </>
+          )}
+          {lookupStatus === "not-found" && (
+            <>
+              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>Pencarian otomatis tidak menemukan produk. Cari di katalog manual atau isi sendiri.</span>
+            </>
+          )}
         </div>
       )}
 
-      {/* Catalog picker — shown when barcode search fails but catalog available */}
+      {/* Catalog search/picker */}
       {lookupStatus === "not-found" && catalog.length > 0 && (
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Pilih dari Katalog Honda</Label>
-          <Input
-            value={catalogSearch}
-            onChange={(e) => setCatalogSearch(e.target.value)}
-            placeholder="Cari produk..."
-            className="h-9 text-sm"
-          />
-          <div className="max-h-40 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+        <div className="space-y-2.5 bg-muted/20 p-3.5 rounded-xl border border-border/50 animate-fade-in-up shadow-sm">
+          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Pilih dari Katalog Honda Cengkareng
+          </Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={catalogSearch}
+              onChange={(e) => setCatalogSearch(e.target.value)}
+              placeholder="Cari produk dari hasil katalog..."
+              className="h-9 pl-9 text-xs border-border/60 shadow-sm focus-visible:ring-primary"
+            />
+          </div>
+          
+          <div className="max-h-36 overflow-y-auto rounded-lg border border-border/60 bg-background divide-y divide-border/40 scrollbar-thin shadow-inner">
             {filteredCatalog && filteredCatalog.length > 0 ? (
               filteredCatalog.map((item, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => handleSelectCatalogItem(item)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors truncate"
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-accent/60 transition-colors truncate flex items-center justify-between group"
                 >
-                  {item.name}
+                  <span className="font-medium text-muted-foreground group-hover:text-foreground transition-colors truncate">
+                    {item.name}
+                  </span>
+                  <ArrowRight className="h-3 w-3 text-muted-foreground/0 group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0" />
                 </button>
               ))
             ) : (
-              <div className="px-3 py-2 text-xs text-muted-foreground text-center">
-                {catalogSearch ? "Tidak ditemukan" : "Daftar produk kosong"}
+              <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+                {catalogSearch ? "Tidak ditemukan produk yang cocok" : "Daftar produk katalog kosong"}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {!writable && <div className="text-sm text-muted-foreground text-center">Akun viewer hanya dapat melihat data scan.</div>}
+      {!writable && (
+        <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl flex items-center gap-2 text-amber-600 shadow-sm animate-fade-in-up">
+          <Info className="h-4 w-4 flex-shrink-0" />
+          <span className="text-xs">Akun Anda (Viewer) hanya dapat melihat data scan dan tidak memiliki hak akses tulis.</span>
+        </div>
+      )}
+
       {/* Add New Product Form */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <PackageOpen className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-medium">Tambah Produk Baru</h2>
+      <div className="space-y-4 animate-fade-in-up">
+        <div className="flex items-center gap-2 pb-1 border-b border-border/40">
+          <PackageOpen className="h-4 w-4 text-primary animate-pulse" />
+          <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+            Form Detail Produk Baru
+          </h4>
         </div>
 
-        <div>
-          <Label className="text-sm font-medium">Barcode</Label>
-          <Input
-            value={barcode || ""}
-            className="h-10 text-sm font-mono"
-            disabled
-            readOnly
-          />
-        </div>
-
-        <div>
-          <Label className="text-sm font-medium">Nama Produk *</Label>
-          <Input
-            value={newProduct.name}
-            onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
-            placeholder="Masukkan nama produk"
-            className="h-10 text-sm"
-            disabled={isLoading}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-sm font-medium">Stok Awal</Label>
-            <Input
-              type="number"
-              value={newProduct.quantity}
-              onChange={(e) => setNewProduct(prev => ({ ...prev, quantity: Math.max(0, parseInt(e.target.value) || 0) }))}
-              placeholder="0"
-              className="h-10 text-sm"
-              min="0"
-              disabled={isLoading}
-            />
+        <div className="grid gap-3.5">
+          {/* Barcode (Readonly) */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground">Barcode</Label>
+            <div className="relative">
+              <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={barcode || ""}
+                className="h-10 pl-9 font-mono text-xs bg-muted/45 border-border/50 text-muted-foreground cursor-not-allowed select-all rounded-lg shadow-sm"
+                disabled
+                readOnly
+              />
+            </div>
           </div>
-          <div>
-            <Label className="text-sm font-medium">Stok Minimum</Label>
-            <Input
-              type="number"
-              value={newProduct.minStock}
-              onChange={(e) => setNewProduct(prev => ({ ...prev, minStock: Math.max(0, parseInt(e.target.value) || 0) }))}
-              placeholder="0"
-              className="h-10 text-sm"
-              min="0"
-              disabled={isLoading}
-            />
+
+          {/* Product Name */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground">Nama Produk <span className="text-destructive">*</span></Label>
+            <div className="relative">
+              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={newProduct.name}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Masukkan nama lengkap produk / sparepart"
+                className="h-10 pl-9 text-xs border-border/60 focus-visible:ring-primary rounded-lg shadow-sm"
+                disabled={isLoading || !writable}
+                required
+              />
+            </div>
           </div>
-        </div>
 
-        <div>
-          <Label className="text-sm font-medium">Kategori</Label>
-          <Input
-            value={newProduct.category}
-            onChange={(e) => setNewProduct(prev => ({ ...prev, category: e.target.value }))}
-            placeholder="Contoh: Oli & Pelumas"
-            className="h-10 text-sm"
-            disabled={isLoading}
-          />
-        </div>
+          {/* Quantities (Stock and MinStock) */}
+          <div className="grid grid-cols-2 gap-3.5">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-muted-foreground">Stok Awal</Label>
+              <div className="relative">
+                <Database className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="number"
+                  value={newProduct.quantity}
+                  onChange={(e) => setNewProduct(prev => ({ ...prev, quantity: Math.max(0, parseInt(e.target.value) || 0) }))}
+                  placeholder="0"
+                  className="h-10 pl-9 text-xs border-border/60 focus-visible:ring-primary rounded-lg shadow-sm"
+                  min="0"
+                  disabled={isLoading || !writable}
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-muted-foreground">Min. Stok</Label>
+              <div className="relative">
+                <AlertCircle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="number"
+                  value={newProduct.minStock}
+                  onChange={(e) => setNewProduct(prev => ({ ...prev, minStock: Math.max(0, parseInt(e.target.value) || 0) }))}
+                  placeholder="0"
+                  className="h-10 pl-9 text-xs border-border/60 focus-visible:ring-primary rounded-lg shadow-sm"
+                  min="0"
+                  disabled={isLoading || !writable}
+                />
+              </div>
+            </div>
+          </div>
 
-        <div>
-          <Label className="text-sm font-medium">Lokasi</Label>
-          <Input
-            value={newProduct.location}
-            onChange={(e) => setNewProduct(prev => ({ ...prev, location: e.target.value }))}
-            placeholder="Contoh: Rak A1"
-            className="h-10 text-sm"
-            disabled={isLoading}
-          />
-        </div>
+          {/* Category */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground">Kategori</Label>
+            <div className="relative">
+              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={newProduct.category}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, category: e.target.value }))}
+                placeholder="Contoh: Mesin, Transmisi, Oli & Pelumas"
+                className="h-10 pl-9 text-xs border-border/60 focus-visible:ring-primary rounded-lg shadow-sm"
+                disabled={isLoading || !writable}
+              />
+            </div>
+          </div>
 
-        <div>
-          <Label className="text-sm font-medium">Supplier</Label>
-          <Input
-            value={newProduct.supplier || ""}
-            onChange={(e) => setNewProduct(prev => ({ ...prev, supplier: e.target.value }))}
-            placeholder="Nama pemasok"
-            className="h-10 text-sm"
-            disabled={isLoading}
-          />
-        </div>
+          {/* Location */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground">Lokasi Rak / Box</Label>
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={newProduct.location}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, location: e.target.value }))}
+                placeholder="Contoh: Rak A-02, Box C"
+                className="h-10 pl-9 text-xs border-border/60 focus-visible:ring-primary rounded-lg shadow-sm"
+                disabled={isLoading || !writable}
+              />
+            </div>
+          </div>
 
-        <div>
-          <Label className="text-sm font-medium">Deskripsi</Label>
-          <Textarea
-            value={newProduct.description}
-            onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
-            placeholder="Detail produk"
-            className="min-h-20 text-sm"
-            disabled={isLoading}
-          />
+          {/* Supplier */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground">Supplier / Pemasok</Label>
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={newProduct.supplier || ""}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, supplier: e.target.value }))}
+                placeholder="Nama perusahaan / dealer pemasok"
+                className="h-10 pl-9 text-xs border-border/60 focus-visible:ring-primary rounded-lg shadow-sm"
+                disabled={isLoading || !writable}
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground">Deskripsi / Catatan</Label>
+            <div className="relative">
+              <FileText className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Textarea
+                value={newProduct.description}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Spesifikasi teknis, kecocokan part, atau informasi tambahan"
+                className="min-h-20 pl-9 text-xs border-border/60 focus-visible:ring-primary rounded-lg shadow-sm"
+                disabled={isLoading || !writable}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -616,37 +861,60 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
       <Button
         onClick={handleAddNewProduct}
         disabled={isLoading || !newProduct.name.trim() || !writable}
-        className={`w-full h-12 text-sm text-white ${lookupStatus === "found" ? "bg-green-600 hover:bg-green-700" : "bg-primary hover:bg-primary/90 text-primary-foreground"}`}
+        className={`w-full h-11 text-xs font-bold text-white rounded-xl shadow-lg transition-all duration-200 active:scale-[0.98] ${
+          lookupStatus === "found" 
+            ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/10" 
+            : "bg-primary hover:bg-primary/95 text-primary-foreground shadow-primary/10"
+        }`}
       >
         {isLoading ? (
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
         ) : (
           <Plus className="h-4 w-4 mr-2" />
         )}
-        {lookupStatus === "found" ? "Tambah Barang Otomatis" : "Tambah Produk"}
+        {lookupStatus === "found" ? "Tambah Barang Otomatis" : "Daftarkan Produk Baru"}
       </Button>
     </div>
   )
 
   // Dynamic sizing based on device type
   const dialogContentClass = isMobile 
-    ? "w-[95vw] max-w-sm mx-auto p-4 max-h-[85vh] overflow-y-auto"
-    : "w-[95vw] max-w-md mx-auto p-4 max-h-[85vh] overflow-y-auto"
+    ? "w-[95vw] max-w-sm mx-auto p-5 rounded-2xl max-h-[85vh] overflow-y-auto border border-border/80 shadow-2xl backdrop-blur-md bg-background/95 scrollbar-thin animate-scale-in"
+    : "w-[95vw] max-w-md mx-auto p-6 rounded-2xl max-h-[85vh] overflow-y-auto border border-border/80 shadow-2xl backdrop-blur-md bg-background/95 scrollbar-thin animate-scale-in"
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className={`${dialogContentClass} [&>button]:hidden`}>
-        <DialogHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-1 pr-2">
-              <Zap className="h-5 w-5 text-primary" />
-              <DialogTitle className="text-base">Aksi Cepat ESP32</DialogTitle>
+        <DialogHeader className="pb-4 border-b border-border/60 relative overflow-hidden">
+          {/* Decorative glowing gradient effect behind title */}
+          <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+          <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-32 h-16 bg-primary/10 rounded-full blur-2xl" />
+          
+          <div className="flex items-center justify-between relative z-10">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shadow-inner">
+                <Zap className="h-4.5 w-4.5 text-primary animate-pulse" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text">
+                  Aksi Cepat ESP32
+                </DialogTitle>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Mode: {scanMode === "in" ? "Auto Masuk" : scanMode === "out" ? "Auto Keluar" : "Manual / Ask"}
+                  </span>
+                </div>
+              </div>
             </div>
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={onClose}
-              className="h-8 w-8 p-0 hover:bg-accent flex-shrink-0"
+              className="h-8 w-8 rounded-full hover:bg-accent/80 transition-colors flex-shrink-0"
               aria-label="Tutup popup aksi cepat"
             >
               <X className="h-4 w-4" />
@@ -661,13 +929,20 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
           </DialogDescription>
         </DialogHeader>
 
-
-        {product ? renderExistingProduct() : renderAddNewProduct()}
+        {product 
+          ? renderExistingProduct() 
+          : (scanMode === "out" ? renderUnknownProductWarning() : renderAddNewProduct())
+        }
         
         {/* ESP32 Indicator */}
-        <div className="flex items-center justify-center gap-2 pt-2 border-t border-border">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span className="text-xs text-muted-foreground">ESP32 Scanner Aktif - {isMobile ? 'Mobile' : 'Desktop'}</span>
+        <div className="flex items-center justify-center gap-2 pt-3 border-t border-border/40 mt-4">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            ESP32 Scanner Aktif - {isMobile ? 'Mobile View' : 'Desktop View'}
+          </span>
         </div>
       </DialogContent>
     </Dialog>
