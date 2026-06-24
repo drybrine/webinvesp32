@@ -111,7 +111,7 @@ The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/tab
 
 ### Firmware notes (`GM67_ESP32_BARCODESCANNER.ino`)
 
-Single file, ~1800 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, `driver/adc` libraries; OTA additionally uses `Update.h`, `esp_ota_ops.h`, `WiFiClientSecure`, and mbedTLS (`mbedtls_sha256`, `mbedtls_pk_verify`). OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.4.1"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state (including batteryLevel, rssi) to `/devices/{deviceId}` every 8s.
+Single file, ~1800 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, `driver/adc` libraries; OTA additionally uses `Update.h`, `esp_ota_ops.h`, `WiFiClientSecure`, and mbedTLS (`mbedtls_sha256`, `mbedtls_pk_verify`). OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.4.8"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state (including batteryLevel, rssi) to `/devices/{deviceId}` every 5s.
 
 Battery monitoring: `esp_adc_cal` eFuse Vref calibration, EMA smoothing (α=0.05), hysteresis ±2%, range 3200–3800mV. Battery sampled before HTTP request to avoid WiFi voltage sag. OLED shows 4-bar battery icon + 4-bar WiFi signal icon (RSSI-based).
 
