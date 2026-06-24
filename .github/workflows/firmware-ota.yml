@@ -50,12 +50,27 @@ jobs:
             exit 1
           fi
 
+      - name: Cache Arduino CLI, cores, and libraries
+        id: cache-arduino
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./bin
+            ~/.arduino15
+            ~/Arduino/libraries
+          key: ${{ runner.os }}-arduino-cache-v1
+
       - name: Install arduino-cli
+        if: steps.cache-arduino.outputs.cache-hit != 'true'
         run: |
           curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh -s 0.35.3
+
+      - name: Add arduino-cli to path
+        run: |
           echo "${PWD}/bin" >> "$GITHUB_PATH"
 
       - name: Install ESP32 core and libraries
+        if: steps.cache-arduino.outputs.cache-hit != 'true'
         run: |
           arduino-cli config init
           arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
