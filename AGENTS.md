@@ -40,7 +40,7 @@ Firebase Realtime Database + Auth is the backend. Client config keys are `NEXT_P
 
 ## Architecture
 
-This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.4.8). The web app and the firmware share one Firebase Realtime Database.
+This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.5.1). The web app and the firmware share one Firebase Realtime Database.
 
 ### Data flow
 
@@ -102,7 +102,7 @@ The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/tab
 
 ### Firmware notes (`GM67_ESP32_BARCODESCANNER.ino`)
 
-Single file, ~1800 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, and `driver/adc` libraries; OTA additionally uses `Update.h`, `esp_ota_ops.h`, `WiFiClientSecure`, and mbedTLS (`mbedtls_sha256`, `mbedtls_pk_verify`). OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.4.8"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state, including batteryLevel and rssi, to `/devices/{deviceId}` every 5s. Provisioning is scan-only: scan QR WiFi, register the OLED `deviceId`, then scan the one-time PDF417 credential from the admin page.
+Single file, ~1800 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, and `driver/adc` libraries; OTA additionally uses `Update.h`, `esp_ota_ops.h`, `WiFiClientSecure`, and mbedTLS (`mbedtls_sha256`, `mbedtls_pk_verify`). OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.5.1"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state, including batteryLevel and rssi, to `/devices/{deviceId}` every 5s. Provisioning is scan-only: scan QR WiFi, register the OLED `deviceId`, then scan the one-time PDF417 credential from the admin page.
 
 Battery monitoring uses `esp_adc_cal` eFuse Vref calibration, EMA smoothing (alpha=0.05), hysteresis +/-2%, and range 3200-3800mV. OLED shows a 4-bar battery icon and 4-bar WiFi signal icon.
 
