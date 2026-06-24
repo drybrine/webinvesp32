@@ -19,9 +19,9 @@ export interface DeviceStatus {
 }
 
 // Device dianggap offline jika timestamp server terakhir lebih dari threshold ini (ms)
-const OFFLINE_THRESHOLD_MS = 15000
+const OFFLINE_THRESHOLD_MS = 9000
 // Interval re-evaluasi status client-side (ms) — makin kecil makin responsif
-const STATUS_RECHECK_INTERVAL_MS = 3000
+const STATUS_RECHECK_INTERVAL_MS = 1000
 
 interface RawDevice {
   status?: string
