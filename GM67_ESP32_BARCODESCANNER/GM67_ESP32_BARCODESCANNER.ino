@@ -48,7 +48,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.4.8"
+#define FIRMWARE_VERSION   "6.5.0"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -149,10 +149,17 @@ String        pendingLookupBarcode = "";
 unsigned long pendingLookupDeadline = 0;
 unsigned long lastLookupPoll = 0;
 String        activeScanMode = "Manual";       // dari web: "Manual", "Auto IN", "Auto OUT"
-unsigned long lastScanModePoll = 0;
 #define LOOKUP_POLL_INTERVAL_MS 1000UL
 #define LOOKUP_TIMEOUT_MS       10000UL
-#define SCAN_MODE_POLL_INTERVAL_MS 10000UL
+
+// --- SSE Stream for scanMode -------------------------------------------------
+WiFiClientSecure sseClient;
+HTTPClient       sseHttp;
+WiFiClient*      sseStream = nullptr;
+bool             sseConnected = false;
+unsigned long    lastSseConnectAttempt = 0;
+String           sseTokenUsed = "";
+// -----------------------------------------------------------------------------
 
 // --- OTA state ---------------------------------------------------------------
 unsigned long lastOtaCheck       = 0;
@@ -175,7 +182,9 @@ void          processBarcodeInput(String input);
 void          processProvisioningBarcode(String input);
 void          processInventoryBarcode(String barcode);
 void          checkDeviceLookupStatus();
-void          checkDeviceScanMode();
+void          startScanModeStream();
+void          stopScanModeStream();
+void          handleScanModeStream();
 bool          connectToWiFi();
 bool          sendScanToFirebase(String barcode);
 bool          sendHeartbeatToFirebase();
@@ -1185,39 +1194,109 @@ void checkDeviceLookupStatus() {
   }
 }
 
-void checkDeviceScanMode() {
+void stopScanModeStream() {
+  if (sseConnected) {
+    sseHttp.end();
+    sseConnected = false;
+    sseStream = nullptr;
+    Serial.println("SSE: stream stopped");
+  }
+}
+
+void startScanModeStream() {
   if (!isWiFiConnected) return;
-
-  // Skip jika sedang dalam masa validasi boot OTA agar tidak mengganggu kestabilan WiFi
-  String pendingOtaId = otaPreferences.getString("pendingId", "");
-  if (pendingOtaId.length() > 0) return;
-
-  // Poll setiap 2.5 detik untuk respon yang cepat
-  if (millis() - lastScanModePoll < 2500UL) return;
-  lastScanModePoll = millis();
-
   if (firebaseIdToken.length() == 0) return;
 
-  HTTPClient http;
+  stopScanModeStream(); // ensure clean state
+
+  Serial.println("SSE: connecting to scanMode stream...");
+  sseClient.setInsecure();
+  sseClient.setTimeout(5000);
+
   String url = String(FIREBASE_DATABASE_URL) + "/deviceCommands/"
     + String(deviceConfig.deviceId) + "/scanMode.json?auth=" + firebaseIdToken;
-  http.begin(url);
-  http.setTimeout(2000); // timeout cepat agar tidak block main loop
-  int code = http.GET();
+
+  sseHttp.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  sseHttp.setTimeout(10000);
+
+  if (!sseHttp.begin(sseClient, url)) {
+    Serial.println("SSE: http.begin failed");
+    return;
+  }
+
+  sseHttp.addHeader("Accept", "text/event-stream");
+  int code = sseHttp.GET();
   if (code == 200) {
-    String body = http.getString();
-    DynamicJsonDocument doc(256);
-    if (!deserializeJson(doc, body) && doc.containsKey("mode")) {
-      String mode = doc["mode"].as<String>();
-      if (mode.length() > 0 && mode != activeScanMode) {
-        activeScanMode = mode;
-        Serial.println("Scan mode: " + activeScanMode);
-        // Langsung update layar OLED
-        oledShowStatus();
+    sseStream = sseHttp.getStreamPtr();
+    sseConnected = true;
+    sseTokenUsed = firebaseIdToken;
+    lastSseConnectAttempt = millis();
+    Serial.println("SSE: connected successfully");
+  } else {
+    Serial.printf("SSE: connection failed (HTTP %d)\n", code);
+    sseHttp.end();
+  }
+}
+
+void handleScanModeStream() {
+  if (!isWiFiConnected) {
+    stopScanModeStream();
+    return;
+  }
+
+  // Auto-reconnect if token changed
+  if (sseConnected && sseTokenUsed != firebaseIdToken) {
+    Serial.println("SSE: token changed, reconnecting...");
+    stopScanModeStream();
+  }
+
+  // Connect or reconnect if disconnected
+  if (!sseConnected) {
+    // Gated on OTA validation to avoid extra HTTP that could destabilize boot
+    String pendingOtaId = otaPreferences.getString("pendingId", "");
+    if (pendingOtaId.length() > 0) return;
+
+    if (millis() - lastSseConnectAttempt > 5000UL) {
+      lastSseConnectAttempt = millis();
+      startScanModeStream();
+    }
+    return;
+  }
+
+  // Read available data from stream in non-blocking way
+  if (sseStream && sseStream->available()) {
+    String line = sseStream->readStringUntil('\n');
+    line.trim();
+    if (line.startsWith("data:")) {
+      String jsonStr = line.substring(5);
+      jsonStr.trim();
+      if (jsonStr == "null") return; // no data
+
+      DynamicJsonDocument doc(512);
+      DeserializationError err = deserializeJson(doc, jsonStr);
+      if (!err) {
+        String mode = "";
+        if (doc.containsKey("data")) {
+          if (doc["data"].is<JsonObject>()) {
+            mode = doc["data"]["mode"] | "";
+          } else {
+            mode = doc["data"].as<String>();
+          }
+        }
+        if (mode.length() > 0 && mode != activeScanMode) {
+          activeScanMode = mode;
+          Serial.println("Scan mode (stream): " + activeScanMode);
+          oledShowStatus();
+        }
       }
     }
   }
-  http.end();
+
+  // Verify connection is still alive
+  if (!sseClient.connected()) {
+    Serial.println("SSE: client disconnected");
+    stopScanModeStream();
+  }
 }
 
 
@@ -1996,7 +2075,7 @@ void loop() {
   }
 
   checkDeviceLookupStatus();
-  checkDeviceScanMode();
+  handleScanModeStream();
 
   // Poll for a pending OTA command; gated internally on idle + battery.
   checkForOtaCommand();
