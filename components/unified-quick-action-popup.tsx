@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useMemo } from "react"
+import React, { useState, useEffect, useMemo, useRef } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -105,9 +105,17 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  const initializedBarcodeRef = useRef<string | null>(null)
+
   // Reset state when popup opens
   useEffect(() => {
-    if (!isOpen || !barcode) return
+    if (!isOpen || !barcode) {
+      initializedBarcodeRef.current = null
+      return
+    }
+
+    if (initializedBarcodeRef.current === barcode) return
+    initializedBarcodeRef.current = barcode
 
     const foundProduct = items.find((item) => item.barcode === barcode)
     setProduct(foundProduct || null)

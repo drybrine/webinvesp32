@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -46,6 +47,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authReady, setAuthReady] = useState(false)
   const [profileReady, setProfileReady] = useState(false)
 
+  const currentUserRef = useRef<User | null>(null)
+  currentUserRef.current = user
+
   useEffect(() => {
     let unsubscribeAuth: (() => void) | undefined
     let unsubscribeProfile: (() => void) | undefined
@@ -64,12 +68,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         unsubscribeAuth = onIdTokenChanged(auth, async (nextUser) => {
           try {
+            const isSameUser =
+              currentUserRef.current &&
+              nextUser &&
+              currentUserRef.current.uid === nextUser.uid
+
             unsubscribeProfile?.()
             unsubscribeProfile = undefined
             setUser(nextUser)
-            setProfile(null)
-            setRole(null)
-            setProfileReady(false)
+
+            if (!isSameUser) {
+              setProfile(null)
+              setRole(null)
+              setProfileReady(false)
+            }
 
             if (!nextUser) {
               setAuthReady(true)
