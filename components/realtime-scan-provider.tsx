@@ -63,11 +63,29 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
         notes: `Auto mode via ESP32 scanner - ${isMobile ? "Mobile" : "Desktop"}`,
       })
       await firebaseHelpers.markScanProcessed(scan.id)
-      toast({
-        title: type === "in" ? "✅ Auto Stock In" : "✅ Auto Stock Out",
-        description: `${item.name} ${delta > 0 ? "+" : ""}${delta} unit.`,
-        duration: 2000,
-      })
+      
+      if (type === "out" && item.quantity + delta <= 0) {
+        toast({
+          title: "⚠️ Barang Habis!",
+          description: `${item.name} telah habis (stok: 0).`,
+          variant: "destructive",
+          duration: 4000,
+        })
+      } else {
+        toast({
+          title: type === "in" ? "✅ Auto Stock In" : "✅ Auto Stock Out",
+          description: `${item.name} ${delta > 0 ? "+" : ""}${delta} unit.`,
+          duration: 2000,
+        })
+      }
+      if (item.quantity + delta === 0) {
+        toast({
+          title: "⚠️ Barang Habis!",
+          description: `${item.name} telah habis (stok: 0).`,
+          variant: "destructive",
+          duration: 4000,
+        })
+      }
     } catch (err) {
       console.error("auto stock failed:", err)
       toast({

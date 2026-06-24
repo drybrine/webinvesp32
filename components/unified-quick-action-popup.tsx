@@ -306,11 +306,20 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
         })
       }
 
-      toast({
-        title: "Stock out berhasil",
-        description: `${product.name} -${quickActionAmount} unit.`,
-        duration: 3000,
-      })
+      if (product.quantity - quickActionAmount <= 0) {
+        toast({
+          title: "⚠️ Barang Habis!",
+          description: `${product.name} telah habis (stok: 0).`,
+          variant: "destructive",
+          duration: 4000,
+        })
+      } else {
+        toast({
+          title: "Stock out berhasil",
+          description: `${product.name} -${quickActionAmount} unit.`,
+          duration: 3000,
+        })
+      }
 
       onClose()
     } catch (error) {
