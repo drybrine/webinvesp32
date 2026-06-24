@@ -252,33 +252,20 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
           const isAutoMode = scanMode === "in" || scanMode === "out"
           let autoHandled = false
 
-          console.log("[scan-provider] incoming scan:", {
-            barcode: latestScan.barcode,
-            scanMode,
-            isAutoMode,
-            foundItemName: foundItem?.name,
-            foundItemQty: foundItem?.quantity,
-            writable,
-          })
-
           if (isAutoMode && foundItem && writable) {
             if (scanMode === "in") {
               autoHandled = true
-              console.log("[scan-provider] auto executing Stock IN (+1) for:", foundItem.name)
               autoExecuteStock(latestScan, foundItem, 1, "in")
             } else if (scanMode === "out" && foundItem.quantity >= 1) {
               autoHandled = true
-              console.log("[scan-provider] auto executing Stock OUT (-1) for:", foundItem.name)
               autoExecuteStock(latestScan, foundItem, -1, "out")
             }
             // out with insufficient stock → fall through to popup
           }
 
           if (autoHandled) {
-            console.log("[scan-provider] auto handled successfully, skipping popup")
             // Auto mode executed — no popup
           } else if (!isPopupDisabled && !popupsGloballyDisabled) {
-            console.log("[scan-provider] not auto handled, showing popup")
             setShowPopup(true)
 
             // Enhanced mobile scroll prevention
