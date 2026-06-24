@@ -6,6 +6,7 @@ export type ScanMode = "ask" | "in" | "out"
 
 const STORAGE_KEY = "scanDefaultMode"
 const DEFAULT_MODE: ScanMode = "ask"
+const EVENT_NAME = "localScanModeChange"
 
 const MODE_LABELS: Record<ScanMode, string> = {
   ask: "Manual",
@@ -32,22 +33,34 @@ function readMode(): ScanMode {
 function writeMode(mode: ScanMode) {
   try {
     localStorage.setItem(STORAGE_KEY, mode)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: mode }))
+    }
   } catch { /* localStorage unavailable */ }
 }
 
 export function useScanMode() {
   const [scanMode, setScanModeState] = useState<ScanMode>(readMode)
 
-  // Sync from other tabs
+  // Sync from other tabs and within the same tab
   useEffect(() => {
-    const handler = (e: StorageEvent) => {
+    const handleStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) {
         const val = e.newValue as ScanMode | null
         if (val === "in" || val === "out" || val === "ask") setScanModeState(val)
       }
     }
-    window.addEventListener("storage", handler)
-    return () => window.removeEventListener("storage", handler)
+    const handleLocal = (e: Event) => {
+      const val = (e as CustomEvent).detail as ScanMode
+      if (val === "in" || val === "out" || val === "ask") setScanModeState(val)
+    }
+
+    window.addEventListener("storage", handleStorage)
+    window.addEventListener(EVENT_NAME, handleLocal)
+    return () => {
+      window.removeEventListener("storage", handleStorage)
+      window.removeEventListener(EVENT_NAME, handleLocal)
+    }
   }, [])
 
   const setScanMode = useCallback((mode: ScanMode) => {
