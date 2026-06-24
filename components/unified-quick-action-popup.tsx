@@ -877,15 +877,14 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
     </div>
   )
 
-  // Dynamic sizing based on device type
-  const dialogContentClass = isMobile 
-    ? "w-[95vw] max-w-sm mx-auto p-5 rounded-2xl max-h-[85vh] overflow-y-auto border border-border/80 shadow-2xl backdrop-blur-md bg-background/95 scrollbar-thin animate-scale-in"
-    : "w-[95vw] max-w-md mx-auto p-6 rounded-2xl max-h-[85vh] overflow-y-auto border border-border/80 shadow-2xl backdrop-blur-md bg-background/95 scrollbar-thin animate-scale-in"
+    // Dynamic sizing based on device type
+  const dialogContentClass = `w-[95vw] ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto p-0 rounded-2xl max-h-[85vh] border border-border/80 shadow-2xl backdrop-blur-md bg-background/95 flex flex-col overflow-hidden animate-scale-in`
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className={`${dialogContentClass} [&>button]:hidden`}>
-        <DialogHeader className="pb-4 border-b border-border/60 relative overflow-hidden">
+        {/* Header */}
+        <DialogHeader className={`border-b border-border/60 relative overflow-hidden shrink-0 ${isMobile ? "p-5 pb-4" : "p-6 pb-4"}`}>
           {/* Decorative glowing gradient effect behind title */}
           <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
           <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-32 h-16 bg-primary/10 rounded-full blur-2xl" />
@@ -896,7 +895,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
                 <Zap className="h-4.5 w-4.5 text-primary animate-pulse" />
               </div>
               <div>
-                <DialogTitle className="text-sm font-bold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text">
+                <DialogTitle className="text-sm font-bold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">
                   Aksi Cepat ESP32
                 </DialogTitle>
                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -929,19 +928,22 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
           </DialogDescription>
         </DialogHeader>
 
-        {product 
-          ? renderExistingProduct() 
-          : (scanMode === "out" ? renderUnknownProductWarning() : renderAddNewProduct())
-        }
+        {/* Scrollable Content Area */}
+        <div className={`flex-1 overflow-y-auto scrollbar-thin ${isMobile ? "px-5 pb-5" : "px-6 pb-6"}`}>
+          {product 
+            ? renderExistingProduct() 
+            : (scanMode === "out" ? renderUnknownProductWarning() : renderAddNewProduct())
+          }
+        </div>
         
         {/* ESP32 Indicator */}
-        <div className="flex items-center justify-center gap-2 pt-3 border-t border-border/40 mt-4">
+        <div className="flex items-center justify-center gap-2 py-3.5 border-t border-border/40 shrink-0 bg-muted/20">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-            ESP32 Scanner Aktif - {isMobile ? 'Mobile View' : 'Desktop View'}
+            ESP32 Scanner Aktif - {isMobile ? "Mobile View" : "Desktop View"}
           </span>
         </div>
       </DialogContent>
