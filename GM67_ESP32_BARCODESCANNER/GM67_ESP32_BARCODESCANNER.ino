@@ -48,7 +48,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.4.6"
+#define FIRMWARE_VERSION   "6.4.7"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -175,6 +175,7 @@ void          processBarcodeInput(String input);
 void          processProvisioningBarcode(String input);
 void          processInventoryBarcode(String barcode);
 void          checkDeviceLookupStatus();
+void          checkDeviceScanMode();
 bool          connectToWiFi();
 bool          sendScanToFirebase(String barcode);
 bool          sendHeartbeatToFirebase();
@@ -1184,6 +1185,41 @@ void checkDeviceLookupStatus() {
   }
 }
 
+void checkDeviceScanMode() {
+  if (!isWiFiConnected) return;
+
+  // Skip jika sedang dalam masa validasi boot OTA agar tidak mengganggu kestabilan WiFi
+  String pendingOtaId = otaPreferences.getString("pendingId", "");
+  if (pendingOtaId.length() > 0) return;
+
+  // Poll setiap 2.5 detik untuk respon yang cepat
+  if (millis() - lastScanModePoll < 2500UL) return;
+  lastScanModePoll = millis();
+
+  if (firebaseIdToken.length() == 0) return;
+
+  HTTPClient http;
+  String url = String(FIREBASE_DATABASE_URL) + "/deviceCommands/"
+    + String(deviceConfig.deviceId) + "/scanMode.json?auth=" + firebaseIdToken;
+  http.begin(url);
+  http.setTimeout(2000); // timeout cepat agar tidak block main loop
+  int code = http.GET();
+  if (code == 200) {
+    String body = http.getString();
+    DynamicJsonDocument doc(256);
+    if (!deserializeJson(doc, body) && doc.containsKey("mode")) {
+      String mode = doc["mode"].as<String>();
+      if (mode.length() > 0 && mode != activeScanMode) {
+        activeScanMode = mode;
+        Serial.println("Scan mode: " + activeScanMode);
+        // Langsung update layar OLED
+        oledShowStatus();
+      }
+    }
+  }
+  http.end();
+}
+
 
 // Mengirim heartbeat berkala ke /devices/{deviceId}.
 // Payload berisi status koneksi, uptime, heap, baterai, RSSI, versi firmware, dan mode.
@@ -1238,32 +1274,6 @@ bool sendHeartbeatToFirebase() {
     }
   }
   http.end();
-
-  // After successful heartbeat, poll scan mode.
-  // Skip during OTA validation to avoid extra HTTP that could destabilize boot.
-  String pendingOtaId = otaPreferences.getString("pendingId", "");
-  if (ok && pendingOtaId.length() == 0 && millis() - lastScanModePoll >= SCAN_MODE_POLL_INTERVAL_MS) {
-    lastScanModePoll = millis();
-    HTTPClient sh;
-    String surl = String(FIREBASE_DATABASE_URL) + "/deviceCommands/"
-      + String(deviceConfig.deviceId) + "/scanMode.json?auth=" + firebaseIdToken;
-    sh.begin(surl);
-    sh.setTimeout(3000);
-    int scode = sh.GET();
-    if (scode == 200) {
-      String sbody = sh.getString();
-      DynamicJsonDocument sdoc(256);
-      if (!deserializeJson(sdoc, sbody) && sdoc.containsKey("mode")) {
-        String mode = sdoc["mode"].as<String>();
-        if (mode.length() > 0 && mode != activeScanMode) {
-          activeScanMode = mode;
-          Serial.println("Scan mode: " + activeScanMode);
-        }
-      }
-    }
-    sh.end();
-  }
-
   return ok;
 }
 
@@ -1986,6 +1996,7 @@ void loop() {
   }
 
   checkDeviceLookupStatus();
+  checkDeviceScanMode();
 
   // Poll for a pending OTA command; gated internally on idle + battery.
   checkForOtaCommand();
