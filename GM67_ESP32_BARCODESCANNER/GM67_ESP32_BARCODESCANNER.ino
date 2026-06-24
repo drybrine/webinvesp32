@@ -2110,31 +2110,47 @@ void loop() {
   checkWiFiConnection();
 
   static String serial2Buffer = "";
+  static unsigned long lastSerial2CharTime = 0;
   while (Serial2.available() > 0) {
     char c = Serial2.read();
-    if (c == '\n') {
-      processBarcodeInput(serial2Buffer);
-      serial2Buffer = "";
-    } else if (c != '\r') {
+    lastSerial2CharTime = millis();
+    if (c == '\n' || c == '\r') {
+      if (serial2Buffer.length() > 0) {
+        processBarcodeInput(serial2Buffer);
+        serial2Buffer = "";
+      }
+    } else {
       serial2Buffer += c;
       if (serial2Buffer.length() > 512) {
         serial2Buffer = "";
       }
     }
   }
+  if (serial2Buffer.length() > 0 && millis() - lastSerial2CharTime > 50) {
+    processBarcodeInput(serial2Buffer);
+    serial2Buffer = "";
+  }
 
   static String serialBuffer = "";
+  static unsigned long lastSerialCharTime = 0;
   while (Serial.available() > 0) {
     char c = Serial.read();
-    if (c == '\n') {
-      processBarcodeInput(serialBuffer);
-      serialBuffer = "";
-    } else if (c != '\r') {
+    lastSerialCharTime = millis();
+    if (c == '\n' || c == '\r') {
+      if (serialBuffer.length() > 0) {
+        processBarcodeInput(serialBuffer);
+        serialBuffer = "";
+      }
+    } else {
       serialBuffer += c;
       if (serialBuffer.length() > 512) {
         serialBuffer = "";
       }
     }
+  }
+  if (serialBuffer.length() > 0 && millis() - lastSerialCharTime > 50) {
+    processBarcodeInput(serialBuffer);
+    serialBuffer = "";
   }
 
   if (millis() - lastHeartbeat > 5000) {
