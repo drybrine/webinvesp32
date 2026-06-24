@@ -48,7 +48,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.4.5"
+#define FIRMWARE_VERSION   "6.4.6"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -1239,9 +1239,10 @@ bool sendHeartbeatToFirebase() {
   }
   http.end();
 
-  // After successful heartbeat, poll scan mode (every ~8s, no extra auth).
-  // Gagal membaca scanMode tidak memengaruhi OTA validation karena ok sudah true.
-  if (ok && millis() - lastScanModePoll >= SCAN_MODE_POLL_INTERVAL_MS) {
+  // After successful heartbeat, poll scan mode.
+  // Skip during OTA validation to avoid extra HTTP that could destabilize boot.
+  String pendingOtaId = otaPreferences.getString("pendingId", "");
+  if (ok && pendingOtaId.length() == 0 && millis() - lastScanModePoll >= SCAN_MODE_POLL_INTERVAL_MS) {
     lastScanModePoll = millis();
     HTTPClient sh;
     String surl = String(FIREBASE_DATABASE_URL) + "/deviceCommands/"
