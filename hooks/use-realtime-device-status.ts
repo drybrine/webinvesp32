@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { ref, onValue, DataSnapshot, Unsubscribe } from "firebase/database"
-import { database, isFirebaseConfigured, waitForFirebaseReady } from "@/lib/firebase"
+import { database, isFirebaseConfigured, waitForFirebaseReady, firebaseHelpers } from "@/lib/firebase"
 import { toast } from "@/hooks/use-toast"
 
 export interface DeviceStatus {
@@ -98,6 +98,19 @@ export function useRealtimeDeviceStatus() {
         description: `${change.deviceId} ${isNowOnline ? "online" : "offline"}`,
         variant: isNowOnline ? "default" : "destructive",
       })
+
+      // Reset scanMode to Manual if device goes offline
+      if (!isNowOnline) {
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.setItem("scanDefaultMode", "ask")
+            window.dispatchEvent(new CustomEvent("localScanModeChange", { detail: "ask" }))
+          }
+          firebaseHelpers.updateDeviceScanMode(change.deviceId, "Manual").catch(() => {})
+        } catch (e) {
+          console.error("Failed to reset scan mode on offline transition:", e)
+        }
+      }
     })
 
     setDevices(list)
