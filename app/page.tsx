@@ -94,13 +94,19 @@ export default function DashboardPage() {
   }, [devices])
 
   const handleCycleMode = useCallback(() => {
+    if (!activeDeviceId) {
+      toast({
+        title: "Perangkat Tidak Terhubung",
+        description: "Mode scanner hanya bisa diubah ketika scanner dalam keadaan online.",
+        variant: "destructive",
+      })
+      return
+    }
     const next = nextMode(scanMode)
     cycleMode()
-    if (activeDeviceId) {
-      const modeLabel = next === "ask" ? "Manual" : next === "in" ? "Auto IN" : "Auto OUT"
-      firebaseHelpers.updateDeviceScanMode(activeDeviceId, modeLabel).catch(() => {})
-    }
-  }, [scanMode, cycleMode, activeDeviceId])
+    const modeLabel = next === "ask" ? "Manual" : next === "in" ? "Auto IN" : "Auto OUT"
+    firebaseHelpers.updateDeviceScanMode(activeDeviceId, modeLabel).catch(() => {})
+  }, [scanMode, cycleMode, activeDeviceId, toast])
 
   const [newItem, setNewItem] = useState<AddInventoryInput>({
     barcode: "",
