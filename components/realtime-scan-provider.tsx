@@ -47,6 +47,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   const [currentDeviceId, setCurrentDeviceId] = useState("")
   const [isMobile, setIsMobile] = useState(false)
   const [popupsGloballyDisabled, setPopupsGloballyDisabled] = useState(false)
+  const [latestScan, setLatestScan] = useState<IncomingScan | null>(null)
 
   // Auto-execute stock adjustment for auto mode (fire-and-forget)
   const autoExecuteStock = useCallback(async (scan: IncomingScan, item: InventoryItem, delta: number, type: "in" | "out") => {
@@ -80,16 +81,16 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
 
   // Detect mobile device and setup
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       // Check if popups are globally disabled
-      const globallyDisabled = localStorage.getItem('popupsGloballyDisabled') === 'true'
+      const globallyDisabled = localStorage.getItem("popupsGloballyDisabled") === "true"
       setPopupsGloballyDisabled(globallyDisabled)
 
       const checkMobile = () => {
         const userAgent = window.navigator.userAgent
         const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
         const isSmallScreen = window.innerWidth <= 768
-        const isTouchDevice = 'ontouchstart' in window
+        const isTouchDevice = "ontouchstart" in window
         
         return isMobileDevice || isSmallScreen || isTouchDevice
       }
@@ -99,7 +100,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
       
       // FORCE Firebase initialization for mobile immediately
       if (mobileStatus) {
-        import('@/lib/firebase').then(({ waitForFirebaseReady }) => {
+        import("@/lib/firebase").then(({ waitForFirebaseReady }) => {
           waitForFirebaseReady(15000)
         })
       }
@@ -109,7 +110,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
         // Mobile detected - Initializing Firebase connection
         
         // Test Firebase connection
-        const testRef = ref(database, '.info/connected')
+        const testRef = ref(database, ".info/connected")
         const unsubscribeTest = onValue(testRef, (snapshot) => {
           snapshot.val() // fire connection listener
           // Firebase connection status available
@@ -146,17 +147,17 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
       }
       
       // Add modern event listeners (replaces deprecated unload events)
-      window.addEventListener('pagehide', handlePageHide)
-      document.addEventListener('visibilitychange', handleVisibilityChange)
-      window.addEventListener('pageshow', handlePageShow)
-      window.addEventListener('resize', handleResize)
+      window.addEventListener("pagehide", handlePageHide)
+      document.addEventListener("visibilitychange", handleVisibilityChange)
+      window.addEventListener("pageshow", handlePageShow)
+      window.addEventListener("resize", handleResize)
       
       return () => {
         // Cleanup modern event listeners
-        window.removeEventListener('pagehide', handlePageHide)
-        document.removeEventListener('visibilitychange', handleVisibilityChange)
-        window.removeEventListener('pageshow', handlePageShow)
-        window.removeEventListener('resize', handleResize)
+        window.removeEventListener("pagehide", handlePageHide)
+        document.removeEventListener("visibilitychange", handleVisibilityChange)
+        window.removeEventListener("pageshow", handlePageShow)
+        window.removeEventListener("resize", handleResize)
       }
     }
   }, [pathname])
@@ -172,182 +173,181 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
     setLastScannedBarcode(null)
   }, [pathname])
 
+  // Firebase listener: setup once on mount and update latestScan
   useEffect(() => {
-    // Enhanced Firebase initialization check for mobile
+    if (!role) return
+    let cleanup: (() => void) | undefined
+    let cancelled = false
+
     const setupFirebaseListener = async () => {
       if (!isFirebaseConfigured() || !database) {
-        // Wait for Firebase to be ready (especially important for mobile)
-        const { waitForFirebaseReady } = await import('@/lib/firebase')
-        const isReady = await waitForFirebaseReady(10000) // Wait up to 10 seconds
-
-        if (!isReady) {
-          return
-        }
+        const { waitForFirebaseReady } = await import("@/lib/firebase")
+        const isReady = await waitForFirebaseReady(10000)
+        if (!isReady || cancelled) return
       }
 
-      // Listen to scan events from Firebase Realtime Database
       const scansRef = query(ref(database!, "scans"), orderByChild("timestamp"), limitToLast(1))
-
       const unsubscribe = onValue(scansRef, (snapshot) => {
-      const data = snapshot.val()
-
-      if (data) {
-        // Query is limited to the newest scan, avoiding full scans download/sort on every update.
-        const scansArray: IncomingScan[] = Object.keys(data).map((key) => ({
-          id: key,
-          ...data[key],
-        }))
-
-        if (scansArray.length > 0) {
-          const latestScan = scansArray[0]
-          
-          // Enhanced scan detection logic
-          const now = Date.now()
-          const scanTime = scanTimestampMs(latestScan.timestamp)
-          const scanAge = now - scanTime
-          
-          // Enhanced ESP32 device detection based on actual Firebase data structure
-          const isESP32Device = (
-            // Primary detection: ESP32-XXXXXXXX pattern from actual data
-            latestScan.deviceId?.startsWith('ESP32-') ||
-            // Location pattern from actual data
-            latestScan.location === 'Warehouse-Scanner' ||
-            // Fallback patterns
-            latestScan.deviceId?.toLowerCase().includes('esp32') ||
-            // Fallback: if no deviceId specified but has recent timestamp, assume ESP32
-            (!latestScan.deviceId && scanAge < 2000)
-          )
-
-          // Check if the scan is from inventory mode based on actual Firebase data structure
-          const isScanFromInventoryMode = (
-            latestScan.mode === 'inventory' || 
-            latestScan.type === 'inventory_scan' || 
-            (!latestScan.mode && !latestScan.type) // For backward compatibility with older scans
-          )
-          
-          // FIXED: Simplified trigger logic to prevent repeated popups
-          // Only trigger if this is a NEW scan ID that we haven't processed yet
-          const shouldTriggerPopup = (
-            isESP32Device && 
-            writable &&
-            !latestScan.processed && 
-            latestScan.id !== lastProcessedScanId &&
-            isScanFromInventoryMode
-          )
-          
-          if (!shouldTriggerPopup || inventoryLoading) {
-            return
+        const data = snapshot.val()
+        if (data) {
+          const scansArray: IncomingScan[] = Object.keys(data).map((key) => ({
+            id: key,
+            ...data[key],
+          }))
+          if (scansArray.length > 0) {
+            setLatestScan(scansArray[0])
           }
-
-          setLastScannedBarcode(latestScan.barcode)
-          setLastProcessedScanId(latestScan.id)
-          setCurrentBarcode(latestScan.barcode)
-          setCurrentScanId(latestScan.id)
-          setCurrentDeviceId(latestScan.deviceId || "")
-          setScanCount(prev => prev + 1)
-          setIsScanning(true)
-
-          // Auto mode: handle stock in/out without popup
-          const foundItem = inventoryItems.find(i => i.barcode === latestScan.barcode)
-          const isAutoMode = scanMode === "in" || scanMode === "out"
-          let autoHandled = false
-
-          if (isAutoMode && foundItem && writable) {
-            if (scanMode === "in") {
-              autoHandled = true
-              autoExecuteStock(latestScan, foundItem, 1, "in")
-            } else if (scanMode === "out" && foundItem.quantity >= 1) {
-              autoHandled = true
-              autoExecuteStock(latestScan, foundItem, -1, "out")
-            }
-            // out with insufficient stock → fall through to popup
-          }
-
-          if (autoHandled) {
-            // Auto mode executed — no popup
-          } else if (!isPopupDisabled && !popupsGloballyDisabled) {
-            setShowPopup(true)
-
-            // Enhanced mobile scroll prevention
-            if (typeof document !== 'undefined') {
-              document.body.classList.add('dialog-open')
-
-              // Only apply fixed positioning on actual mobile devices
-              if (isMobile) {
-                document.body.style.overflow = 'hidden'
-                document.body.style.position = 'fixed'
-                document.body.style.width = '100%'
-                document.body.style.height = '100%'
-                document.body.style.touchAction = 'none'
-              }
-            }
-
-            // Auto-vibrate on mobile if supported
-            if (isMobile && 'navigator' in window && 'vibrate' in navigator) {
-              try {
-                navigator.vibrate([200, 100, 200])
-              } catch {
-                logger.warn('Vibration not supported')
-              }
-            }
-          } else {
-            logger.warn('Popup disabled on page:', pathname)
-          }
-
-          // Reset scanning state after 1 second (faster)
-          setTimeout(() => {
-            setIsScanning(false)
-          }, 1000)
         }
-      }
       }, (error) => {
         console.error("Firebase realtime scan error:", error)
       })
 
-      // Return cleanup function
-      return unsubscribe
-    }
-
-    // Call the async setup function
-    let cleanup: (() => void) | undefined
-    let cancelled = false
-    setupFirebaseListener().then((unsubscribe) => {
-      // If the effect was cleaned up while setup was awaiting, unsubscribe now
       if (cancelled) {
-        if (unsubscribe) unsubscribe()
+        unsubscribe()
         return
       }
       cleanup = unsubscribe
-    }).catch((error) => {
-      console.error('🔥 Failed to setup Firebase listener:', error)
-    })
+    }
 
-    // Cleanup function
+    setupFirebaseListener()
+
     return () => {
       cancelled = true
       if (cleanup) {
         cleanup()
       }
     }
-  }, [autoExecuteStock, inventoryItems, inventoryLoading, isPopupDisabled, isMobile, lastProcessedScanId, pathname, popupsGloballyDisabled, scanMode, writable])
+  }, [role])
+
+  // Scan processor: react to latestScan, writable, and inventory loading
+  useEffect(() => {
+    if (!latestScan) return
+
+    const now = Date.now()
+    const scanTime = scanTimestampMs(latestScan.timestamp)
+    const scanAge = now - scanTime
+    
+    const isESP32Device = (
+      latestScan.deviceId?.startsWith("ESP32-") ||
+      latestScan.location === "Warehouse-Scanner" ||
+      latestScan.deviceId?.toLowerCase().includes("esp32") ||
+      (!latestScan.deviceId && scanAge < 2000)
+    )
+
+    const isScanFromInventoryMode = (
+      latestScan.mode === "inventory" || 
+      latestScan.type === "inventory_scan" || 
+      (!latestScan.mode && !latestScan.type)
+    )
+    
+    const shouldTriggerPopup = (
+      isESP32Device && 
+      writable &&
+      !latestScan.processed && 
+      latestScan.id !== lastProcessedScanId &&
+      isScanFromInventoryMode
+    )
+    
+    console.log("[Scan Debug] evaluation:", {
+      id: latestScan.id,
+      barcode: latestScan.barcode,
+      shouldTriggerPopup,
+      isESP32Device,
+      writable,
+      processed: latestScan.processed,
+      lastProcessedScanId,
+      isScanFromInventoryMode,
+      inventoryLoading
+    })
+    
+    if (!shouldTriggerPopup || inventoryLoading) {
+      return
+    }
+
+    setLastScannedBarcode(latestScan.barcode)
+    setLastProcessedScanId(latestScan.id)
+    setCurrentBarcode(latestScan.barcode)
+    setCurrentScanId(latestScan.id)
+    setCurrentDeviceId(latestScan.deviceId || "")
+    setScanCount(prev => prev + 1)
+    setIsScanning(true)
+
+    const foundItem = inventoryItems.find(i => i.barcode === latestScan.barcode)
+    const isAutoMode = scanMode === "in" || scanMode === "out"
+    let autoHandled = false
+
+    if (isAutoMode && foundItem && writable) {
+      if (scanMode === "in") {
+        autoHandled = true
+        autoExecuteStock(latestScan, foundItem, 1, "in")
+      } else if (scanMode === "out" && foundItem.quantity >= 1) {
+        autoHandled = true
+        autoExecuteStock(latestScan, foundItem, -1, "out")
+      }
+    }
+
+    if (autoHandled) {
+      // Auto mode executed
+    } else if (!isPopupDisabled && !popupsGloballyDisabled) {
+      setShowPopup(true)
+
+      if (typeof document !== "undefined") {
+        document.body.classList.add("dialog-open")
+
+        if (isMobile) {
+          document.body.style.overflow = "hidden"
+          document.body.style.position = "fixed"
+          document.body.style.width = "100%"
+          document.body.style.height = "100%"
+          document.body.style.touchAction = "none"
+        }
+      }
+
+      if (isMobile && "navigator" in window && "vibrate" in navigator) {
+        try {
+          navigator.vibrate([200, 100, 200])
+        } catch {
+          logger.warn("Vibration not supported")
+        }
+      }
+    } else {
+      logger.warn("Popup disabled on page:", pathname)
+    }
+
+    const timer = setTimeout(() => {
+      setIsScanning(false)
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [
+    latestScan,
+    writable,
+    inventoryItems,
+    inventoryLoading,
+    lastProcessedScanId,
+    scanMode,
+    autoExecuteStock,
+    isPopupDisabled,
+    popupsGloballyDisabled,
+    isMobile,
+    pathname
+  ])
 
   const disablePopupsGlobally = () => {
     setPopupsGloballyDisabled(true)
-    localStorage.setItem('popupsGloballyDisabled', 'true')
+    localStorage.setItem("popupsGloballyDisabled", "true")
     setShowPopup(false)
     setCurrentBarcode("")
   }
 
   const handleClosePopup = async () => {
-    logger.info('Closing ESP32 popup - Mobile:', isMobile)
+    logger.info("Closing ESP32 popup - Mobile:", isMobile)
     
-    // Mark scan as processed in Firebase
     if (writable && lastProcessedScanId && database) {
       try {
         await firebaseHelpers.markScanProcessed(lastProcessedScanId)
-        // scan marked processed
       } catch (error) {
-        console.error('❌ Error updating scan processed status:', error)
+        console.error("❌ Error updating scan processed status:", error)
       }
     }
     
@@ -356,15 +356,14 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
     setCurrentScanId("")
     setCurrentDeviceId("")
 
-    // Remove body class and restore scroll
-    if (typeof document !== 'undefined') {
-      document.body.classList.remove('dialog-open')
+    if (typeof document !== "undefined") {
+      document.body.classList.remove("dialog-open")
       if (isMobile) {
-        document.body.style.overflow = ''
-        document.body.style.position = ''
-        document.body.style.width = ''
-        document.body.style.height = ''
-        document.body.style.touchAction = ''
+        document.body.style.overflow = ""
+        document.body.style.position = ""
+        document.body.style.width = ""
+        document.body.style.height = ""
+        document.body.style.touchAction = ""
       }
     }
   }
@@ -377,14 +376,13 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
     popupsGloballyDisabled,
     enablePopupsGlobally: () => {
       setPopupsGloballyDisabled(false)
-      localStorage.setItem('popupsGloballyDisabled', 'false')
+      localStorage.setItem("popupsGloballyDisabled", "false")
     }
   }
 
   return (
     <RealtimeScanContext.Provider value={contextValue}>
       {children}
-      {/* Unified popup that automatically adapts to mobile/desktop */}
       <UnifiedQuickActionPopup
         barcode={currentBarcode}
         scanId={currentScanId}

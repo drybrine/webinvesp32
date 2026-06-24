@@ -5,6 +5,8 @@ import { ref, onValue, DataSnapshot, Unsubscribe } from "firebase/database"
 import { database, isFirebaseConfigured, waitForFirebaseReady, firebaseHelpers } from "@/lib/firebase"
 import { toast } from "@/hooks/use-toast"
 
+import { useAuth } from "@/components/auth-provider"
+
 export interface DeviceStatus {
   deviceId: string
   status: "online" | "offline"
@@ -48,6 +50,7 @@ function computeStatus(raw: RawDevice, now: number): "online" | "offline" {
 }
 
 export function useRealtimeDeviceStatus() {
+  const { role } = useAuth()
   const [rawDevices, setRawDevices] = useState<Record<string, RawDevice>>({})
   const [devices, setDevices] = useState<DeviceStatus[]>([])
   const [loading, setLoading] = useState(true)
@@ -118,6 +121,7 @@ export function useRealtimeDeviceStatus() {
   }, [])
 
   useEffect(() => {
+    if (!role) return
     let unsubscribe: Unsubscribe | undefined
     let unsubscribeOffset: Unsubscribe | undefined
     let cancelled = false
@@ -178,7 +182,7 @@ export function useRealtimeDeviceStatus() {
       if (unsubscribe) unsubscribe()
       if (unsubscribeOffset) unsubscribeOffset()
     }
-  }, [recomputeDevices])
+  }, [role, recomputeDevices])
 
   useEffect(() => {
     const interval = setInterval(() => {

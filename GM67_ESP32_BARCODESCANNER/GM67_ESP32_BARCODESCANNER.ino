@@ -48,7 +48,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.2"
+#define FIRMWARE_VERSION   "6.5.3"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -1244,6 +1244,11 @@ void startScanModeStream() {
   } else {
     Serial.printf("SSE: connection failed (HTTP %d)\n", code);
     sseHttp.end();
+    if (code == 401 || code == 403) {
+      firebaseIdToken = "";
+      authRejected = true;
+      scheduleAuthRetry();
+    }
   }
 }
 
@@ -1297,7 +1302,12 @@ void handleScanModeStream() {
                 if (doc["data"].is<JsonObject>()) {
                   JsonObject dataObj = doc["data"].as<JsonObject>();
                   if (dataObj.containsKey("scanMode")) {
-                    String mode = dataObj["scanMode"] | "";
+                    String mode = "";
+                    if (dataObj["scanMode"].is<JsonObject>()) {
+                      mode = dataObj["scanMode"]["mode"] | "";
+                    } else {
+                      mode = dataObj["scanMode"] | "";
+                    }
                     if (mode.length() > 0 && mode != activeScanMode) {
                       activeScanMode = mode;
                       Serial.println("Scan mode (stream root): " + activeScanMode);
@@ -1312,7 +1322,12 @@ void handleScanModeStream() {
                   }
                 }
               } else if (path == "/scanMode") {
-                String mode = doc["data"] | "";
+                String mode = "";
+                if (doc["data"].is<JsonObject>()) {
+                  mode = doc["data"]["mode"] | "";
+                } else {
+                  mode = doc["data"] | "";
+                }
                 if (mode.length() > 0 && mode != activeScanMode) {
                   activeScanMode = mode;
                   Serial.println("Scan mode (stream child): " + activeScanMode);
