@@ -48,7 +48,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.1"
+#define FIRMWARE_VERSION   "6.5.2"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -168,9 +168,7 @@ String        otaLastFailedId    = "";   // commandId that exhausted retries
 uint8_t       otaRetryCount      = 0;
 bool          otaInProgress      = false;
 Preferences   otaPreferences;
-#define OTA_CHECK_INTERVAL_MS 8000UL
-
-std::vector<ScanData> scanHistory;
+#define OTA_CHECK_INTERVAL_MS 300000UL
 
 // --- Function Declarations ---------------------------------------------------
 void          handleRoot();
@@ -225,7 +223,7 @@ void          oledShowProvisioningSuccess();
 bool          isDeviceProvisioned();
 void          oledUpdateIdle();
 // --- OTA ---------------------------------------------------------------------
-void          checkForOtaCommand();
+void          checkForOtaCommand(bool force = false);
 bool          performOtaUpdate(const String& commandId, const String& binaryUrl,
                                const String& sha256Hex, const String& signatureB64,
                                size_t expectedSize, const String& version);
@@ -916,9 +914,11 @@ bool signInDevice(String email, String password) {
   }
 
   HTTPClient http;
+  WiFiClientSecure client;
+  client.setInsecure();
   String url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" +
                String(FIREBASE_WEB_API_KEY);
-  http.begin(url);
+  http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(10000);
 
@@ -994,8 +994,10 @@ bool refreshFirebaseToken(bool force) {
   }
 
   HTTPClient http;
+  WiFiClientSecure client;
+  client.setInsecure();
   String url = "https://securetoken.googleapis.com/v1/token?key=" + String(FIREBASE_WEB_API_KEY);
-  http.begin(url);
+  http.begin(client, url);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   http.setTimeout(10000);
   String body = "grant_type=refresh_token&refresh_token=" + urlEncode(firebaseRefreshToken);
@@ -1057,7 +1059,9 @@ bool sendScanToFirebase(String barcode) {
   HTTPClient http;
   String url = firebaseUrlWithAuth("/scans.json");
   if (url.length() == 0) return false;
-  http.begin(url);
+  WiFiClientSecure client;
+  client.setInsecure();
+  http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(10000);
 
@@ -1105,7 +1109,9 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
     "/inventory.json?orderBy=\"barcode\"&equalTo=\"" + barcode + "\""
   );
   if (url.length() == 0) return item;
-  http.begin(url);
+  WiFiClientSecure client;
+  client.setInsecure();
+  http.begin(client, url);
   http.setTimeout(8000);
   int code = http.GET();
 
@@ -1162,7 +1168,9 @@ void checkDeviceLookupStatus() {
   HTTPClient http;
   String url = firebaseUrlWithAuth("/deviceLookupStatus/" + String(deviceConfig.deviceId) + ".json");
   if (url.length() == 0) return;
-  http.begin(url);
+  WiFiClientSecure client;
+  client.setInsecure();
+  http.begin(client, url);
   http.setTimeout(3000);
   int code = http.GET();
   if (code != 200) {
@@ -1197,6 +1205,7 @@ void checkDeviceLookupStatus() {
 void stopScanModeStream() {
   if (sseConnected) {
     sseHttp.end();
+    sseClient.stop();
     sseConnected = false;
     sseStream = nullptr;
     Serial.println("SSE: stream stopped");
@@ -1214,7 +1223,7 @@ void startScanModeStream() {
   sseClient.setTimeout(5000);
 
   String url = String(FIREBASE_DATABASE_URL) + "/deviceCommands/"
-    + String(deviceConfig.deviceId) + "/scanMode.json?auth=" + firebaseIdToken;
+    + String(deviceConfig.deviceId) + ".json?auth=" + firebaseIdToken;
 
   sseHttp.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   sseHttp.setTimeout(10000);
@@ -1239,8 +1248,11 @@ void startScanModeStream() {
 }
 
 void handleScanModeStream() {
+  static String sseLineBuffer = "";
+
   if (!isWiFiConnected) {
     stopScanModeStream();
+    sseLineBuffer = "";
     return;
   }
 
@@ -1248,10 +1260,12 @@ void handleScanModeStream() {
   if (sseConnected && sseTokenUsed != firebaseIdToken) {
     Serial.println("SSE: token changed, reconnecting...");
     stopScanModeStream();
+    sseLineBuffer = "";
   }
 
   // Connect or reconnect if disconnected
   if (!sseConnected) {
+    sseLineBuffer = "";
     // Gated on OTA validation to avoid extra HTTP that could destabilize boot
     String pendingOtaId = otaPreferences.getString("pendingId", "");
     if (pendingOtaId.length() > 0) return;
@@ -1264,29 +1278,59 @@ void handleScanModeStream() {
   }
 
   // Read available data from stream in non-blocking way
-  if (sseStream && sseStream->available()) {
-    String line = sseStream->readStringUntil('\n');
-    line.trim();
-    if (line.startsWith("data:")) {
-      String jsonStr = line.substring(5);
-      jsonStr.trim();
-      if (jsonStr == "null") return; // no data
-
-      DynamicJsonDocument doc(512);
-      DeserializationError err = deserializeJson(doc, jsonStr);
-      if (!err) {
-        String mode = "";
-        if (doc.containsKey("data")) {
-          if (doc["data"].is<JsonObject>()) {
-            mode = doc["data"]["mode"] | "";
-          } else {
-            mode = doc["data"].as<String>();
+  if (sseStream) {
+    while (sseStream->available() > 0) {
+      char c = sseStream->read();
+      if (c == '\n') {
+        String line = sseLineBuffer;
+        sseLineBuffer = "";
+        line.trim();
+        if (line.startsWith("data:")) {
+          String jsonStr = line.substring(5);
+          jsonStr.trim();
+          if (jsonStr != "null") {
+            DynamicJsonDocument doc(2048);
+            DeserializationError err = deserializeJson(doc, jsonStr);
+            if (!err) {
+              String path = doc["path"] | "";
+              if (path == "/") {
+                if (doc["data"].is<JsonObject>()) {
+                  JsonObject dataObj = doc["data"].as<JsonObject>();
+                  if (dataObj.containsKey("scanMode")) {
+                    String mode = dataObj["scanMode"] | "";
+                    if (mode.length() > 0 && mode != activeScanMode) {
+                      activeScanMode = mode;
+                      Serial.println("Scan mode (stream root): " + activeScanMode);
+                      oledShowStatus();
+                    }
+                  }
+                  if (dataObj.containsKey("ota")) {
+                    if (!dataObj["ota"].isNull()) {
+                      Serial.println("OTA: ota field updated in stream root, checking...");
+                      checkForOtaCommand(true);
+                    }
+                  }
+                }
+              } else if (path == "/scanMode") {
+                String mode = doc["data"] | "";
+                if (mode.length() > 0 && mode != activeScanMode) {
+                  activeScanMode = mode;
+                  Serial.println("Scan mode (stream child): " + activeScanMode);
+                  oledShowStatus();
+                }
+              } else if (path == "/ota") {
+                if (!doc["data"].isNull()) {
+                  Serial.println("OTA: ota field updated in stream child, checking...");
+                  checkForOtaCommand(true);
+                }
+              }
+            }
           }
         }
-        if (mode.length() > 0 && mode != activeScanMode) {
-          activeScanMode = mode;
-          Serial.println("Scan mode (stream): " + activeScanMode);
-          oledShowStatus();
+      } else if (c != '\r') {
+        sseLineBuffer += c;
+        if (sseLineBuffer.length() > 2048) {
+          sseLineBuffer = "";
         }
       }
     }
@@ -1315,7 +1359,9 @@ bool sendHeartbeatToFirebase() {
     isOnline = false;
     return false;
   }
-  http.begin(url);
+  WiFiClientSecure client;
+  client.setInsecure();
+  http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(5000);
 
@@ -1389,7 +1435,9 @@ void reportOtaStatus(const char* phase, const String& version, int progress, con
   HTTPClient http;
   String url = firebaseUrlWithAuth("/deviceOtaStatus/" + String(deviceConfig.deviceId) + ".json");
   if (url.length() == 0) return;
-  http.begin(url);
+  WiFiClientSecure client;
+  client.setInsecure();
+  http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(8000);
 
@@ -1587,16 +1635,18 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
 // Polls /deviceCommands/{deviceId}/ota and runs an update when one is pending.
 // Idempotent: a command already succeeded or failed (by id) is not re-run; gated
 // commands are reported as deferred until idle+battery preconditions are met.
-void checkForOtaCommand() {
+void checkForOtaCommand(bool force) {
   if (otaInProgress) return;
   if (!isWiFiConnected) return;
-  if (millis() - lastOtaCheck < OTA_CHECK_INTERVAL_MS) return;
+  if (!force && (millis() - lastOtaCheck < OTA_CHECK_INTERVAL_MS)) return;
   lastOtaCheck = millis();
 
   HTTPClient http;
   String url = firebaseUrlWithAuth("/deviceCommands/" + String(deviceConfig.deviceId) + "/ota.json");
   if (url.length() == 0) return;
-  http.begin(url);
+  WiFiClientSecure client;
+  client.setInsecure();
+  http.begin(client, url);
   http.setTimeout(8000);
   int code = http.GET();
   if (code != 200) {
@@ -1711,15 +1761,6 @@ void processInventoryBarcode(String barcode) {
 
   // POST ke /scans dulu agar website popup muncul cepat
   bool sent = sendScanToFirebase(barcode);
-
-  ScanData sd;
-  sd.barcode        = barcode;
-  sd.timestamp      = String(millis());
-  sd.deviceId       = deviceConfig.deviceId;
-  sd.processed      = false;
-  sd.sentToFirebase = sent;
-  scanHistory.push_back(sd);
-  if (scanHistory.size() > 20) scanHistory.erase(scanHistory.begin());
 
   // Lookup inventory setelah scan terkirim (untuk OLED display)
   InventoryItem item = lookupInventoryByBarcode(barcode);
@@ -2053,14 +2094,32 @@ void loop() {
 
   checkWiFiConnection();
 
-  if (Serial2.available()) {
-    String input = Serial2.readStringUntil('\n');
-    processBarcodeInput(input);
+  static String serial2Buffer = "";
+  while (Serial2.available() > 0) {
+    char c = Serial2.read();
+    if (c == '\n') {
+      processBarcodeInput(serial2Buffer);
+      serial2Buffer = "";
+    } else if (c != '\r') {
+      serial2Buffer += c;
+      if (serial2Buffer.length() > 512) {
+        serial2Buffer = "";
+      }
+    }
   }
 
-  if (Serial.available()) {
-    String input = Serial.readStringUntil('\n');
-    processBarcodeInput(input);
+  static String serialBuffer = "";
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\n') {
+      processBarcodeInput(serialBuffer);
+      serialBuffer = "";
+    } else if (c != '\r') {
+      serialBuffer += c;
+      if (serialBuffer.length() > 512) {
+        serialBuffer = "";
+      }
+    }
   }
 
   if (millis() - lastHeartbeat > 5000) {
@@ -2078,7 +2137,7 @@ void loop() {
   handleScanModeStream();
 
   // Poll for a pending OTA command; gated internally on idle + battery.
-  checkForOtaCommand();
+  checkForOtaCommand(false);
 
   oledUpdateIdle();
   delay(100);
