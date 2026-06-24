@@ -70,6 +70,7 @@
         "scanCount": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "freeHeap": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "currentMode": { ".validate": "newData.val() == 'inventory'" },
+        "scanMode": { ".validate": "newData.isString()" },
         "uptime": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "name": { ".validate": "newData.isString()" },
         "$other": { ".validate": false }
