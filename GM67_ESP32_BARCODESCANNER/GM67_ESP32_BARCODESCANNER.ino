@@ -123,7 +123,6 @@ Preferences authPreferences;
 WiFiConfig   wifiConfig;
 DeviceConfig deviceConfig;
 
-String        lastBarcode     = "";
 bool          isWiFiConnected = false;
 unsigned long lastScanTime    = 0;
 unsigned long lastHeartbeat   = 0;
@@ -182,7 +181,7 @@ bool          ensureFirebaseAuth();
 String        firebaseUrlWithAuth(String pathAndQuery);
 String        urlEncode(String value);
 void          loadFirebaseRefreshToken();
-void          clearFirebaseAuth();
+void          scheduleAuthRetry();
 InventoryItem lookupInventoryByBarcode(String barcode);
 bool          parseWiFiQR(String qrData, String &ssid, String &password, String &security);
 void          saveWiFiConfig();
@@ -190,7 +189,6 @@ void          loadWiFiConfig();
 void          saveDeviceConfig();
 void          loadDeviceConfig();
 void          checkWiFiConnection();
-uint32_t      calculateChecksum(const void* data, size_t length);
 void          initOLED();
 void          drawBatteryIcon(int x, int y, int percent);
 void          drawWifiIcon(int x, int y, int rssi);
@@ -232,7 +230,7 @@ float batteryEma = -1.0f;       // persistent EMA state (-1 = uninitialized)
 int   lastReportedBattery = -1; // hysteresis: last sent value
 int   cachedBatteryLevel  = -1; // pre-sampled before WiFi activity
 esp_adc_cal_characteristics_t adcCal;  // ADC calibration characteristics
-bool  adcCalibrated = false;
+
 
 // Menginisialisasi ADC baterai dengan resolusi 12-bit dan attenuasi yang sesuai.
 // Kalibrasi memakai eFuse Vref/Two Point bila tersedia agar pembacaan mV lebih akurat.
@@ -244,7 +242,6 @@ void initBatteryADC() {
     ADC_UNIT_1, BATTERY_ADC_ATTEN, ADC_WIDTH_BIT_12, 1100, &adcCal
   );
 
-  adcCalibrated = true;
   Serial.printf("ADC Cal: type=%s, Vref=%dmV\n",
     (calType == ESP_ADC_CAL_VAL_EFUSE_VREF) ? "eFuse Vref" :
     (calType == ESP_ADC_CAL_VAL_EFUSE_TP)   ? "eFuse Two Point" :
@@ -1633,7 +1630,6 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
   Serial.println("OTA: sukses, reboot...");
   delay(1500);
   ESP.restart();
-  return true;  // not reached
 }
 
 // Polls /deviceCommands/{deviceId}/ota and runs an update when one is pending.
@@ -1864,7 +1860,6 @@ void processBarcodeInput(String input) {
   }
 
   Serial.println("Input: " + input);
-  lastBarcode  = input;
   lastScanTime = millis();
   scanCount++;
   processInventoryBarcode(input);
