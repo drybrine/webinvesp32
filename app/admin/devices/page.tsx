@@ -1,7 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { KeyRound, Plus, Power, RefreshCw, Trash2 } from "lucide-react"
+import { Battery, KeyRound, Plus, Power, RefreshCw, Trash2 } from "lucide-react"
+import { ref, set, serverTimestamp } from "firebase/database"
+import { database } from "@/lib/firebase"
 import {
   createRegisteredDevice,
   listRegisteredDevices,
@@ -98,6 +100,22 @@ export default function AdminDevicesPage() {
     }
   }
 
+  const [calibrating, setCalibrating] = useState<string | null>(null)
+
+  const calibrate = async (device: RegisteredDevice) => {
+    setCalibrating(device.deviceId)
+    try {
+      if (!database) throw new Error("Firebase belum siap")
+      const cmdRef = ref(database, `deviceCommands/${device.deviceId}/batteryCalibrate`)
+      await set(cmdRef, { status: "pending", requestedAt: serverTimestamp() })
+      toast({ title: "Kalibrasi baterai", description: `Perintah dikirim ke ${device.deviceId}. Pastikan baterai penuh (LED biru TP4056).` })
+    } catch (error) {
+      toast({ title: "Gagal mengirim perintah kalibrasi", description: error instanceof Error ? error.message : undefined, variant: "destructive" })
+    } finally {
+      setCalibrating(null)
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -129,6 +147,9 @@ export default function AdminDevicesPage() {
                   <TableCell className="text-sm">{device.email}</TableCell>
                   <TableCell><Badge variant={device.disabled ? "destructive" : "default"}>{device.disabled ? "Dicabut" : "Aktif"}</Badge></TableCell>
                   <TableCell className="text-right space-x-1">
+                    <Button variant="outline" size="sm" onClick={() => void calibrate(device)} disabled={calibrating === device.deviceId} title="Kalibrasi baterai (pastikan baterai penuh)">
+                      <Battery className={`w-4 h-4 ${calibrating === device.deviceId ? "animate-pulse" : ""}`} />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => void rotate(device)} title="Rotasi kredensial"><KeyRound className="w-4 h-4" /></Button>
                     <Button variant="outline" size="sm" onClick={() => void toggleDisabled(device)}><Power className="w-4 h-4 mr-2" />{device.disabled ? "Aktifkan" : "Nonaktifkan"}</Button>
                     <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void revoke(device)} title="Cabut permanen"><Trash2 className="w-4 h-4" /></Button>

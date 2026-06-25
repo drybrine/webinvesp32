@@ -70,14 +70,15 @@ ZJfN84aY52ZkOOxZG8Yq6GBQadq269UEtQXPvwZXT/ZjZFqORuqBifgmWg==
 
 // --- Battery Monitoring (voltage divider R1=R2=100kΩ) ------------------------
 #define BATTERY_PIN          34
-#define BATTERY_MAX_MV     3800  // calibrated: full charge reads ~3785mV via divider
-#define BATTERY_MIN_MV     3200  // PCM cut-off ~3.2V (LP902040 mati di ~30% dengan MIN=3000)
-#define BATTERY_DIVIDER    2.0f  // (R1+R2)/R2 = 200k/100k
-#define BATTERY_SAMPLES      10  // averaging samples per read
-#define BATTERY_EMA_ALPHA  0.05f // EMA smoothing (lower = smoother, less WiFi sag noise)
-#define BATTERY_HYSTERESIS   2   // only update reported level if change >= 2%
-#define BATTERY_ADC_CHANNEL  ADC1_CHANNEL_6  // GPIO34 = ADC1_CH6
-#define BATTERY_ADC_ATTEN    ADC_ATTEN_DB_11 // 0-3.3V range
+#define BATTERY_DEFAULT_MAX_MV 3800  // fallback: full charge reads ~3785mV via divider
+#define BATTERY_MIN_MV         3200  // PCM cut-off ~3.2V (LP902040 mati di ~30% dengan MIN=3000)
+#define BATTERY_DIVIDER        2.0f  // (R1+R2)/R2 = 200k/100k
+#define BATTERY_SAMPLES         10  // averaging samples per read
+#define BATTERY_CALIB_SAMPLES   50  // samples used during calibration
+#define BATTERY_EMA_ALPHA     0.05f // EMA smoothing (lower = smoother, less WiFi sag noise)
+#define BATTERY_HYSTERESIS      2   // only update reported level if change >= 2%
+#define BATTERY_ADC_CHANNEL    ADC1_CHANNEL_6  // GPIO34 = ADC1_CH6
+#define BATTERY_ADC_ATTEN      ADC_ATTEN_DB_11 // 0-3.3V range
 // -----------------------------------------------------------------------------
 
 // --- Structs -----------------------------------------------------------------
@@ -220,6 +221,7 @@ void          reportOtaStatus(const char* phase, const String& version, int prog
 bool          otaPreconditionsMet();
 void          validateOtaBootSuccess(bool heartbeatOk);
 void          oledShowOtaProgress(const String& version, const char* phase, int progress);
+void          performBatteryCalibration();
 // -----------------------------------------------------------------------------
 
 
@@ -230,7 +232,13 @@ float batteryEma = -1.0f;       // persistent EMA state (-1 = uninitialized)
 int   lastReportedBattery = -1; // hysteresis: last sent value
 int   cachedBatteryLevel  = -1; // pre-sampled before WiFi activity
 esp_adc_cal_characteristics_t adcCal;  // ADC calibration characteristics
+Preferences batCalibPrefs;
+int batteryCalMaxMv = 0;        // cached calibrated max voltage (0 = use default)
 
+int getBatteryMaxMv() {
+  if (batteryCalMaxMv <= 0) batteryCalMaxMv = batCalibPrefs.getInt("maxMv", BATTERY_DEFAULT_MAX_MV);
+  return batteryCalMaxMv;
+}
 
 // Menginisialisasi ADC baterai dengan resolusi 12-bit dan attenuasi yang sesuai.
 // Kalibrasi memakai eFuse Vref/Two Point bila tersedia agar pembacaan mV lebih akurat.
@@ -266,7 +274,8 @@ void sampleBattery() {
     batteryEma = BATTERY_EMA_ALPHA * voltageMv + (1.0f - BATTERY_EMA_ALPHA) * batteryEma;
   }
 
-  int percent = (int)((batteryEma - BATTERY_MIN_MV) * 100.0f / (BATTERY_MAX_MV - BATTERY_MIN_MV));
+  int maxMv = getBatteryMaxMv();
+  int percent = (int)((batteryEma - BATTERY_MIN_MV) * 100.0f / (maxMv - BATTERY_MIN_MV));
   if (percent > 100) percent = 100;
   if (percent < 0) percent = 0;
 
@@ -285,6 +294,73 @@ void sampleBattery() {
 int readBatteryLevel() {
   if (cachedBatteryLevel < 0) sampleBattery(); // fallback if never sampled
   return cachedBatteryLevel;
+}
+
+// Kalibrasi ulang BATTERY_MAX_MV berdasarkan tegangan ADC saat ini.
+// Panggil saat baterai diketahui penuh (indikator biru TP4056 menyala).
+// Hasil disimpan di NVS Preferences agar persisten antar reboot.
+void performBatteryCalibration() {
+  Serial.println("Battery calibration started");
+
+  // Oversampling dengan jumlah sampel lebih banyak untuk akurasi
+  uint32_t adcSum = 0;
+  for (int i = 0; i < BATTERY_CALIB_SAMPLES; i++) {
+    adcSum += esp_adc_cal_raw_to_voltage(adc1_get_raw(BATTERY_ADC_CHANNEL), &adcCal);
+    delay(5);
+  }
+  float avgRawMv = adcSum / (float)BATTERY_CALIB_SAMPLES;
+  float realMv = avgRawMv * BATTERY_DIVIDER;
+
+  int newMaxMv = (int)(realMv + 0.5f);
+  if (newMaxMv < 3500 || newMaxMv > 4200) {
+    Serial.printf("Calibration rejected: %dmV diluar rentang (3500-4200)\n", newMaxMv);
+    return;
+  }
+
+  batCalibPrefs.putInt("maxMv", newMaxMv);
+  batteryCalMaxMv = newMaxMv;
+
+  // Reset EMA & hysteresis agar persentase langsung terhitung ulang
+  batteryEma = -1.0f;
+  lastReportedBattery = -1;
+  cachedBatteryLevel = -1;
+
+  Serial.printf("Battery calibration: maxMv=%d\n", newMaxMv);
+
+  // Lapor hasil ke Firebase
+  if (isWiFiConnected && firebaseIdToken.length() > 0) {
+    HTTPClient http;
+    String url = firebaseUrlWithAuth("/deviceCalibrationResult/" + String(deviceConfig.deviceId) + ".json");
+    if (url.length() > 0) {
+      WiFiClientSecure client;
+      client.setInsecure();
+      http.begin(client, url);
+      http.addHeader("Content-Type", "application/json");
+      http.setTimeout(5000);
+      DynamicJsonDocument doc(256);
+      doc["maxMv"] = newMaxMv;
+      doc["status"] = "done";
+      doc["previousMaxMv"] = (newMaxMv == batCalibPrefs.getInt("prevMaxMv", 0)) ? 0 : 0;
+      JsonObject ts = doc.createNestedObject("updatedAt");
+      ts[".sv"] = "timestamp";
+      String body; serializeJson(doc, body);
+      http.PUT(body);
+      http.end();
+    }
+
+    // Hapus perintah kalibrasi
+    String cmdUrl = firebaseUrlWithAuth("/deviceCommands/" + String(deviceConfig.deviceId) + "/batteryCalibrate.json");
+    if (cmdUrl.length() > 0) {
+      WiFiClientSecure cmdClient;
+      cmdClient.setInsecure();
+      HTTPClient cmdHttp;
+      cmdHttp.begin(cmdClient, cmdUrl);
+      cmdHttp.sendRequest("DELETE", "");
+      cmdHttp.end();
+    }
+  }
+
+  Serial.println("Battery calibration done");
 }
 
 
@@ -1306,6 +1382,13 @@ void handleScanModeStream() {
                       checkForOtaCommand(true);
                     }
                   }
+                  if (dataObj.containsKey("batteryCalibrate")) {
+                    JsonObject cal = dataObj["batteryCalibrate"];
+                    if (!cal.isNull() && cal["status"] == "pending") {
+                      Serial.println("Battery calibration requested via stream root");
+                      performBatteryCalibration();
+                    }
+                  }
                 }
               } else if (path == "/scanMode") {
                 String mode = "";
@@ -1323,6 +1406,12 @@ void handleScanModeStream() {
                 if (!doc["data"].isNull()) {
                   Serial.println("OTA: ota field updated in stream child, checking...");
                   checkForOtaCommand(true);
+                }
+              } else if (path == "/batteryCalibrate") {
+                JsonObject cal = doc["data"];
+                if (!cal.isNull() && cal["status"] == "pending") {
+                  Serial.println("Battery calibration requested via stream child");
+                  performBatteryCalibration();
                 }
               }
             }
@@ -1372,6 +1461,7 @@ bool sendHeartbeatToFirebase() {
   doc["uptime"]        = (millis() - bootTime) / 1000;
   doc["freeHeap"]      = ESP.getFreeHeap();
   doc["batteryLevel"]  = readBatteryLevel();
+  doc["calibratedMaxMv"] = getBatteryMaxMv();
   doc["scanCount"]     = scanCount;
   doc["rssi"]          = WiFi.RSSI();
   doc["version"]       = FIRMWARE_VERSION;
@@ -1891,6 +1981,7 @@ void setup() {
 
   EEPROM.begin(EEPROM_SIZE);
   authPreferences.begin("deviceAuth", false);
+  batCalibPrefs.begin("batCalib", false);
   otaPreferences.begin("deviceOta", false);
   loadWiFiConfig();
   loadDeviceConfig();
