@@ -9,7 +9,6 @@
 // =============================================================================
 
 #include <WiFi.h>
-#include <WebServer.h>
 #include <EEPROM.h>
 #include <Preferences.h>
 #include <HTTPClient.h>
@@ -20,6 +19,7 @@
 #include <esp_adc_cal.h>
 #include <driver/adc.h>
 #include <esp_ota_ops.h>
+#include "esp_task_wdt.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/sha256.h"
 #include "mbedtls/base64.h"
@@ -48,7 +48,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.4"
+#define FIRMWARE_VERSION   "6.5.5"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -119,7 +119,6 @@ struct ScanData {
 };
 // -----------------------------------------------------------------------------
 
-WebServer* server = nullptr;
 Preferences authPreferences;
 
 WiFiConfig   wifiConfig;
@@ -127,7 +126,6 @@ DeviceConfig deviceConfig;
 
 String        lastBarcode     = "";
 bool          isWiFiConnected = false;
-bool          isServerStarted = false;
 unsigned long lastScanTime    = 0;
 unsigned long lastHeartbeat   = 0;
 unsigned long scanCount       = 0;
@@ -141,8 +139,6 @@ unsigned long firebaseTokenExpiresAt = 0;
 unsigned long nextAuthRetryAt = 0;
 uint8_t       authRetryCount = 0;
 String        provisioningPin = "";
-uint8_t       provisioningFailures = 0;
-unsigned long provisioningLockedUntil = 0;
 String        lastFirebaseScanId = "";
 String        pendingLookupScanId = "";
 String        pendingLookupBarcode = "";
@@ -171,11 +167,6 @@ Preferences   otaPreferences;
 #define OTA_CHECK_INTERVAL_MS 300000UL
 
 // --- Function Declarations ---------------------------------------------------
-void          handleRoot();
-void          handleApiStatus();
-void          handleApiScan();
-void          handleReset();
-void          startWebServer();
 void          processBarcodeInput(String input);
 void          processProvisioningBarcode(String input);
 void          processInventoryBarcode(String barcode);
@@ -525,7 +516,7 @@ void oledShowInventoryFound(String name, int qty, int minStock) {
   }
 
   display.display();
-  delay(2000);
+  lastBarcodeOnOled = millis();
 }
 
 void oledShowProductLookupSearching(String barcode) {
@@ -849,7 +840,6 @@ void checkWiFiConnection() {
           Serial.println("WiFi reconnected");
           isWiFiConnected = true; isOnline = true;
           oledShowWiFiConnected(WiFi.localIP().toString());
-          if (!isServerStarted) startWebServer();
           lastHeartbeat = 0;
         }
       }
@@ -1106,7 +1096,7 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
 
   HTTPClient http;
   String url = firebaseUrlWithAuth(
-    "/inventory.json?orderBy=\"barcode\"&equalTo=\"" + barcode + "\""
+    "/inventory.json?orderBy=\"barcode\"&equalTo=\"" + urlEncode(barcode) + "\""
   );
   if (url.length() == 0) return item;
   WiFiClientSecure client;
@@ -1869,7 +1859,7 @@ void processBarcodeInput(String input) {
       wifiConfig.password[sizeof(wifiConfig.password) - 1] = '\0';
       wifiConfig.isValid = true;
       saveWiFiConfig();
-      if (connectToWiFi()) startWebServer();
+      connectToWiFi();
     }
     return;
   }
@@ -1883,167 +1873,6 @@ void processBarcodeInput(String input) {
 
 
 // =============================================================================
-//  WEB SERVER
-// =============================================================================
-// Menjalankan web server lokal ESP32 pada port 80.
-// Endpoint lokal hanya untuk status read-only dan reset ber-PIN.
-void startWebServer() {
-  if (isServerStarted || !isWiFiConnected) return;
-  server = new WebServer(80);
-  server->on("/",            HTTP_GET,     handleRoot);
-  server->on("/api/status",  HTTP_GET,     handleApiStatus);
-  server->on("/api/scan",    HTTP_GET,     handleApiScan);
-  server->on("/reset",       HTTP_POST,    handleReset);
-  const char* headerKeys[] = {"X-Provisioning-Pin"};
-  server->collectHeaders(headerKeys, 1);
-  server->begin();
-  isServerStarted = true;
-  Serial.println("Web server started: http://" + WiFi.localIP().toString());
-}
-
-bool requireProvisioningPin() {
-  if (!server) return false;
-  if ((long)(provisioningLockedUntil - millis()) > 0) {
-    server->send(429, "application/json", "{\"error\":\"Terlalu banyak percobaan. Coba lagi nanti\"}");
-    return false;
-  }
-  if (server->header("X-Provisioning-Pin") == provisioningPin) {
-    provisioningFailures = 0;
-    return true;
-  }
-  provisioningFailures++;
-  if (provisioningFailures >= 5) {
-    provisioningFailures = 0;
-    provisioningLockedUntil = millis() + 60000UL;
-  }
-  server->send(403, "application/json", "{\"error\":\"PIN provisioning tidak valid\"}");
-  return false;
-}
-
-// Mengirim halaman web sederhana untuk memantau scanner.
-// HTML dibuat sebagai string raw literal agar bisa langsung disajikan oleh WebServer ESP32.
-void handleRoot() {
-  if (!server) return;
-  String html = R"rawliteral(
-<!DOCTYPE html><html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESP32 Scanner v6.4.2</title>
-<style>
-  body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);color:#eee;margin:0;padding:20px;min-height:100vh}
-  .card{background:rgba(255,255,255,.08);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:20px;margin:12px 0}
-  h1{text-align:center;margin-bottom:4px;font-size:1.4em}
-  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.75em;font-weight:bold;margin-left:8px}
-  .online{background:#22c55e33;color:#4ade80;border:1px solid #4ade8055}
-  .offline{background:#ef444433;color:#f87171;border:1px solid #f8717155}
-  label{display:block;margin-bottom:4px;font-size:.85em;color:#94a3b8}
-  input{width:100%;padding:8px;border:1px solid rgba(255,255,255,.2);border-radius:8px;background:rgba(255,255,255,.05);color:#eee;font-size:.9em;margin-bottom:10px;box-sizing:border-box}
-  button,a.btn{background:rgba(99,102,241,.4);border:1px solid rgba(99,102,241,.6);color:#eee;padding:9px 16px;border-radius:8px;cursor:pointer;margin:4px;font-size:.85em;text-decoration:none;display:inline-block}
-  button:hover,a.btn:hover{background:rgba(99,102,241,.6)}
-  .barcode{font-family:monospace;font-size:1.3em;font-weight:bold;background:rgba(0,0,0,.4);padding:14px;border-radius:10px;text-align:center;word-break:break-all;min-height:48px}
-  table{width:100%;border-collapse:collapse;font-size:.8em}
-  th,td{padding:6px 8px;text-align:left;border-bottom:1px solid rgba(255,255,255,.1)}
-  th{color:#94a3b8}
-  .stat{display:inline-block;background:rgba(255,255,255,.06);border-radius:10px;padding:10px 16px;margin:4px;text-align:center}
-  .stat-n{font-size:1.6em;font-weight:bold;color:#60a5fa}
-  .stat-l{font-size:.75em;color:#94a3b8}
-</style></head><body>
-<h1>ESP32 Scanner <span class="badge )rawliteral";
-  html += isOnline ? "online\">ONLINE" : "offline\">OFFLINE";
-  html += R"rawliteral(</span></h1>
-<p style="text-align:center;color:#94a3b8;font-size:.8em">v6.4.2 - Inventory Mode - )rawliteral";
-  html += String(deviceConfig.deviceId);
-  html += R"rawliteral(</p>
-
-<div class="card">
-  <div>
-    <div class="stat"><div class="stat-n" id="sc">)rawliteral" + String(scanCount) + R"rawliteral(</div><div class="stat-l">Total Scans</div></div>
-    <div class="stat"><div class="stat-n">)rawliteral" + String(WiFi.RSSI()) + R"rawliteral( dBm</div><div class="stat-l">WiFi RSSI</div></div>
-    <div class="stat"><div class="stat-n">)rawliteral" + String(ESP.getFreeHeap()/1024) + R"rawliteral( KB</div><div class="stat-l">Free Heap</div></div>
-    <div class="stat"><div class="stat-n">)rawliteral" + String((millis()-bootTime)/1000) + R"rawliteral(s</div><div class="stat-l">Uptime</div></div>
-  </div>
-</div>
-
-<div class="card">
-  <label>Barcode Terakhir</label>
-  <div class="barcode" id="bc">)rawliteral";
-  html += lastBarcode.length() > 0 ? lastBarcode : "Belum ada scan";
-  html += R"rawliteral(</div>
-  <div style="margin-top:8px;font-size:.8em;color:#94a3b8">
-    WiFi: )rawliteral" + String(wifiConfig.ssid) + " | IP: " + WiFi.localIP().toString() + R"rawliteral(
-  </div>
-</div>
-
-<div class="card">
-  <label>Provisioning</label>
-  <p>Daftarkan Device ID ini di panel admin, lalu pindai barcode kredensial dengan scanner.</p>
-  <a class="btn" href="/api/status">Status JSON</a>
-</div>
-
-<script>
-setInterval(function(){
-  fetch('/api/scan').then(r=>r.json()).then(d=>{
-    if(d.barcode) document.getElementById('bc').textContent=d.barcode;
-    document.getElementById('sc').textContent=d.scanCount||'--';
-  });
-},5000);
-</script></body></html>)rawliteral";
-  server->send(200,"text/html",html);
-}
-
-// Mengirim status perangkat dalam format JSON untuk dashboard atau debugging lokal.
-// Data mencakup identitas perangkat, koneksi, barcode terakhir, uptime, heap, dan heartbeat.
-void handleApiStatus() {
-  if (!server) return;
-  DynamicJsonDocument doc(1024);
-  doc["deviceId"]      = deviceConfig.deviceId;
-  doc["version"]       = FIRMWARE_VERSION;
-  doc["wifiConnected"] = isWiFiConnected;
-  doc["isOnline"]      = isOnline;
-  doc["authenticated"] = firebaseIdToken.length() > 0 && !authRejected;
-  doc["ssid"]          = wifiConfig.ssid;
-  doc["ipAddress"]     = WiFi.localIP().toString();
-  doc["rssi"]          = WiFi.RSSI();
-  doc["lastBarcode"]   = lastBarcode;
-  doc["uptime"]        = (millis() - bootTime) / 1000;
-  doc["freeHeap"]      = ESP.getFreeHeap();
-  doc["scanCount"]     = scanCount;
-  doc["currentMode"]   = "inventory";
-  doc["lastHeartbeat"] = (millis() - lastHeartbeat) / 1000;
-  String res; serializeJson(doc, res);
-  server->send(200,"application/json",res);
-}
-
-// Mengirim informasi scan terakhir dalam format JSON read-only.
-void handleApiScan() {
-  if (!server) return;
-  DynamicJsonDocument doc(512);
-  doc["status"]      = lastBarcode.length() > 0 ? "success" : "no_scan";
-  doc["barcode"]     = lastBarcode;
-  doc["scanCount"]   = scanCount;
-  doc["currentMode"] = "inventory";
-  doc["isOnline"]    = isOnline;
-  String res; serializeJson(doc, res);
-  server->send(200,"application/json",res);
-}
-
-// Mereset konfigurasi WiFi dan perangkat dari EEPROM, lalu restart ESP32.
-// Endpoint ini dipakai saat perangkat perlu dikonfigurasi ulang dari awal.
-void handleReset() {
-  if (!server) return;
-  if (!requireProvisioningPin()) return;
-  server->send(200,"text/plain","Resetting...");
-  memset(&wifiConfig,   0, sizeof(wifiConfig));
-  memset(&deviceConfig, 0, sizeof(deviceConfig));
-  wifiConfig.isValid = false; deviceConfig.isConfigured = false;
-  EEPROM.put(WIFI_CONFIG_ADDR,   wifiConfig);
-  EEPROM.put(DEVICE_CONFIG_ADDR, deviceConfig);
-  EEPROM.commit();
-  clearFirebaseAuth();
-  delay(1000);
-  ESP.restart();
-}
-
-// =============================================================================
 //  SETUP & LOOP
 // =============================================================================
 // Fungsi setup Arduino yang berjalan sekali saat perangkat boot.
@@ -2053,6 +1882,10 @@ void setup() {
   Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
   delay(100);  // minimal stabilize
   bootTime = millis();
+
+  esp_task_wdt_config_t wdtConfig = { .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true };
+  esp_task_wdt_init(&wdtConfig);
+  esp_task_wdt_add(NULL);
 
   initOLED();
   oledShowBoot();
@@ -2084,8 +1917,6 @@ void setup() {
 
   if (wifiConfig.isValid) {
     if (connectToWiFi()) {
-      startWebServer();
-      Serial.println("Web: http://" + WiFi.localIP().toString());
       ensureFirebaseAuth();
     } else {
       oledShowNoWiFi();
@@ -2103,10 +1934,8 @@ void setup() {
 }
 
 // Fungsi loop utama Arduino yang berjalan terus-menerus.
-// Menangani web server, reconnect WiFi, input barcode, heartbeat Firebase, dan refresh OLED.
+// Menangani reconnect WiFi, input barcode, heartbeat Firebase, dan refresh OLED.
 void loop() {
-  if (isServerStarted && server) server->handleClient();
-
   checkWiFiConnection();
 
   static String serial2Buffer = "";
@@ -2160,8 +1989,14 @@ void loop() {
       bool hbOk = sendHeartbeatToFirebase();
       // First successful heartbeat after an OTA reboot confirms the new image.
       validateOtaBootSuccess(hbOk);
+      if (hbOk) {
+        lastHeartbeat = millis();
+      } else {
+        lastHeartbeat = millis() - 4000; // retry in ~1 detik
+      }
+    } else {
+      lastHeartbeat = millis();
     }
-    lastHeartbeat = millis();
   }
 
   checkDeviceLookupStatus();
