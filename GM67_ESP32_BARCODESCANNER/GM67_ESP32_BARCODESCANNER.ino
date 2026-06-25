@@ -19,7 +19,6 @@
 #include <esp_adc_cal.h>
 #include <driver/adc.h>
 #include <esp_ota_ops.h>
-#include "esp_task_wdt.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/sha256.h"
 #include "mbedtls/base64.h"
@@ -1882,10 +1881,6 @@ void setup() {
   Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
   delay(100);  // minimal stabilize
   bootTime = millis();
-
-  esp_task_wdt_config_t wdtConfig = { .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true };
-  esp_task_wdt_init(&wdtConfig);
-  esp_task_wdt_add(NULL);
 
   initOLED();
   oledShowBoot();
