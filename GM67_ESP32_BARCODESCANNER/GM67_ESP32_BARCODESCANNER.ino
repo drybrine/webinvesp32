@@ -47,7 +47,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.7"
+#define FIRMWARE_VERSION   "6.5.8"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -1660,6 +1660,7 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
       break;
     }
     written += n;
+    delay(1); // yield/feed watchdog saat stream lancar terus
     int pct = (int)(written * 100 / total);
     if (pct != lastPct && pct % 5 == 0) {
       lastPct = pct;
