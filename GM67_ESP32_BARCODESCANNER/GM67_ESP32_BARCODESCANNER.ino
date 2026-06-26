@@ -47,7 +47,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.8"
+#define FIRMWARE_VERSION   "6.5.9"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -1586,7 +1586,7 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
   otaInProgress = true;
   // Bebaskan TLS/socket SSE sebelum download OTA; ESP32 heap ketat saat 2 HTTPS aktif.
   stopScanModeStream();
-  reportOtaStatus("downloading", version, 0, "");
+  delay(500); // beri waktu stack WiFi/TLS melepas buffer lama sebelum HTTPS OTA
   oledShowOtaProgress(version, "Unduh", 0);
 
   // Decode signature dari base64 (DER ECDSA, panjang ~70-72 byte).
