@@ -47,7 +47,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.6"
+#define FIRMWARE_VERSION   "6.5.7"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -162,6 +162,7 @@ String        otaActiveCommandId = "";   // commandId currently being attempted
 String        otaLastFailedId    = "";   // commandId that exhausted retries
 uint8_t       otaRetryCount      = 0;
 bool          otaInProgress      = false;
+bool          otaCheckRequested  = false;
 Preferences   otaPreferences;
 #define OTA_CHECK_INTERVAL_MS 300000UL
 
@@ -1378,8 +1379,8 @@ void handleScanModeStream() {
                   }
                   if (dataObj.containsKey("ota")) {
                     if (!dataObj["ota"].isNull()) {
-                      Serial.println("OTA: ota field updated in stream root, checking...");
-                      checkForOtaCommand(true);
+                      Serial.println("OTA: ota field updated in stream root, queued...");
+                      otaCheckRequested = true;
                     }
                   }
                   if (dataObj.containsKey("batteryCalibrate")) {
@@ -1404,8 +1405,8 @@ void handleScanModeStream() {
                 }
               } else if (path == "/ota") {
                 if (!doc["data"].isNull()) {
-                  Serial.println("OTA: ota field updated in stream child, checking...");
-                  checkForOtaCommand(true);
+                  Serial.println("OTA: ota field updated in stream child, queued...");
+                  otaCheckRequested = true;
                 }
               } else if (path == "/batteryCalibrate") {
                 JsonObject cal = doc["data"];
@@ -1583,6 +1584,8 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
                       size_t expectedSize, const String& version) {
   Serial.println("OTA: mulai " + binaryUrl);
   otaInProgress = true;
+  // Bebaskan TLS/socket SSE sebelum download OTA; ESP32 heap ketat saat 2 HTTPS aktif.
+  stopScanModeStream();
   reportOtaStatus("downloading", version, 0, "");
   oledShowOtaProgress(version, "Unduh", 0);
 
@@ -1660,7 +1663,6 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
     int pct = (int)(written * 100 / total);
     if (pct != lastPct && pct % 5 == 0) {
       lastPct = pct;
-      reportOtaStatus("downloading", version, pct, "");
       oledShowOtaProgress(version, "Unduh", pct);
     }
   }
@@ -2082,6 +2084,11 @@ void loop() {
 
   checkDeviceLookupStatus();
   handleScanModeStream();
+
+  if (otaCheckRequested) {
+    otaCheckRequested = false;
+    checkForOtaCommand(true);
+  }
 
   // Poll for a pending OTA command; gated internally on idle + battery.
   checkForOtaCommand(false);
