@@ -67,6 +67,7 @@
         "batteryLevel": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
         "rssi": { ".validate": "newData.isNumber() && newData.val() >= -120 && newData.val() <= 0" },
         "version": { ".validate": "newData.isString()" },
+        "calibratedMaxMv": { ".validate": "newData.isNumber() && newData.val() >= 3500 && newData.val() <= 4200" },
         "scanCount": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "freeHeap": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "currentMode": { ".validate": "newData.val() == 'inventory'" },
@@ -98,7 +99,22 @@
         ".write": false,
         "scanMode": {
           ".write": "auth != null && auth.token.disabled != true && (auth.token.role == 'admin' || auth.token.role == 'operator') && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false"
+        },
+        "batteryCalibrate": {
+          ".write": "auth != null && auth.token.disabled != true && (auth.token.role == 'admin' || auth.token.role == 'operator') && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false",
+          ".validate": "newData.val() == null || (newData.hasChildren(['status', 'requestedAt']) && newData.child('status').val() == 'pending' && newData.child('requestedAt').isNumber())"
         }
+      }
+    },
+    "deviceCalibrationResult": {
+      "$deviceId": {
+        ".read": "auth != null && auth.token.disabled != true && ((auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false) || ((auth.token.role == 'admin' || auth.token.role == 'operator' || auth.token.role == 'viewer') && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('role').val() == auth.token.role && root.child('users').child(auth.uid).child('disabled').val() == false))",
+        ".write": "auth != null && auth.token.disabled != true && auth.token.device == true && auth.token.deviceId == $deviceId && root.child('deviceAuth').child(auth.uid).child('deviceId').val() == $deviceId && root.child('deviceAuth').child(auth.uid).child('disabled').val() == false && newData.exists()",
+        ".validate": "newData.hasChildren(['status', 'maxMv', 'updatedAt']) && newData.child('status').val() == 'done' && newData.child('maxMv').isNumber() && newData.child('maxMv').val() >= 3500 && newData.child('maxMv').val() <= 4200 && newData.child('updatedAt').isNumber()",
+        "status": { ".validate": "newData.val() == 'done'" },
+        "maxMv": { ".validate": "newData.isNumber() && newData.val() >= 3500 && newData.val() <= 4200" },
+        "updatedAt": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
       }
     },
     "deviceOtaStatus": {
@@ -140,4 +156,3 @@
     }
   }
 }
-

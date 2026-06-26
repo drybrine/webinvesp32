@@ -47,7 +47,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.9"
+#define FIRMWARE_VERSION   "6.5.10"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -341,7 +341,6 @@ void performBatteryCalibration() {
       DynamicJsonDocument doc(256);
       doc["maxMv"] = newMaxMv;
       doc["status"] = "done";
-      doc["previousMaxMv"] = (newMaxMv == batCalibPrefs.getInt("prevMaxMv", 0)) ? 0 : 0;
       JsonObject ts = doc.createNestedObject("updatedAt");
       ts[".sv"] = "timestamp";
       String body; serializeJson(doc, body);
@@ -1462,7 +1461,6 @@ bool sendHeartbeatToFirebase() {
   doc["uptime"]        = (millis() - bootTime) / 1000;
   doc["freeHeap"]      = ESP.getFreeHeap();
   doc["batteryLevel"]  = readBatteryLevel();
-  doc["calibratedMaxMv"] = getBatteryMaxMv();
   doc["scanCount"]     = scanCount;
   doc["rssi"]          = WiFi.RSSI();
   doc["version"]       = FIRMWARE_VERSION;
