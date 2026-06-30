@@ -518,7 +518,8 @@ export const firebaseHelpers = {
     }
   },
 
-  // Update scan mode (web → device command path, ESP32 polls this)
+  // Legacy command helper. Current firmware controls scan mode from physical buttons
+  // and reports the active mode via /devices/{deviceId}/scanMode.
   updateDeviceScanMode: async (deviceId: string, mode: string) => {
     if (!database) { console.error("Firebase not available"); return }
     try {

@@ -24,10 +24,10 @@ export const ESP32_CONFIG = {
   DEVICE_ID_PATTERN: /^ESP32-[0-9A-Fa-f]{8}$/,
   
   // Version from ESP32 .ino file
-  VERSION: "6.4.2",
+  VERSION: "6.5.14",
   
   // Heartbeat interval from ESP32 .ino
-  HEARTBEAT_INTERVAL: 8000,
+  HEARTBEAT_INTERVAL: 5000,
   
   // WiFi check interval from ESP32 .ino
   WIFI_CHECK_INTERVAL: 10000,

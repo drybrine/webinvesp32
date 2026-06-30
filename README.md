@@ -2,7 +2,9 @@
 
 Sistem Manajemen Inventory Real-time berbasis Next.js + Firebase dengan integrasi ESP32 Barcode Scanner dan prediksi stok menggunakan Simple Linear Regression.
 
-Updated: 2026-06-21
+Updated: 2026-06-30
+
+> Agent handoff: sebelum agent lain mengubah repo ini, baca `AGENTS.md` dulu. File itu adalah source-of-truth arsitektur, batasan schema, workflow, dan perintah verifikasi.
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.1.0-blue)](https://reactjs.org/)
@@ -62,10 +64,10 @@ Buka http://localhost:3000
 
 ### Device Management (ESP32)
 - Setiap scanner memakai akun Firebase Auth unik yang dipetakan ke satu `deviceId`
-- Firmware 6.4.1 menyimpan refresh token saja di Preferences/NVS dan memperbarui ID token otomatis
+- Firmware 6.5.14 menyimpan refresh token saja di Preferences/NVS dan memperbarui ID token otomatis
 - **OTA firmware update** — admin dispatch versi dari panel, perangkat HTTP-pull, verifikasi SHA-256 + ECDSA P-256, flash + auto-rollback (lihat bagian OTA Firmware Update)
 - Monitoring realtime via Firebase `onValue` listener (bukan polling)
-- Deteksi online/offline dalam ~16 detik (threshold 15s, re-evaluasi tiap 3s)
+- Deteksi online/offline client-side: offline bila `lastSeen` >15 detik, re-evaluasi tiap 1 detik
 - Battery level monitoring (voltage divider GPIO34, `esp_adc_cal` eFuse Vref, EMA + hysteresis ±2%)
 - Battery icon + WiFi signal icon di OLED display
 - Notifikasi baterai rendah (<20%) otomatis
@@ -86,7 +88,7 @@ Buka http://localhost:3000
 ```
 ESP32 GM67 Scanner
     │
-    ├── PUT /devices/{id}     (heartbeat tiap 8s + batteryLevel)
+    ├── PUT /devices/{id}     (heartbeat tiap ~5s + batteryLevel/rssi/scanMode)
     ├── POST /scans/{id}      (barcode scan event)
     └── GET /inventory        (lookup produk by barcode)
     │
@@ -100,7 +102,7 @@ Firebase Realtime Database
     ├── /auditLogs/{id}       (audit immutable, admin-only)
     ├── /scans/{id}           (barcode, deviceId, timestamp, processed)
     ├── /transactions/{id}    (type, qty, operator, reason, timestamp)
-    ├── /deviceCommands/{id}  (perintah OTA: commandId, version, binaryUrl, sha256, signature, size)
+    ├── /deviceCommands/{id}  (perintah OTA/kalibrasi; scanMode legacy ignored by firmware)
     ├── /deviceOtaStatus/{id} (fase OTA: downloading/verifying/flashing/success/failed/deferred/rollback)
     └── /analytics            (totalScans, totalItems, lowStockAlerts)
     │
@@ -177,15 +179,16 @@ GND           ←    GND                GND          ← GND
 
 ### Firmware
 - File: `GM67_ESP32_BARCODESCANNER/GM67_ESP32_BARCODESCANNER.ino`
-- Version: 6.4.1
+- Version: 6.5.14
 - Mode: Inventory only (single mode)
-- Heartbeat: tiap 8 detik ke Firebase `/devices/{id}`
+- Heartbeat: tiap ~5 detik ke Firebase `/devices/{id}` berisi `batteryLevel`, `rssi`, dan `scanMode`
 - Battery: `esp_adc_cal` eFuse Vref + EMA(α=0.05) + hysteresis ±2%, MIN=3200mV, MAX=3800mV
 - OLED: battery icon (4-bar) + WiFi signal icon (4-bar RSSI)
 - Boot time: ~3 detik (`WiFi.persistent(false)`, delay minimal)
 - Libraries: WiFi, WebServer, EEPROM, HTTPClient, ArduinoJson v6, Wire, Adafruit_GFX, Adafruit_SSD1306, esp_adc_cal, driver/adc
 - Auth: Firebase Identity Toolkit; refresh token saja disimpan di Preferences/NVS
 - Provisioning: scan QR WiFi, daftarkan `deviceId` di panel admin, lalu scan PDF417 kredensial satu kali
+- Scan mode: dikontrol dari tombol fisik UP/OK/DOWN; firmware melaporkan `Manual`, `Auto IN`, atau `Auto OUT` via heartbeat. Mode Auto IN/OUT bekerja standalone tanpa dashboard terbuka.
 - OTA: HTTP-pull dari `/deviceCommands/{deviceId}/ota` (poll tiap 8s), `Update.h` + `esp_ota_ops.h`, verifikasi SHA-256 + ECDSA P-256 (public key tertanam), gate baterai ≥30% + idle, auto-rollback bila boot gagal 3x, status ke `/deviceOtaStatus/{deviceId}`
 
 ## Prediksi Stok
@@ -341,11 +344,11 @@ Semua `/api/admin/*` berjalan sebagai Vercel Functions, mewajibkan Firebase ID t
 2. Set `FIREBASE_SERVICE_ACCOUNT` pada Vercel untuk Preview dan Production, lalu deploy aplikasi.
 3. Deploy `firebase-rules-migration.json` dan jalankan bootstrap admin.
 4. Buat akun pengguna dan scanner dari panel admin; operasi admin dicatat ke `/auditLogs` oleh Vercel Functions.
-5. Flash firmware 6.4.1, scan QR WiFi, daftarkan `deviceId` dari OLED, lalu scan PDF417 kredensial yang ditampilkan panel admin.
+5. Flash firmware 6.5.14, scan QR WiFi, daftarkan `deviceId` dari OLED, lalu scan PDF417 kredensial yang ditampilkan panel admin.
 6. Verifikasi login, heartbeat, scan, role, dan audit administrasi.
 7. Jalankan workflow `Deploy Strict Firebase Rules` setelah approval environment.
 
-`firebase.json` sengaja menunjuk rules migrasi. Cutover strict memakai `firebase.strict.json` sehingga request anonim dan firmware lama baru ditolak setelah scanner 6.4.1 diverifikasi. Karena Firebase Spark tidak mendukung blocking/database-trigger Functions, tidak ada self-registration UI dan akun tanpa profil + custom claim yang sah tidak mendapat akses; audit otomatis hanya dijamin untuk operasi admin melalui Vercel Functions.
+`firebase.json` sengaja menunjuk rules migrasi. Cutover strict memakai `firebase.strict.json` sehingga request anonim dan firmware lama baru ditolak setelah scanner 6.5.14 diverifikasi. Karena Firebase Spark tidak mendukung blocking/database-trigger Functions, tidak ada self-registration UI dan akun tanpa profil + custom claim yang sah tidak mendapat akses; audit otomatis hanya dijamin untuk operasi admin melalui Vercel Functions.
 
 ## License
 

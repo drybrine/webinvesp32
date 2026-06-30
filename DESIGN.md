@@ -12,7 +12,7 @@ StokManager adalah sistem manajemen inventory untuk AHASS (Honda Authorized Serv
 - **Backend**: Firebase Realtime Database (sumber kebenaran tunggal)
 - **Frontend**: Next.js 16 (App Router, Turbopack) di Vercel
 - **ML**: Simple Linear Regression + EMA Smoothing untuk prediksi stockout
-- **Anomaly Detection**: IQR + gap detection untuk pola transaksi tidak normal
+- **Prediksi**: output regresi/forecast untuk scope skripsi; anomaly metadata dari API tidak ditampilkan di UI
 - **Barcode**: PDF417 (2D) di-render via bwip-js, dapat di-scan GM67
 
 ---
@@ -23,7 +23,7 @@ StokManager adalah sistem manajemen inventory untuk AHASS (Honda Authorized Serv
 ┌─────────────────────────────────────────────────────────┐
 │                     ESP32 GM67 Scanner                   │
 │  GM67 (UART) → ESP32 → Firebase RTDB                    │
-│  Heartbeat tiap 8s: /devices/{id}                       │
+│  Heartbeat tiap ~5s: /devices/{id}                      │
 │  Scan event: POST /scans/{id}                           │
 │  Lookup: GET /inventory/{barcode}                       │
 └────────────────────────┬────────────────────────────────┘
@@ -88,7 +88,7 @@ GND           ←   GND             GND          ← GND
 ## 4. Firmware
 
 **File**: `GM67_ESP32_BARCODESCANNER/GM67_ESP32_BARCODESCANNER.ino`  
-**Version**: 6.2
+**Version**: 6.5.14
 
 ### Flow Utama
 
@@ -101,10 +101,11 @@ Boot (~3 detik)
   → loop()
 
 loop() setiap iterasi:
-  → handleClient (WebServer)
   → checkWiFiConnection
   → baca Serial2 (GM67) → processBarcodeInput
-  → setiap 8s: sampleBattery → sendHeartbeatToFirebase
+  → setiap ~5s: sampleBattery → sendHeartbeatToFirebase
+  → baca stream deviceCommands/{deviceId} untuk OTA/kalibrasi
+  → setiap 8s atau saat stream memberi sinyal: poll deviceCommands/{deviceId}/ota
   → oledUpdateIdle
 ```
 
@@ -121,7 +122,7 @@ GM67 scan barcode
 
 ```
 ┌────────────────────────────────┐
-│ SCANNER v6.1          [▓▓▓░]  │  title + battery icon
+│ SCANNER v6.5.14       [▓▓▓░]  │  title + battery icon
 │ [ONLINE]               98%    │  status + battery %
 │────────────────────────────────│
 │ WiFi: MySSID                  │  ssid (max 14 char)
@@ -166,7 +167,8 @@ GM67 scan barcode
       "lastSeen": 1716123456789,
       "uptime": 3600,
       "scanCount": 42,
-      "version": "6.2"
+      "version": "6.5.14",
+      "scanMode": "Manual"
     }
   },
   "scans": {
@@ -190,6 +192,25 @@ GM67 scan barcode
       "timestamp": 1716123456789
     }
   },
+  "deviceCommands": {
+    "{deviceId}": {
+      "ota": {
+        "commandId": "cmd-123",
+        "version": "6.5.14",
+        "binaryUrl": "https://github.com/.../firmware.bin",
+        "sha256": "...",
+        "signature": "...",
+        "size": 1048576
+      }
+    }
+  },
+  "deviceOtaStatus": {
+    "{deviceId}": {
+      "phase": "success",
+      "version": "6.5.14",
+      "updatedAt": 1716123456789
+    }
+  },
   "analytics": {
     "totalScans": 150,
     "totalItems": 20,
@@ -200,9 +221,7 @@ GM67 scan barcode
 
 ### Realtime Strategy
 
-Semua data di-subscribe via `onValue` listener (bukan polling). Device online/offline dideteksi client-side: threshold 15 detik, re-evaluasi tiap 3 detik. Transaksi di-fetch dengan `limitToLast(5000)` untuk performa (dashboard pakai 500 untuk prediksi batch).
-
-**Important**: `useFirebaseTransactions()` now accepts `null` as limit to fetch ALL transactions (no `limitToLast`). For prediction accuracy, always pass `null` to get the full history rather than a subset.
+Semua data web di-subscribe via `onValue` listener (bukan polling). Device online/offline dideteksi client-side: offline bila `lastSeen` >15 detik, re-evaluasi tiap 1 detik. `scanMode` di dashboard berasal dari heartbeat perangkat (`Manual`, `Auto IN`, `Auto OUT`); mode dikontrol dari tombol fisik alat. Untuk prediksi akurat, transaksi harus di-fetch penuh dengan `useFirebaseTransactions(null)`.
 
 ### Atomic Stock Update (anti race condition)
 
@@ -266,11 +285,19 @@ Pendekatan ini menghilangkan race condition read-modify-write: scanner, dashboar
 
 ## 7. API Routes
 
-Hanya satu endpoint API di web app: `/api/predict` (Vercel Python function di `api/predict.py`, bukan Next.js route). Semua helper endpoint lama (`barcode-scan`, `check-device-status`, `current-page`, `devices-status`, `firebase-init`, `firebase-rules`, `heartbeat`) sudah dihapus — ESP32 push langsung ke Firebase, dan device-status sweeper berjalan di `functions/index.js` (Firebase Cloud Function, scheduled setiap 30 detik).
+API web sengaja terbatas: `/api/predict` adalah Vercel Python function di `api/predict.py` (bukan Next.js route), sedangkan `/api/admin/*` adalah Next.js Route Handlers untuk administrasi user/device/OTA memakai Firebase Admin SDK. ESP32 tidak memanggil endpoint ini; scanner tetap push langsung ke Firebase. Tidak ada Firebase Cloud Functions, RTDB trigger, atau device-status sweeper.
 
 | Method | Path | Fungsi |
 |--------|------|--------|
 | POST | `/api/predict` | Python Simple Linear Regression prediction — single item atau batch (`mode: 'batch'`). Handler Vercel Python di `api/predict.py`; tidak ada `app/api/predict/route.ts`. |
+| GET/POST/PATCH | `/api/admin/users` | List, buat, dan ubah pengguna internal. |
+| POST | `/api/admin/users/reset-password` | Buat tautan reset kata sandi pengguna. |
+| GET/POST/PATCH/DELETE | `/api/admin/devices` | List, daftar, ubah status, dan cabut scanner. |
+| POST | `/api/admin/devices/rotate` | Rotasi kredensial scanner. |
+| GET/POST/DELETE | `/api/admin/devices/ota` | List status OTA, dispatch perintah OTA, batalkan perintah. |
+| POST | `/api/admin/firmware/build` | Trigger GitHub Actions build firmware. |
+| GET | `/api/admin/firmware/releases` | List release firmware signed yang valid. |
+| GET | `/api/admin/firmware/builds` | History workflow run build. |
 
 ---
 
@@ -310,7 +337,7 @@ Training langsung pada **level stok** membuat forecast simple linear regression 
 POST /api/predict
 Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
 Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
-Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, anomalies, source }
+Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, source }
 Source: `lr-consumption-py` atau `lr-consumption-batch`
 ```
 
@@ -333,66 +360,9 @@ Dashboard memanggil `/api/predict` dengan `mode: 'batch'` untuk mendapatkan top-
 
 ---
 
-## 9. Anomaly Detection
+## 9. Scope Notes
 
-### Metode
-
-Deteksi pola tidak normal pada data historis transaksi, dikembalikan di field `anomalies` dari endpoint `/api/predict`.
-
-### IQR-based Spike Detection
-
-```
-1. Hitung Q1, Q3, IQR dari daily consumption/restock series
-2. Upper fence = Q3 + 1.5 × IQR
-3. Hari dengan nilai > upper fence → anomali spike
-4. Severity:
-   - high   → nilai > 3× mean
-   - medium → nilai > 2× mean
-   - low    → nilai > upper fence tapi ≤ 2× mean
-```
-
-**Tipe spike:**
-- `spike_consumption` — lonjakan konsumsi tidak wajar (mungkin salah input atau penjualan besar)
-- `spike_restock` — restock tidak wajar (mungkin koreksi stok atau salah input)
-
-### Gap Detection
-
-```
-Iterasi semua hari dalam series:
-  jika gap antar transaksi > 14 hari → anomali gap
-  Severity: high (scanner mungkin mati, data tidak lengkap)
-```
-
-### Output Format
-
-```json
-{
-  "anomalies": [
-    {
-      "timestamp": "2025-03-15",
-      "type": "spike_consumption",
-      "value": 25,
-      "expected": 5.2,
-      "severity": "high",
-      "description": "Consumption 25 significantly above expected 5.2"
-    },
-    {
-      "timestamp": "2025-04-01",
-      "type": "gap",
-      "value": 18,
-      "expected": 14,
-      "severity": "high",
-      "description": "No transactions for 18 days (threshold: 14)"
-    }
-  ]
-}
-```
-
-### Visualisasi
-
-Di halaman `/prediksi`, anomali ditampilkan sebagai:
-- **Titik merah di chart** — warna sesuai severity (red/orange/yellow)
-- **Tabel anomali** — deskripsi, tipe, nilai, severity
+Anomaly detection tidak ditampilkan di `/prediksi` karena di luar scope skripsi. Jika backend pernah mengembalikan metadata anomaly, frontend mengabaikannya sampai scope berubah.
 
 ---
 
@@ -432,13 +402,12 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 |-------|-------|
 | Frontend | Next.js 16 (Turbopack), React 19, TypeScript 5.8 |
 | Styling | Tailwind CSS 3.4, shadcn/ui, Radix UI |
-| Backend | Firebase Realtime Database, Next.js API Routes |
+| Backend | Firebase Realtime Database, Vercel Node.js Functions, Vercel Python Function |
 | ML | Pure Python Simple Linear Regression + EMA, TypeScript fallback |
-| Anomaly | IQR spike detection + gap detection (Python) |
 | Barcode | bwip-js (PDF417 2D render ke canvas) |
 | Hardware | ESP32 + GM67 + OLED SSD1306 + TP4056 + Li-Po LP902040 |
 | Deploy | Vercel |
 
 ---
 
-*Updated: 2026-06-12*
+*Updated: 2026-06-30*
