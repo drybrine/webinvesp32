@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { ref, onValue, DataSnapshot, Unsubscribe } from "firebase/database"
-import { database, isFirebaseConfigured, waitForFirebaseReady, firebaseHelpers } from "@/lib/firebase"
+import { database, isFirebaseConfigured, waitForFirebaseReady } from "@/lib/firebase"
 import { toast } from "@/hooks/use-toast"
 
 import { useAuth } from "@/components/auth-provider"
@@ -18,14 +18,13 @@ export interface DeviceStatus {
   name?: string
   batteryLevel?: number
   lastHeartbeat?: any
+  scanMode?: string
 }
 
 // Device dianggap offline jika timestamp server terakhir lebih dari threshold ini (ms)
 const OFFLINE_THRESHOLD_MS = 15000
 // Interval re-evaluasi status client-side (ms) — makin kecil makin responsif
 const STATUS_RECHECK_INTERVAL_MS = 1000
-// Jumlah tick berturut-turut device offline sebelum scanMode direset (debounce)
-const OFFLINE_RESET_DEBOUNCE_TICKS = 3
 
 interface RawDevice {
   status?: string
@@ -37,6 +36,7 @@ interface RawDevice {
   version?: string
   name?: string
   batteryLevel?: number
+  scanMode?: string
 }
 
 // `now` di sini WAJIB waktu-server (Date.now() + serverTimeOffset), bukan jam PC mentah.
@@ -67,10 +67,6 @@ export function useRealtimeDeviceStatus() {
   // Snapshot device terakhir, agar tick interval & update offset bisa re-evaluasi
   // tanpa menunggu event onValue berikutnya.
   const latestRawRef = useRef<Record<string, RawDevice>>({})
-  // Hitungan tick berturut-turut device offline, untuk debounce reset scanMode.
-  // Hanya di-reset setelah OFFLINE_RESET_DEBOUNCE_TICKS tick agar mode tidak
-  // berubah karena delay heartbeat sesaat.
-  const offlineCountsRef = useRef<Map<string, number>>(new Map())
 
   const recomputeDevices = useCallback((raw: Record<string, RawDevice>) => {
     latestRawRef.current = raw
@@ -88,6 +84,7 @@ export function useRealtimeDeviceStatus() {
         version: d.version,
         name: d.name || deviceId,
         batteryLevel: d.batteryLevel,
+        scanMode: d.scanMode,
       }
     })
 
@@ -108,29 +105,6 @@ export function useRealtimeDeviceStatus() {
         description: `${change.deviceId} ${isNowOnline ? "online" : "offline"}`,
         variant: isNowOnline ? "default" : "destructive",
       })
-    })
-
-    // Debounce reset scanMode: hanya reset kalau device offline
-    // selama OFFLINE_RESET_DEBOUNCE_TICKS tick berturut-turut.
-    list.forEach((device) => {
-      const counts = offlineCountsRef.current
-      if (device.status === "online") {
-        counts.set(device.deviceId, 0)
-      } else {
-        const count = (counts.get(device.deviceId) || 0) + 1
-        counts.set(device.deviceId, count)
-        if (count === OFFLINE_RESET_DEBOUNCE_TICKS) {
-          try {
-            if (typeof window !== "undefined") {
-              localStorage.setItem("scanDefaultMode", "ask")
-              window.dispatchEvent(new CustomEvent("localScanModeChange", { detail: "ask" }))
-            }
-            firebaseHelpers.updateDeviceScanMode(device.deviceId, "Manual").catch(() => {})
-          } catch (e) {
-            console.error("Failed to reset scan mode on offline transition:", e)
-          }
-        }
-      }
     })
 
     setDevices(list)

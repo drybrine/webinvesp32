@@ -32,7 +32,6 @@ import {
   Database
 } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
-import { useScanMode } from "@/hooks/use-scan-mode"
 import { canWrite } from "@/types/security"
 
 interface UnifiedQuickActionPopupProps {
@@ -72,7 +71,6 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
   const writable = canWrite(role)
   const { items, addItem } = useFirebaseInventory()
   const { toast } = useToast()
-  const { scanMode } = useScanMode()
   const [product, setProduct] = useState<InventoryItem | null>(null)
   const [quickActionAmount, setQuickActionAmount] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
@@ -124,20 +122,6 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
     setLookupStatus("idle")
 
     if (foundProduct) return
-
-    // If barcode is unknown and we are in "out" mode, abort lookup and set status
-    if (scanMode === "out") {
-      setLookupStatus("not-found")
-      if (scanId && deviceId) {
-        firebaseHelpers.updateDeviceLookupStatus(deviceId, {
-          scanId,
-          barcode,
-          status: "not_found",
-          message: "Gagal: Barang belum terdaftar",
-        }).catch((e: unknown) => console.error("[lookup] write not_found failed:", e))
-      }
-      return
-    }
 
     const controller = new AbortController()
     setNewProduct(createNewProductDraft(barcode))
@@ -207,7 +191,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
       })
 
     return () => controller.abort()
-  }, [barcode, deviceId, items, isOpen, scanId, scanMode])
+  }, [barcode, deviceId, items, isOpen, scanId])
 
   // Handle body scroll prevention
   useEffect(() => {
@@ -548,74 +532,6 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
     )
   }
 
-  const renderUnknownProductWarning = () => (
-    <div className="space-y-5 pt-3">
-      {/* Warning Card */}
-      <div className="relative overflow-hidden rounded-xl border border-destructive/20 bg-gradient-to-br from-destructive/10 via-background to-destructive/5 p-5 text-center shadow-md animate-scale-in">
-        <div className="absolute -right-10 -top-10 w-24 h-24 rounded-full bg-destructive/15 blur-2xl" />
-        
-        <div className="relative z-10 flex flex-col items-center">
-          <div className="w-12 h-12 bg-destructive/10 rounded-full border border-destructive/20 flex items-center justify-center mb-3.5 shadow-inner">
-            <AlertTriangle className="h-5 w-5 text-destructive animate-bounce" />
-          </div>
-          <h2 className="text-sm font-bold text-destructive tracking-tight uppercase">Gagal: Barang Belum Terdaftar</h2>
-          
-          <div className="flex items-center gap-1.5 mt-2 bg-destructive/10 border border-destructive/15 rounded-lg px-2.5 py-1">
-            <Barcode className="h-3.5 w-3.5 text-destructive" />
-            <span className="text-xs font-mono font-bold text-destructive select-all">{barcode}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Explanatory Info */}
-      <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3.5 shadow-inner animate-fade-in-up">
-        <div className="flex items-start gap-2.5">
-          <Info className="h-4.5 w-4.5 text-muted-foreground mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-muted-foreground leading-normal">
-            Anda saat ini sedang menggunakan mode <strong className="text-foreground font-semibold">Auto KELUAR (Out)</strong>. Sistem tidak diizinkan untuk mengurangi stok barang yang belum terdaftar.
-          </p>
-        </div>
-        
-        <div className="border-t border-border/40 pt-3">
-          <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
-            Langkah-Langkah Solusi:
-          </h4>
-          <ol className="space-y-2 text-xs">
-            <li className="flex items-start gap-2 text-muted-foreground">
-              <span className="flex-shrink-0 w-4.5 h-4.5 rounded-full bg-muted border border-border/80 flex items-center justify-center text-[10px] font-bold text-foreground shadow-sm">
-                1
-              </span>
-              <span className="leading-tight mt-0.5">Tutup popup peringatan ini.</span>
-            </li>
-            <li className="flex items-start gap-2 text-muted-foreground">
-              <span className="flex-shrink-0 w-4.5 h-4.5 rounded-full bg-muted border border-border/80 flex items-center justify-center text-[10px] font-bold text-foreground shadow-sm">
-                2
-              </span>
-              <span className="leading-tight mt-0.5">
-                Ubah mode scanner di dashboard menjadi <strong className="text-foreground font-semibold">Manual</strong> atau <strong className="text-foreground font-semibold text-primary">Auto MASUK (In)</strong>.
-              </span>
-            </li>
-            <li className="flex items-start gap-2 text-muted-foreground">
-              <span className="flex-shrink-0 w-4.5 h-4.5 rounded-full bg-muted border border-border/80 flex items-center justify-center text-[10px] font-bold text-foreground shadow-sm">
-                3
-              </span>
-              <span className="leading-tight mt-0.5">
-                Pindai ulang barcode untuk membuka form pendaftaran barang baru.
-              </span>
-            </li>
-          </ol>
-        </div>
-      </div>
-
-      <Button 
-        onClick={onClose}
-        className="w-full h-11 text-xs font-bold bg-destructive hover:bg-destructive/90 text-white rounded-xl shadow-lg shadow-destructive/10 transition-all active:scale-[0.98]"
-      >
-        Tutup Peringatan
-      </Button>
-    </div>
-  )
-
   const renderAddNewProduct = () => (
     <div className="space-y-5 pt-3">
       {/* Product Not Found / Found Header */}
@@ -921,7 +837,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
                   <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Mode: {scanMode === "in" ? "Auto Masuk" : scanMode === "out" ? "Auto Keluar" : "Manual / Ask"}
+                    Mode: Manual dari alat
                   </span>
                 </div>
               </div>
@@ -949,7 +865,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
         <div className={`flex-1 overflow-y-auto scrollbar-thin ${isMobile ? "px-5 pb-5" : "px-6 pb-6"}`}>
           {product 
             ? renderExistingProduct() 
-            : (scanMode === "out" ? renderUnknownProductWarning() : renderAddNewProduct())
+            : renderAddNewProduct()
           }
         </div>
         

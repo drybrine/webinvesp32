@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import dynamic from "next/dynamic"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
@@ -36,7 +36,6 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/components/auth-provider"
 import { canWrite } from "@/types/security"
 import { AuditTimeline } from "@/components/audit-timeline"
-import { useScanMode, MODE_LABELS, nextMode } from "@/hooks/use-scan-mode"
 
 const BarcodeComponent = dynamic(() => import("@/components/pdf417-barcode"), {
   ssr: false,
@@ -84,29 +83,13 @@ export default function DashboardPage() {
   const [filterCategory, setFilterCategory] = useState("all")
   const [sortOrder, setSortOrder] = useState("name-asc")
 
-  const { scanMode, cycleMode } = useScanMode()
   const { toast } = useToast()
 
-  // Sync scan mode to connected device(s) — first online device
-  const activeDeviceId = useMemo(() => {
+  const activeDevice = useMemo(() => {
     const online = devices.filter((d) => d.status === "online")
-    return online.length > 0 ? online[0].deviceId : ""
+    return online.length > 0 ? online[0] : null
   }, [devices])
-
-  const handleCycleMode = useCallback(() => {
-    if (!activeDeviceId) {
-      toast({
-        title: "Perangkat Tidak Terhubung",
-        description: "Mode scanner hanya bisa diubah ketika scanner dalam keadaan online.",
-        variant: "destructive",
-      })
-      return
-    }
-    const next = nextMode(scanMode)
-    cycleMode()
-    const modeLabel = next === "ask" ? "Manual" : next === "in" ? "Auto IN" : "Auto OUT"
-    firebaseHelpers.updateDeviceScanMode(activeDeviceId, modeLabel).catch(() => {})
-  }, [scanMode, cycleMode, activeDeviceId, toast])
+  const activeDeviceMode = activeDevice?.scanMode || "Manual"
 
   const [newItem, setNewItem] = useState<AddInventoryInput>({
     barcode: "",
@@ -166,6 +149,7 @@ export default function DashboardPage() {
   const onlineDevices = realtimeOnlineDevices
 
   const prevOnlineDevicesRef = useRef<number | undefined>(undefined);
+  const previousDeviceModesRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!devicesLoading) {
@@ -182,6 +166,18 @@ export default function DashboardPage() {
       prevOnlineDevicesRef.current = currentOnlineDevices;
     }
   }, [onlineDevices, devicesLoading, toast]);
+
+  useEffect(() => {
+    if (devicesLoading) return
+    devices.forEach((device) => {
+      const mode = device.scanMode || "Manual"
+      const previous = previousDeviceModesRef.current.get(device.deviceId)
+      if (previous && previous !== mode && device.status === "online") {
+        toast({ title: "Mode Scanner Berubah", description: `${device.deviceId} sekarang ${mode}` })
+      }
+      previousDeviceModesRef.current.set(device.deviceId, mode)
+    })
+  }, [devices, devicesLoading, toast])
 
   // Server-side batch prediction via /api/predict-batch
   const [stockRisks, setStockRisks] = useState<Array<{
@@ -530,29 +526,28 @@ export default function DashboardPage() {
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">Dashboard Inventory</h1>
             {/* Scan Mode Indicator adjacent to title */}
-            <button
-              onClick={handleCycleMode}
-              title={`Mode Scanner: ${MODE_LABELS[scanMode]} — klik untuk ganti`}
+            <div
+              title={`Mode Scanner dikontrol dari tombol alat: ${activeDeviceMode}`}
               className={`
                 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium
-                border transition-all shrink-0 mt-1 sm:mt-0
-                ${scanMode === "ask"
-                  ? "bg-muted border-border text-muted-foreground hover:bg-accent"
-                  : scanMode === "in"
-                    ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
-                    : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                border shrink-0 mt-1 sm:mt-0
+                ${activeDeviceMode === "Manual"
+                  ? "bg-muted border-border text-muted-foreground"
+                  : activeDeviceMode === "Auto IN"
+                    ? "bg-green-50 border-green-200 text-green-700"
+                    : "bg-red-50 border-red-200 text-red-700"
                 }
               `}
             >
               <span className={
                 "w-1.5 h-1.5 rounded-full inline-block " + (
-                  scanMode === "ask" ? "bg-muted-foreground"
-                  : scanMode === "in" ? "bg-green-500"
+                  activeDeviceMode === "Manual" ? "bg-muted-foreground"
+                  : activeDeviceMode === "Auto IN" ? "bg-green-500"
                   : "bg-red-500"
                 )
               } />
-              {MODE_LABELS[scanMode]}
-            </button>
+              {activeDeviceMode}
+            </div>
           </div>
           <p className="text-sm text-muted-foreground md:self-end">Kelola stok barang dengan prediksi otomatis</p>
         </div>

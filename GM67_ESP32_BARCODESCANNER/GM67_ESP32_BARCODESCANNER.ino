@@ -47,12 +47,20 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.11"
+#define FIRMWARE_VERSION   "6.5.12"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
 #define FIREBASE_WEB_API_KEY  "AIzaSyBDMTHkz_BwbqKfkVQYvKEI3yfrOLa_jLY"
 #define PROVISIONING_PREFIX   "ESP32PROV:"
+
+// --- Physical UI buttons ------------------------------------------------------
+#define BTN_UP_PIN          32
+#define BTN_OK_PIN          33
+#define BTN_DOWN_PIN        25
+#define BUTTON_DEBOUNCE_MS  50UL
+#define BUTTON_LONG_MS      800UL
+#define SCREEN_SAVER_TIMEOUT_MS 30000UL
 
 // --- OTA (over-the-air firmware update) --------------------------------------
 #define OTA_MIN_BATTERY_PCT     30      // do not flash below this charge
@@ -143,9 +151,48 @@ String        pendingLookupScanId = "";
 String        pendingLookupBarcode = "";
 unsigned long pendingLookupDeadline = 0;
 unsigned long lastLookupPoll = 0;
-String        activeScanMode = "Manual";       // dari web: "Manual", "Auto IN", "Auto OUT"
+String        activeScanMode = "Manual";       // dikontrol dari tombol alat: "Manual", "Auto IN", "Auto OUT"
 #define LOOKUP_POLL_INTERVAL_MS 1000UL
 #define LOOKUP_TIMEOUT_MS       10000UL
+
+enum UiScreen {
+  SCREEN_HOME,
+  SCREEN_SAVER,
+  SCREEN_MAIN_MENU,
+  SCREEN_MODE_MENU,
+  SCREEN_BATTERY,
+  SCREEN_WIFI,
+  SCREEN_STATUS,
+  SCREEN_RESTART_CONFIRM
+};
+
+enum ButtonEvent {
+  BTN_NONE,
+  BTN_UP_SHORT,
+  BTN_OK_SHORT,
+  BTN_DOWN_SHORT,
+  BTN_UP_LONG,
+  BTN_OK_LONG,
+  BTN_DOWN_LONG
+};
+
+struct ButtonState {
+  uint8_t pin;
+  bool stablePressed;
+  bool lastReading;
+  bool longFired;
+  unsigned long lastChange;
+  unsigned long pressedAt;
+};
+
+UiScreen currentScreen = SCREEN_HOME;
+uint8_t mainMenuIndex = 0;
+uint8_t modeMenuIndex = 0;
+uint8_t restartMenuIndex = 0;
+unsigned long lastUiInteraction = 0;
+ButtonState btnUp = {BTN_UP_PIN, false, false, false, 0, 0};
+ButtonState btnOk = {BTN_OK_PIN, false, false, false, 0, 0};
+ButtonState btnDown = {BTN_DOWN_PIN, false, false, false, 0, 0};
 
 // --- SSE Stream for scanMode -------------------------------------------------
 WiFiClientSecure sseClient;
@@ -212,6 +259,18 @@ void          oledShowProvisioningPin();
 void          oledShowProvisioningSuccess();
 bool          isDeviceProvisioned();
 void          oledUpdateIdle();
+void          initButtons();
+ButtonEvent   readButton(ButtonState &button, ButtonEvent shortEvent, ButtonEvent longEvent);
+void          handleButtons();
+void          handleUiEvent(ButtonEvent event);
+void          setScanModeFromDevice(const String& mode);
+void          oledShowMainMenu();
+void          oledShowModeMenu();
+void          oledShowScreenSaver();
+void          oledShowBatteryMenu();
+void          oledShowWiFiMenu();
+void          oledShowDeviceStatusMenu();
+void          oledShowRestartConfirm();
 // --- OTA ---------------------------------------------------------------------
 void          checkForOtaCommand(bool force = false);
 bool          performOtaUpdate(const String& commandId, const String& binaryUrl,
@@ -510,6 +569,97 @@ void oledShowStatus() {
   display.display();
 }
 
+void drawMenuList(const char* title, const char* const* items, uint8_t count, uint8_t selected) {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0); display.println(title);
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  for (uint8_t i = 0; i < count && i < 5; i++) {
+    display.setCursor(0, 16 + i * 9);
+    display.print(i == selected ? "> " : "  ");
+    display.println(items[i]);
+  }
+  display.display();
+}
+
+void oledShowMainMenu() {
+  static const char* const items[] = {"Mode Scanner", "Status Device", "Battery", "WiFi Info", "Restart"};
+  drawMenuList("MENU", items, 5, mainMenuIndex);
+}
+
+void oledShowModeMenu() {
+  static const char* const items[] = {"Manual", "Auto IN", "Auto OUT"};
+  drawMenuList("PILIH MODE", items, 3, modeMenuIndex);
+}
+
+void oledShowBatteryMenu() {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0); display.println("BATTERY");
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  display.setCursor(0, 18); display.print("Level: "); display.print(readBatteryLevel()); display.println("%");
+  display.setCursor(0, 30); display.print("Max: "); display.print(getBatteryMaxMv()); display.println("mV");
+  display.setCursor(0, 48); display.println("Kalibrasi: next phase");
+  display.display();
+}
+
+void oledShowWiFiMenu() {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0); display.println("WIFI INFO");
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  display.setCursor(0, 18); display.print("SSID: "); display.println(String(wifiConfig.ssid).substring(0, 15));
+  display.setCursor(0, 30); display.print("RSSI: "); display.print(isWiFiConnected ? WiFi.RSSI() : 0); display.println(" dBm");
+  display.setCursor(0, 42); display.print("IP: "); display.println(isWiFiConnected ? WiFi.localIP().toString() : "--");
+  display.display();
+}
+
+void oledShowDeviceStatusMenu() {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0); display.println("DEVICE STATUS");
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  display.setCursor(0, 18); display.println(deviceConfig.deviceId);
+  display.setCursor(0, 30); display.print("FW: "); display.println(FIRMWARE_VERSION);
+  display.setCursor(0, 42); display.print("Heap: "); display.print(ESP.getFreeHeap() / 1024); display.println(" KB");
+  display.setCursor(0, 54); display.print("Mode: "); display.println(activeScanMode);
+  display.display();
+}
+
+void oledShowRestartConfirm() {
+  static const char* const items[] = {"Tidak", "Ya"};
+  drawMenuList("RESTART?", items, 2, restartMenuIndex);
+}
+
+void oledShowScreenSaver() {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(2);
+  struct tm timeinfo;
+  int drift = (millis() / 10000UL) % 3;
+  if (getLocalTime(&timeinfo, 10)) {
+    char timeBuf[9];
+    char dateBuf[16];
+    strftime(timeBuf, sizeof(timeBuf), "%H:%M", &timeinfo);
+    strftime(dateBuf, sizeof(dateBuf), "%d/%m/%Y", &timeinfo);
+    display.setCursor(24 + drift * 2, 8); display.println(timeBuf);
+    display.setTextSize(1);
+    display.setCursor(34 + drift * 2, 30); display.println(dateBuf);
+  } else {
+    display.setCursor(26 + drift * 2, 12); display.println("--:--");
+    display.setTextSize(1);
+    display.setCursor(18, 34); display.println("Sinkron waktu...");
+  }
+  display.setTextSize(1);
+  display.setCursor(0, 52); display.print(activeScanMode);
+  display.setCursor(96, 52); display.print(readBatteryLevel()); display.print("%");
+  display.display();
+}
+
 // Menampilkan hasil scan barcode pada OLED.
 // Parameter sent dipakai untuk menandai apakah data berhasil dikirim ke Firebase.
 void oledShowBarcode(String barcode, String itemName, bool sent) {
@@ -768,7 +918,7 @@ bool isDeviceProvisioned() {
 void oledUpdateIdle() {
   if (!oledAvailable) return;
   if (millis() - lastBarcodeOnOled < OLED_BARCODE_HOLD_MS) return;
-  if (millis() - lastOledRefresh   < 3000) return;
+  if (millis() - lastOledRefresh   < 1000) return;
   lastOledRefresh = millis();
   // Selama belum diprovisikan, tahan PIN di layar agar admin tetap bisa membacanya
   // (jika tidak, koneksi WiFi & status idle akan menimpanya dan PIN tak terlihat lagi).
@@ -780,7 +930,20 @@ void oledUpdateIdle() {
     oledShowAuthError();
     return;
   }
-  oledShowStatus();
+  if (currentScreen == SCREEN_HOME && millis() - lastUiInteraction > SCREEN_SAVER_TIMEOUT_MS) {
+    currentScreen = SCREEN_SAVER;
+  }
+  switch (currentScreen) {
+    case SCREEN_SAVER: oledShowScreenSaver(); break;
+    case SCREEN_MAIN_MENU: oledShowMainMenu(); break;
+    case SCREEN_MODE_MENU: oledShowModeMenu(); break;
+    case SCREEN_BATTERY: oledShowBatteryMenu(); break;
+    case SCREEN_WIFI: oledShowWiFiMenu(); break;
+    case SCREEN_STATUS: oledShowDeviceStatusMenu(); break;
+    case SCREEN_RESTART_CONFIRM: oledShowRestartConfirm(); break;
+    case SCREEN_HOME:
+    default: oledShowStatus(); break;
+  }
 }
 
 
@@ -1363,19 +1526,7 @@ void handleScanModeStream() {
               if (path == "/") {
                 if (doc["data"].is<JsonObject>()) {
                   JsonObject dataObj = doc["data"].as<JsonObject>();
-                  if (dataObj.containsKey("scanMode")) {
-                    String mode = "";
-                    if (dataObj["scanMode"].is<JsonObject>()) {
-                      mode = dataObj["scanMode"]["mode"] | "";
-                    } else {
-                      mode = dataObj["scanMode"] | "";
-                    }
-                    if (mode.length() > 0 && mode != activeScanMode) {
-                      activeScanMode = mode;
-                      Serial.println("Scan mode (stream root): " + activeScanMode);
-                      oledShowStatus();
-                    }
-                  }
+                  // scanMode command is intentionally ignored: mode is controlled by physical buttons.
                   if (dataObj.containsKey("ota")) {
                     if (!dataObj["ota"].isNull()) {
                       Serial.println("OTA: ota field updated in stream root, queued...");
@@ -1391,17 +1542,7 @@ void handleScanModeStream() {
                   }
                 }
               } else if (path == "/scanMode") {
-                String mode = "";
-                if (doc["data"].is<JsonObject>()) {
-                  mode = doc["data"]["mode"] | "";
-                } else {
-                  mode = doc["data"] | "";
-                }
-                if (mode.length() > 0 && mode != activeScanMode) {
-                  activeScanMode = mode;
-                  Serial.println("Scan mode (stream child): " + activeScanMode);
-                  oledShowStatus();
-                }
+                // ignored: mode is controlled by physical buttons.
               } else if (path == "/ota") {
                 if (!doc["data"].isNull()) {
                   Serial.println("OTA: ota field updated in stream child, queued...");
@@ -1927,6 +2068,8 @@ void processProvisioningBarcode(String input) {
 void processBarcodeInput(String input) {
   input.trim();
   if (input.length() == 0) return;
+  lastUiInteraction = millis();
+  if (currentScreen == SCREEN_SAVER) currentScreen = SCREEN_HOME;
 
   // Jangan log atau teruskan payload ini: isinya membawa password perangkat.
   if (input.startsWith(PROVISIONING_PREFIX)) {
@@ -1958,6 +2101,114 @@ void processBarcodeInput(String input) {
 
 
 // =============================================================================
+//  BUTTON UI
+// =============================================================================
+
+void initButtons() {
+  pinMode(BTN_UP_PIN, INPUT_PULLUP);
+  pinMode(BTN_OK_PIN, INPUT_PULLUP);
+  pinMode(BTN_DOWN_PIN, INPUT_PULLUP);
+  btnUp.lastReading = digitalRead(BTN_UP_PIN) == LOW;
+  btnOk.lastReading = digitalRead(BTN_OK_PIN) == LOW;
+  btnDown.lastReading = digitalRead(BTN_DOWN_PIN) == LOW;
+  lastUiInteraction = millis();
+}
+
+ButtonEvent readButton(ButtonState &button, ButtonEvent shortEvent, ButtonEvent longEvent) {
+  bool reading = digitalRead(button.pin) == LOW;
+  unsigned long now = millis();
+  if (reading != button.lastReading) {
+    button.lastReading = reading;
+    button.lastChange = now;
+  }
+  if (now - button.lastChange < BUTTON_DEBOUNCE_MS) return BTN_NONE;
+  if (reading != button.stablePressed) {
+    button.stablePressed = reading;
+    if (reading) {
+      button.pressedAt = now;
+      button.longFired = false;
+    } else if (!button.longFired) {
+      return shortEvent;
+    }
+  }
+  if (button.stablePressed && !button.longFired && now - button.pressedAt >= BUTTON_LONG_MS) {
+    button.longFired = true;
+    return longEvent;
+  }
+  return BTN_NONE;
+}
+
+void setScanModeFromDevice(const String& mode) {
+  if (mode != "Manual" && mode != "Auto IN" && mode != "Auto OUT") return;
+  if (mode == activeScanMode) return;
+  activeScanMode = mode;
+  currentScreen = SCREEN_HOME;
+  lastUiInteraction = millis();
+  lastHeartbeat = 0;
+  lastOledRefresh = 0;
+  Serial.println("Scan mode (button): " + activeScanMode);
+}
+
+void handleUiEvent(ButtonEvent event) {
+  if (event == BTN_NONE) return;
+  lastUiInteraction = millis();
+  if (currentScreen == SCREEN_SAVER) currentScreen = SCREEN_HOME;
+
+  if (event == BTN_OK_LONG || event == BTN_UP_LONG) {
+    currentScreen = (currentScreen == SCREEN_HOME) ? SCREEN_HOME : SCREEN_MAIN_MENU;
+    lastOledRefresh = 0;
+    return;
+  }
+  if (event == BTN_DOWN_LONG) {
+    currentScreen = SCREEN_HOME;
+    lastOledRefresh = 0;
+    return;
+  }
+
+  switch (currentScreen) {
+    case SCREEN_HOME:
+      if (event == BTN_OK_SHORT) currentScreen = SCREEN_MAIN_MENU;
+      break;
+    case SCREEN_MAIN_MENU:
+      if (event == BTN_UP_SHORT) mainMenuIndex = (mainMenuIndex + 4) % 5;
+      else if (event == BTN_DOWN_SHORT) mainMenuIndex = (mainMenuIndex + 1) % 5;
+      else if (event == BTN_OK_SHORT) {
+        currentScreen = mainMenuIndex == 0 ? SCREEN_MODE_MENU :
+                        mainMenuIndex == 1 ? SCREEN_STATUS :
+                        mainMenuIndex == 2 ? SCREEN_BATTERY :
+                        mainMenuIndex == 3 ? SCREEN_WIFI : SCREEN_RESTART_CONFIRM;
+      }
+      break;
+    case SCREEN_MODE_MENU:
+      if (event == BTN_UP_SHORT) modeMenuIndex = (modeMenuIndex + 2) % 3;
+      else if (event == BTN_DOWN_SHORT) modeMenuIndex = (modeMenuIndex + 1) % 3;
+      else if (event == BTN_OK_SHORT) {
+        setScanModeFromDevice(modeMenuIndex == 0 ? "Manual" : modeMenuIndex == 1 ? "Auto IN" : "Auto OUT");
+      }
+      break;
+    case SCREEN_RESTART_CONFIRM:
+      if (event == BTN_UP_SHORT || event == BTN_DOWN_SHORT) restartMenuIndex = restartMenuIndex == 0 ? 1 : 0;
+      else if (event == BTN_OK_SHORT) {
+        if (restartMenuIndex == 1) ESP.restart();
+        currentScreen = SCREEN_MAIN_MENU;
+      }
+      break;
+    default:
+      if (event == BTN_OK_SHORT) currentScreen = SCREEN_MAIN_MENU;
+      break;
+  }
+  lastOledRefresh = 0;
+}
+
+void handleButtons() {
+  ButtonEvent event = readButton(btnUp, BTN_UP_SHORT, BTN_UP_LONG);
+  if (event == BTN_NONE) event = readButton(btnOk, BTN_OK_SHORT, BTN_OK_LONG);
+  if (event == BTN_NONE) event = readButton(btnDown, BTN_DOWN_SHORT, BTN_DOWN_LONG);
+  handleUiEvent(event);
+}
+
+
+// =============================================================================
 //  SETUP & LOOP
 // =============================================================================
 // Fungsi setup Arduino yang berjalan sekali saat perangkat boot.
@@ -1967,6 +2218,8 @@ void setup() {
   Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
   delay(100);  // minimal stabilize
   bootTime = millis();
+  activeScanMode = "Manual";
+  initButtons();
 
   initOLED();
   oledShowBoot();
@@ -2018,6 +2271,7 @@ void setup() {
 // Fungsi loop utama Arduino yang berjalan terus-menerus.
 // Menangani reconnect WiFi, input barcode, heartbeat Firebase, dan refresh OLED.
 void loop() {
+  handleButtons();
   checkWiFiConnection();
 
   static String serial2Buffer = "";

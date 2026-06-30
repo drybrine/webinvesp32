@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { limitToLast, off, onValue, orderByChild, query, ref } from "firebase/database"
 import { database, firebaseHelpers, isFirebaseConfigured } from "@/lib/firebase"
@@ -9,9 +9,6 @@ import { RealtimeScanContext, type RealtimeScanContextType } from "@/hooks/use-r
 import { logger } from "@/lib/logger"
 import { useAuth } from "@/components/auth-provider"
 import { canWrite } from "@/types/security"
-import { toast } from "@/hooks/use-toast"
-import { useScanMode } from "@/hooks/use-scan-mode"
-import { useFirebaseInventory, type InventoryItem } from "@/hooks/use-firebase"
 
 interface RealtimeScanProviderProps {
   children: React.ReactNode
@@ -34,8 +31,6 @@ const scanTimestampMs = (timestamp: IncomingScan["timestamp"]) =>
 export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   const { role } = useAuth()
   const writable = canWrite(role)
-  const { scanMode } = useScanMode()
-  const { items: inventoryItems, loading: inventoryLoading } = useFirebaseInventory()
   const pathname = usePathname()
   const [isScanning, setIsScanning] = useState(false)
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null)
@@ -48,54 +43,6 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   const [isMobile, setIsMobile] = useState(false)
   const [popupsGloballyDisabled, setPopupsGloballyDisabled] = useState(false)
   const [latestScan, setLatestScan] = useState<IncomingScan | null>(null)
-
-  // Auto-execute stock adjustment for auto mode (fire-and-forget)
-  const autoExecuteStock = useCallback(async (scan: IncomingScan, item: InventoryItem, delta: number, type: "in" | "out") => {
-    const txDir = delta > 0 ? "in" : "out"
-    try {
-      await firebaseHelpers.adjustStock(item.id, delta, {
-        type: txDir,
-        productName: item.name,
-        productBarcode: item.barcode || scan.barcode || "",
-        quantity: Math.abs(delta),
-        reason: `Stock ${txDir === "in" ? "In" : "Out"} via Scanner (Auto Mode)`,
-        operator: "ESP32 Scanner",
-        notes: `Auto mode via ESP32 scanner - ${isMobile ? "Mobile" : "Desktop"}`,
-      })
-      await firebaseHelpers.markScanProcessed(scan.id)
-      
-      if (type === "out" && item.quantity + delta <= 0) {
-        toast({
-          title: "⚠️ Barang Habis!",
-          description: `${item.name} telah habis (stok: 0).`,
-          variant: "destructive",
-          duration: 4000,
-        })
-      } else {
-        toast({
-          title: type === "in" ? "✅ Auto Stock In" : "✅ Auto Stock Out",
-          description: `${item.name} ${delta > 0 ? "+" : ""}${delta} unit.`,
-          duration: 2000,
-        })
-      }
-      if (item.quantity + delta === 0) {
-        toast({
-          title: "⚠️ Barang Habis!",
-          description: `${item.name} telah habis (stok: 0).`,
-          variant: "destructive",
-          duration: 4000,
-        })
-      }
-    } catch (err) {
-      console.error("auto stock failed:", err)
-      toast({
-        title: "❌ Auto Stock Gagal",
-        description: err instanceof Error ? err.message : "Terjadi kesalahan",
-        variant: "destructive",
-        duration: 4000,
-      })
-    }
-  }, [isMobile])
 
   // Detect mobile device and setup
   useEffect(() => {
@@ -275,10 +222,10 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
       processed: latestScan.processed,
       lastProcessedScanId,
       isScanFromInventoryMode,
-      inventoryLoading
+      inventoryLoading: false
     })
     
-    if (!shouldTriggerPopup || inventoryLoading) {
+    if (!shouldTriggerPopup) {
       return
     }
 
@@ -290,23 +237,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
     setScanCount(prev => prev + 1)
     setIsScanning(true)
 
-    const foundItem = inventoryItems.find(i => i.barcode === latestScan.barcode)
-    const isAutoMode = scanMode === "in" || scanMode === "out"
-    let autoHandled = false
-
-    if (isAutoMode && foundItem && writable) {
-      if (scanMode === "in") {
-        autoHandled = true
-        autoExecuteStock(latestScan, foundItem, 1, "in")
-      } else if (scanMode === "out" && foundItem.quantity >= 1) {
-        autoHandled = true
-        autoExecuteStock(latestScan, foundItem, -1, "out")
-      }
-    }
-
-    if (autoHandled) {
-      // Auto mode executed
-    } else if (!isPopupDisabled && !popupsGloballyDisabled) {
+    if (!isPopupDisabled && !popupsGloballyDisabled) {
       setShowPopup(true)
 
       if (typeof document !== "undefined") {
@@ -340,11 +271,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   }, [
     latestScan,
     writable,
-    inventoryItems,
-    inventoryLoading,
     lastProcessedScanId,
-    scanMode,
-    autoExecuteStock,
     isPopupDisabled,
     popupsGloballyDisabled,
     isMobile,
