@@ -47,7 +47,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.12"
+#define FIRMWARE_VERSION   "6.5.13"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -271,6 +271,7 @@ void          oledShowBatteryMenu();
 void          oledShowWiFiMenu();
 void          oledShowDeviceStatusMenu();
 void          oledShowRestartConfirm();
+void          renderCurrentScreen();
 // --- OTA ---------------------------------------------------------------------
 void          checkForOtaCommand(bool force = false);
 bool          performOtaUpdate(const String& commandId, const String& binaryUrl,
@@ -660,6 +661,21 @@ void oledShowScreenSaver() {
   display.display();
 }
 
+void renderCurrentScreen() {
+  if (!oledAvailable) return;
+  switch (currentScreen) {
+    case SCREEN_SAVER: oledShowScreenSaver(); break;
+    case SCREEN_MAIN_MENU: oledShowMainMenu(); break;
+    case SCREEN_MODE_MENU: oledShowModeMenu(); break;
+    case SCREEN_BATTERY: oledShowBatteryMenu(); break;
+    case SCREEN_WIFI: oledShowWiFiMenu(); break;
+    case SCREEN_STATUS: oledShowDeviceStatusMenu(); break;
+    case SCREEN_RESTART_CONFIRM: oledShowRestartConfirm(); break;
+    case SCREEN_HOME:
+    default: oledShowStatus(); break;
+  }
+}
+
 // Menampilkan hasil scan barcode pada OLED.
 // Parameter sent dipakai untuk menandai apakah data berhasil dikirim ke Firebase.
 void oledShowBarcode(String barcode, String itemName, bool sent) {
@@ -933,17 +949,7 @@ void oledUpdateIdle() {
   if (currentScreen == SCREEN_HOME && millis() - lastUiInteraction > SCREEN_SAVER_TIMEOUT_MS) {
     currentScreen = SCREEN_SAVER;
   }
-  switch (currentScreen) {
-    case SCREEN_SAVER: oledShowScreenSaver(); break;
-    case SCREEN_MAIN_MENU: oledShowMainMenu(); break;
-    case SCREEN_MODE_MENU: oledShowModeMenu(); break;
-    case SCREEN_BATTERY: oledShowBatteryMenu(); break;
-    case SCREEN_WIFI: oledShowWiFiMenu(); break;
-    case SCREEN_STATUS: oledShowDeviceStatusMenu(); break;
-    case SCREEN_RESTART_CONFIRM: oledShowRestartConfirm(); break;
-    case SCREEN_HOME:
-    default: oledShowStatus(); break;
-  }
+  renderCurrentScreen();
 }
 
 
@@ -2157,11 +2163,13 @@ void handleUiEvent(ButtonEvent event) {
   if (event == BTN_OK_LONG || event == BTN_UP_LONG) {
     currentScreen = (currentScreen == SCREEN_HOME) ? SCREEN_HOME : SCREEN_MAIN_MENU;
     lastOledRefresh = 0;
+    renderCurrentScreen();
     return;
   }
   if (event == BTN_DOWN_LONG) {
     currentScreen = SCREEN_HOME;
     lastOledRefresh = 0;
+    renderCurrentScreen();
     return;
   }
 
@@ -2198,6 +2206,7 @@ void handleUiEvent(ButtonEvent event) {
       break;
   }
   lastOledRefresh = 0;
+  renderCurrentScreen();
 }
 
 void handleButtons() {
@@ -2347,5 +2356,5 @@ void loop() {
   checkForOtaCommand(false);
 
   oledUpdateIdle();
-  delay(100);
+  delay(10);
 }
