@@ -6,7 +6,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing"
-import {get, ref, remove, set, update} from "firebase/database"
+import {get, increment, ref, remove, serverTimestamp, set, update} from "firebase/database"
 
 let env
 
@@ -224,6 +224,73 @@ test("device can read inventory and write only its own heartbeat and scans", asy
     mode: "inventory",
     type: "inventory_scan",
     processed: false,
+  }))
+})
+
+test("device can append scanner stock transactions with one-unit inventory delta only", async () => {
+  const db = device()
+  const now = Date.now()
+  await assertSucceeds(update(ref(db), {
+    "inventory/item-1/quantity": increment(1),
+    "inventory/item-1/lastUpdated": serverTimestamp(),
+    "inventory/item-1/updatedAt": serverTimestamp(),
+    "inventory/item-1/operationId": "operation-device-in-1",
+    "inventory/item-1/updatedByUid": "device-user",
+    "transactions/tx-device-in-1": {
+      id: "tx-device-in-1",
+      type: "in",
+      productName: "Busi",
+      productBarcode: "8990001",
+      quantity: 1,
+      reason: "Auto IN dari scanner",
+      operator: "Scanner",
+      operatorUid: "device-user",
+      operationId: "operation-device-in-1",
+      timestamp: serverTimestamp(),
+    },
+  }))
+
+  await assertSucceeds(update(ref(db), {
+    "inventory/item-1/quantity": increment(-1),
+    "inventory/item-1/lastUpdated": serverTimestamp(),
+    "inventory/item-1/updatedAt": serverTimestamp(),
+    "inventory/item-1/operationId": "operation-device-out-1",
+    "inventory/item-1/updatedByUid": "device-user",
+    "transactions/tx-device-out-1": {
+      id: "tx-device-out-1",
+      type: "out",
+      productName: "Busi",
+      productBarcode: "8990001",
+      quantity: 1,
+      reason: "Auto OUT dari scanner",
+      operator: "Scanner",
+      operatorUid: "device-user",
+      operationId: "operation-device-out-1",
+      timestamp: serverTimestamp(),
+    },
+  }))
+
+  await assertFails(update(ref(db), {
+    "inventory/item-1/quantity": increment(2),
+    "inventory/item-1/lastUpdated": serverTimestamp(),
+    "inventory/item-1/updatedAt": serverTimestamp(),
+    "inventory/item-1/operationId": "operation-device-bad-delta",
+    "inventory/item-1/updatedByUid": "device-user",
+  }))
+
+  await assertFails(update(ref(db), {
+    "transactions/tx-device-bad-operator": {
+      id: "tx-device-bad-operator",
+      type: "in",
+      productName: "Busi",
+      productBarcode: "8990001",
+      quantity: 1,
+      reason: "Auto IN dari scanner",
+      operator: "Dashboard",
+      operatorUid: "device-user",
+      operationId: "operation-device-bad-operator",
+      timestamp: now,
+    },
   }))
 })
 

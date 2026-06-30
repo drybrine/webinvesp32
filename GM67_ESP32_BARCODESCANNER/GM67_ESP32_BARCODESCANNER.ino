@@ -61,6 +61,8 @@ unsigned long lastBarcodeOnOled   = 0;
 #define BUTTON_DEBOUNCE_MS  50UL
 #define BUTTON_LONG_MS      800UL
 #define SCREEN_SAVER_TIMEOUT_MS 30000UL
+#define MAIN_MENU_COUNT      6
+#define MODE_MENU_COUNT      4
 
 // --- OTA (over-the-air firmware update) --------------------------------------
 #define OTA_MIN_BATTERY_PCT     30      // do not flash below this charge
@@ -142,6 +144,7 @@ bool          isOnline        = false;
 bool          authRejected    = false;
 String        firebaseIdToken = "";
 String        firebaseRefreshToken = "";
+String        firebaseUserUid = "";
 unsigned long firebaseTokenExpiresAt = 0;
 unsigned long nextAuthRetryAt = 0;
 uint8_t       authRetryCount = 0;
@@ -222,16 +225,19 @@ void          startScanModeStream();
 void          stopScanModeStream();
 void          handleScanModeStream();
 bool          connectToWiFi();
-bool          sendScanToFirebase(String barcode);
+bool          sendScanToFirebase(String barcode, bool processed = false, bool itemFound = false, const String& itemId = "");
 bool          sendHeartbeatToFirebase();
 bool          signInDevice(String email, String password);
 bool          refreshFirebaseToken(bool force = false);
 bool          ensureFirebaseAuth();
 String        firebaseUrlWithAuth(String pathAndQuery);
 String        urlEncode(String value);
+String        makeFirebaseKey(const char* prefix);
+String        makeOperationId();
 void          loadFirebaseRefreshToken();
 void          scheduleAuthRetry();
 InventoryItem lookupInventoryByBarcode(String barcode);
+bool          adjustStockFromDevice(const InventoryItem& item, int delta);
 bool          parseWiFiQR(String qrData, String &ssid, String &password, String &security);
 void          saveWiFiConfig();
 void          loadWiFiConfig();
@@ -248,6 +254,7 @@ void          oledShowBoot();
 void          oledShowStatus();
 void          oledShowBarcode(String barcode, String itemName, bool sent);
 void          oledShowInventoryFound(String name, int qty, int minStock);
+void          oledShowAutoStockResult(String mode, String name, int beforeQty, int afterQty, bool ok, String message);
 void          oledShowProductLookupSearching(String barcode);
 void          oledShowProductLookupFound(String name, String category);
 void          oledShowProductLookupNotFound(String barcode, String message);
@@ -576,8 +583,14 @@ void drawMenuList(const char* title, const char* const* items, uint8_t count, ui
   display.setTextSize(1);
   display.setCursor(0, 0); display.println(title);
   display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-  for (uint8_t i = 0; i < count && i < 5; i++) {
-    display.setCursor(0, 16 + i * 9);
+  uint8_t visibleCount = count < 5 ? count : 5;
+  uint8_t startIndex = 0;
+  if (count > visibleCount && selected >= visibleCount) {
+    startIndex = selected - visibleCount + 1;
+  }
+  for (uint8_t row = 0; row < visibleCount; row++) {
+    uint8_t i = startIndex + row;
+    display.setCursor(0, 16 + row * 9);
     display.print(i == selected ? "> " : "  ");
     display.println(items[i]);
   }
@@ -585,13 +598,13 @@ void drawMenuList(const char* title, const char* const* items, uint8_t count, ui
 }
 
 void oledShowMainMenu() {
-  static const char* const items[] = {"Mode Scanner", "Status Device", "Battery", "WiFi Info", "Restart"};
-  drawMenuList("MENU", items, 5, mainMenuIndex);
+  static const char* const items[] = {"Mode Scanner", "Status Device", "Battery", "WiFi Info", "Restart", "Tampilan Awal"};
+  drawMenuList("MENU", items, MAIN_MENU_COUNT, mainMenuIndex);
 }
 
 void oledShowModeMenu() {
-  static const char* const items[] = {"Manual", "Auto IN", "Auto OUT"};
-  drawMenuList("PILIH MODE", items, 3, modeMenuIndex);
+  static const char* const items[] = {"Manual", "Auto IN", "Auto OUT", "Kembali"};
+  drawMenuList("PILIH MODE", items, MODE_MENU_COUNT, modeMenuIndex);
 }
 
 void oledShowBatteryMenu() {
@@ -752,6 +765,27 @@ void oledShowInventoryFound(String name, int qty, int minStock) {
     display.setCursor(0, 48);
     display.println("Stok: Aman");
   }
+
+  display.display();
+  lastBarcodeOnOled = millis();
+}
+
+void oledShowAutoStockResult(String mode, String name, int beforeQty, int afterQty, bool ok, String message) {
+  if (!oledAvailable) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0); display.print(mode);
+  display.print(ok ? " BERHASIL" : " GAGAL");
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+
+  if (name.length() > 21) name = name.substring(0, 21);
+  display.setCursor(0, 16); display.println(name);
+
+  display.setCursor(0, 28); display.print("Sebelum: "); display.println(beforeQty);
+  display.setCursor(0, 38); display.print("Sesudah: "); display.println(afterQty);
+
+  if (message.length() > 21) message = message.substring(0, 21);
+  display.setCursor(0, 54); display.println(message);
 
   display.display();
   lastBarcodeOnOled = millis();
@@ -1111,9 +1145,21 @@ String urlEncode(String value) {
   return encoded;
 }
 
+String makeFirebaseKey(const char* prefix) {
+  char buffer[48];
+  snprintf(buffer, sizeof(buffer), "%s-%lu-%08lx",
+           prefix, (unsigned long)millis(), (unsigned long)esp_random());
+  return String(buffer);
+}
+
+String makeOperationId() {
+  return "esp32-" + String(deviceConfig.deviceId) + "-" + String(millis()) + "-" + String((uint32_t)esp_random(), HEX);
+}
+
 void loadFirebaseRefreshToken() {
   firebaseRefreshToken = authPreferences.getString("refreshToken", "");
   firebaseIdToken = "";
+  firebaseUserUid = "";
   firebaseTokenExpiresAt = 0;
   authRejected = false;
   Serial.println(firebaseRefreshToken.length() > 0 ?
@@ -1124,6 +1170,7 @@ void loadFirebaseRefreshToken() {
 void clearFirebaseAuth() {
   firebaseIdToken = "";
   firebaseRefreshToken = "";
+  firebaseUserUid = "";
   firebaseTokenExpiresAt = 0;
   authRejected = false;
   authRetryCount = 0;
@@ -1183,6 +1230,7 @@ bool signInDevice(String email, String password) {
 
   String previousIdToken = firebaseIdToken;
   String previousRefreshToken = firebaseRefreshToken;
+  String previousUserUid = firebaseUserUid;
   unsigned long previousExpiresAt = firebaseTokenExpiresAt;
   unsigned long previousRetryAt = nextAuthRetryAt;
   uint8_t previousRetryCount = authRetryCount;
@@ -1190,6 +1238,7 @@ bool signInDevice(String email, String password) {
 
   firebaseIdToken = responseDoc["idToken"].as<String>();
   firebaseRefreshToken = responseDoc["refreshToken"].as<String>();
+  firebaseUserUid = responseDoc["localId"].as<String>();
   unsigned long expiresIn = responseDoc["expiresIn"].as<unsigned long>();
   firebaseTokenExpiresAt = millis() + expiresIn * 1000UL;
   authRejected = false;
@@ -1201,6 +1250,7 @@ bool signInDevice(String email, String password) {
   if (!sendHeartbeatToFirebase()) {
     firebaseIdToken = previousIdToken;
     firebaseRefreshToken = previousRefreshToken;
+    firebaseUserUid = previousUserUid;
     firebaseTokenExpiresAt = previousExpiresAt;
     nextAuthRetryAt = previousRetryAt;
     authRetryCount = previousRetryCount;
@@ -1254,6 +1304,7 @@ bool refreshFirebaseToken(bool force) {
   }
 
   firebaseIdToken = responseDoc["access_token"].as<String>();
+  firebaseUserUid = responseDoc["user_id"].as<String>();
   String rotatedRefreshToken = responseDoc["refresh_token"].as<String>();
   if (rotatedRefreshToken.length() > 0 && rotatedRefreshToken != firebaseRefreshToken) {
     firebaseRefreshToken = rotatedRefreshToken;
@@ -1280,8 +1331,9 @@ String firebaseUrlWithAuth(String pathAndQuery) {
 }
 
 // Mengirim hasil scan barcode ke node /scans di Firebase Realtime Database.
-// Record dibuat sebagai inventory_scan agar web dapat menampilkan popup scan dengan cepat.
-bool sendScanToFirebase(String barcode) {
+// Auto mode yang sudah diproses di alat dikirim sebagai processed=true agar
+// website tidak membuka popup stok kedua untuk scan yang sama.
+bool sendScanToFirebase(String barcode, bool processed, bool itemFound, const String& itemId) {
   lastFirebaseScanId = "";
   if (!isWiFiConnected) {
     Serial.println("Tidak bisa kirim scan: no WiFi");
@@ -1296,12 +1348,15 @@ bool sendScanToFirebase(String barcode) {
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(10000);
 
-  DynamicJsonDocument doc(512);
+  DynamicJsonDocument doc(1024);
   doc["barcode"]   = barcode;
   doc["deviceId"]  = deviceConfig.deviceId;
   doc["location"]  = "Warehouse-Scanner";
   doc["mode"]      = "inventory";
-  doc["processed"] = false;
+  doc["scanMode"]  = activeScanMode;
+  doc["processed"] = processed;
+  doc["itemFound"] = itemFound;
+  if (itemId.length() > 0) doc["itemId"] = itemId;
   doc["type"]      = "inventory_scan";
   JsonObject ts    = doc.createNestedObject("timestamp");
   ts[".sv"]        = "timestamp";
@@ -1382,6 +1437,81 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
   }
   http.end();
   return item;
+}
+
+bool adjustStockFromDevice(const InventoryItem& item, int delta) {
+  if (!item.found || item.id.length() == 0 || (delta != 1 && delta != -1)) return false;
+  if (!isWiFiConnected) return false;
+  if (delta < 0 && item.quantity + delta < 0) {
+    Serial.println("Auto stock ditolak: stok tidak cukup");
+    return false;
+  }
+  if (firebaseUserUid.length() == 0 && !refreshFirebaseToken(true)) return false;
+  if (firebaseUserUid.length() == 0) {
+    Serial.println("Auto stock gagal: UID Firebase kosong");
+    return false;
+  }
+
+  HTTPClient http;
+  String url = firebaseUrlWithAuth("/.json");
+  if (url.length() == 0) return false;
+  WiFiClientSecure client;
+  client.setInsecure();
+  http.begin(client, url);
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(10000);
+
+  const bool stockIn = delta > 0;
+  String txId = makeFirebaseKey("tx");
+  String operationId = makeOperationId();
+  DynamicJsonDocument doc(4096);
+
+  String quantityPath = "inventory/" + item.id + "/quantity";
+  JsonObject quantityOp = doc.createNestedObject(quantityPath);
+  JsonObject quantitySv = quantityOp.createNestedObject(".sv");
+  quantitySv["increment"] = delta;
+
+  doc["inventory/" + item.id + "/operationId"] = operationId;
+  doc["inventory/" + item.id + "/updatedByUid"] = firebaseUserUid;
+
+  JsonObject lastUpdated = doc.createNestedObject("inventory/" + item.id + "/lastUpdated");
+  lastUpdated[".sv"] = "timestamp";
+  JsonObject updatedAt = doc.createNestedObject("inventory/" + item.id + "/updatedAt");
+  updatedAt[".sv"] = "timestamp";
+
+  String txPath = "transactions/" + txId;
+  doc[txPath + "/id"] = txId;
+  doc[txPath + "/type"] = stockIn ? "in" : "out";
+  doc[txPath + "/productName"] = item.name;
+  doc[txPath + "/productBarcode"] = item.barcode;
+  doc[txPath + "/quantity"] = 1;
+  doc[txPath + "/reason"] = stockIn ? "Auto IN dari scanner" : "Auto OUT dari scanner";
+  doc[txPath + "/operator"] = "Scanner";
+  doc[txPath + "/operatorUid"] = firebaseUserUid;
+  doc[txPath + "/operationId"] = operationId;
+  doc[txPath + "/notes"] = "Device " + String(deviceConfig.deviceId);
+  JsonObject txTimestamp = doc.createNestedObject(txPath + "/timestamp");
+  txTimestamp[".sv"] = "timestamp";
+
+  String json;
+  serializeJson(doc, json);
+  Serial.println("PATCH auto stock: " + item.id + " delta " + String(delta));
+
+  int code = http.sendRequest("PATCH", json);
+  bool ok = (code >= 200 && code < 300);
+  if (ok) {
+    Serial.printf("Auto stock OK (HTTP %d)\n", code);
+  } else {
+    Serial.printf("Auto stock gagal (HTTP %d): %s\n", code, http.getString().c_str());
+    if (code == 401 || code == 403) {
+      firebaseIdToken = "";
+      authRejected = true;
+      oledShowAuthError();
+      scheduleAuthRetry();
+    }
+  }
+  http.end();
+  return ok;
 }
 
 void checkDeviceLookupStatus() {
@@ -1992,12 +2122,57 @@ void validateOtaBootSuccess(bool heartbeatOk) {
 // =============================================================================
 //  BARCODE PROCESSING
 // =============================================================================
-// Memproses barcode inventory: kirim scan, simpan histori lokal, lookup item, dan tampilkan OLED.
-// Stok tidak diubah di firmware; perubahan stok ditangani oleh aplikasi web/Firebase helper.
+// Memproses barcode inventory. Mode Manual tetap mengirim scan untuk popup web.
+// Mode Auto IN/OUT bekerja standalone: alat menambah/mengurangi stok dan membuat
+// transaksi langsung ke RTDB tanpa perlu dashboard terbuka.
 void processInventoryBarcode(String barcode) {
   Serial.println("Inventory barcode: " + barcode);
 
-  // POST ke /scans dulu agar website popup muncul cepat
+  bool autoMode = activeScanMode == "Auto IN" || activeScanMode == "Auto OUT";
+
+  if (autoMode) {
+    InventoryItem item = lookupInventoryByBarcode(barcode);
+    if (item.found) {
+      pendingLookupScanId = "";
+      pendingLookupBarcode = "";
+      int delta = activeScanMode == "Auto IN" ? 1 : -1;
+      int afterQty = item.quantity + delta;
+      bool stockEnough = afterQty >= 0;
+      bool adjusted = false;
+      if (stockEnough) {
+        adjusted = adjustStockFromDevice(item, delta);
+        if (!adjusted) afterQty = item.quantity;
+      } else {
+        afterQty = item.quantity;
+      }
+
+      bool scanProcessed = adjusted || !stockEnough;
+      sendScanToFirebase(barcode, scanProcessed, true, item.id);
+      oledShowAutoStockResult(
+        activeScanMode,
+        item.name,
+        item.quantity,
+        afterQty,
+        adjusted,
+        !stockEnough ? "Stok tidak cukup" : (adjusted ? "Transaksi tersimpan" : "Sync gagal")
+      );
+      return;
+    }
+
+    bool sent = sendScanToFirebase(barcode);
+    if (sent && lastFirebaseScanId.length() > 0) {
+      pendingLookupScanId = lastFirebaseScanId;
+      pendingLookupBarcode = barcode;
+      pendingLookupDeadline = millis() + LOOKUP_TIMEOUT_MS;
+      lastLookupPoll = 0;
+      oledShowProductLookupSearching(barcode);
+    } else {
+      oledShowBarcode(barcode, "", sent);
+    }
+    return;
+  }
+
+  // POST ke /scans dulu agar website popup muncul cepat pada mode Manual.
   bool sent = sendScanToFirebase(barcode);
 
   // Lookup inventory setelah scan terkirim (untuk OLED display)
@@ -2146,52 +2321,48 @@ ButtonEvent readButton(ButtonState &button, ButtonEvent shortEvent, ButtonEvent 
 
 void setScanModeFromDevice(const String& mode) {
   if (mode != "Manual" && mode != "Auto IN" && mode != "Auto OUT") return;
-  if (mode == activeScanMode) return;
-  activeScanMode = mode;
+  bool changed = mode != activeScanMode;
+  if (changed) activeScanMode = mode;
   currentScreen = SCREEN_HOME;
   lastUiInteraction = millis();
-  lastHeartbeat = 0;
+  if (changed) lastHeartbeat = 0;
   lastOledRefresh = 0;
   Serial.println("Scan mode (button): " + activeScanMode);
 }
 
 void handleUiEvent(ButtonEvent event) {
   if (event == BTN_NONE) return;
+  if (event == BTN_OK_LONG) event = BTN_OK_SHORT;
+  else if (event == BTN_UP_LONG) event = BTN_UP_SHORT;
+  else if (event == BTN_DOWN_LONG) event = BTN_DOWN_SHORT;
+
   lastUiInteraction = millis();
   if (currentScreen == SCREEN_SAVER) currentScreen = SCREEN_HOME;
-
-  if (event == BTN_OK_LONG || event == BTN_UP_LONG) {
-    currentScreen = (currentScreen == SCREEN_HOME) ? SCREEN_HOME : SCREEN_MAIN_MENU;
-    lastOledRefresh = 0;
-    renderCurrentScreen();
-    return;
-  }
-  if (event == BTN_DOWN_LONG) {
-    currentScreen = SCREEN_HOME;
-    lastOledRefresh = 0;
-    renderCurrentScreen();
-    return;
-  }
 
   switch (currentScreen) {
     case SCREEN_HOME:
       if (event == BTN_OK_SHORT) currentScreen = SCREEN_MAIN_MENU;
       break;
     case SCREEN_MAIN_MENU:
-      if (event == BTN_UP_SHORT) mainMenuIndex = (mainMenuIndex + 4) % 5;
-      else if (event == BTN_DOWN_SHORT) mainMenuIndex = (mainMenuIndex + 1) % 5;
+      if (event == BTN_UP_SHORT) mainMenuIndex = (mainMenuIndex + MAIN_MENU_COUNT - 1) % MAIN_MENU_COUNT;
+      else if (event == BTN_DOWN_SHORT) mainMenuIndex = (mainMenuIndex + 1) % MAIN_MENU_COUNT;
       else if (event == BTN_OK_SHORT) {
-        currentScreen = mainMenuIndex == 0 ? SCREEN_MODE_MENU :
-                        mainMenuIndex == 1 ? SCREEN_STATUS :
-                        mainMenuIndex == 2 ? SCREEN_BATTERY :
-                        mainMenuIndex == 3 ? SCREEN_WIFI : SCREEN_RESTART_CONFIRM;
+        if (mainMenuIndex == 0) {
+          modeMenuIndex = activeScanMode == "Auto IN" ? 1 : activeScanMode == "Auto OUT" ? 2 : 0;
+          currentScreen = SCREEN_MODE_MENU;
+        } else if (mainMenuIndex == 1) currentScreen = SCREEN_STATUS;
+        else if (mainMenuIndex == 2) currentScreen = SCREEN_BATTERY;
+        else if (mainMenuIndex == 3) currentScreen = SCREEN_WIFI;
+        else if (mainMenuIndex == 4) currentScreen = SCREEN_RESTART_CONFIRM;
+        else currentScreen = SCREEN_HOME;
       }
       break;
     case SCREEN_MODE_MENU:
-      if (event == BTN_UP_SHORT) modeMenuIndex = (modeMenuIndex + 2) % 3;
-      else if (event == BTN_DOWN_SHORT) modeMenuIndex = (modeMenuIndex + 1) % 3;
+      if (event == BTN_UP_SHORT) modeMenuIndex = (modeMenuIndex + MODE_MENU_COUNT - 1) % MODE_MENU_COUNT;
+      else if (event == BTN_DOWN_SHORT) modeMenuIndex = (modeMenuIndex + 1) % MODE_MENU_COUNT;
       else if (event == BTN_OK_SHORT) {
-        setScanModeFromDevice(modeMenuIndex == 0 ? "Manual" : modeMenuIndex == 1 ? "Auto IN" : "Auto OUT");
+        if (modeMenuIndex == 3) currentScreen = SCREEN_MAIN_MENU;
+        else setScanModeFromDevice(modeMenuIndex == 0 ? "Manual" : modeMenuIndex == 1 ? "Auto IN" : "Auto OUT");
       }
       break;
     case SCREEN_RESTART_CONFIRM:
@@ -2210,9 +2381,15 @@ void handleUiEvent(ButtonEvent event) {
 }
 
 void handleButtons() {
-  ButtonEvent event = readButton(btnUp, BTN_UP_SHORT, BTN_UP_LONG);
-  if (event == BTN_NONE) event = readButton(btnOk, BTN_OK_SHORT, BTN_OK_LONG);
-  if (event == BTN_NONE) event = readButton(btnDown, BTN_DOWN_SHORT, BTN_DOWN_LONG);
+  if (digitalRead(BTN_UP_PIN) == LOW || digitalRead(BTN_OK_PIN) == LOW || digitalRead(BTN_DOWN_PIN) == LOW) {
+    lastUiInteraction = millis();
+    if (currentScreen == SCREEN_SAVER) currentScreen = SCREEN_HOME;
+  }
+
+  ButtonEvent upEvent = readButton(btnUp, BTN_UP_SHORT, BTN_UP_LONG);
+  ButtonEvent okEvent = readButton(btnOk, BTN_OK_SHORT, BTN_OK_LONG);
+  ButtonEvent downEvent = readButton(btnDown, BTN_DOWN_SHORT, BTN_DOWN_LONG);
+  ButtonEvent event = okEvent != BTN_NONE ? okEvent : (upEvent != BTN_NONE ? upEvent : downEvent);
   handleUiEvent(event);
 }
 
