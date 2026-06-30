@@ -88,7 +88,7 @@ GND           ←   GND             GND          ← GND
 ## 4. Firmware
 
 **File**: `GM67_ESP32_BARCODESCANNER/GM67_ESP32_BARCODESCANNER.ino`  
-**Version**: 6.5.14
+**Version**: 6.5.15
 
 ### Flow Utama
 
@@ -122,7 +122,7 @@ GM67 scan barcode
 
 ```
 ┌────────────────────────────────┐
-│ SCANNER v6.5.14       [▓▓▓░]  │  title + battery icon
+│ SCANNER v6.5.15       [▓▓▓░]  │  title + battery icon
 │ [ONLINE]               98%    │  status + battery %
 │────────────────────────────────│
 │ WiFi: MySSID                  │  ssid (max 14 char)
@@ -167,7 +167,7 @@ GM67 scan barcode
       "lastSeen": 1716123456789,
       "uptime": 3600,
       "scanCount": 42,
-      "version": "6.5.14",
+      "version": "6.5.15",
       "scanMode": "Manual"
     }
   },
@@ -196,7 +196,7 @@ GM67 scan barcode
     "{deviceId}": {
       "ota": {
         "commandId": "cmd-123",
-        "version": "6.5.14",
+        "version": "6.5.15",
         "binaryUrl": "https://github.com/.../firmware.bin",
         "sha256": "...",
         "signature": "...",
@@ -207,7 +207,7 @@ GM67 scan barcode
   "deviceOtaStatus": {
     "{deviceId}": {
       "phase": "success",
-      "version": "6.5.14",
+      "version": "6.5.15",
       "updatedAt": 1716123456789
     }
   },
@@ -221,7 +221,7 @@ GM67 scan barcode
 
 ### Realtime Strategy
 
-Semua data web di-subscribe via `onValue` listener (bukan polling). Device online/offline dideteksi client-side: offline bila `lastSeen` >15 detik, re-evaluasi tiap 1 detik. `scanMode` di dashboard berasal dari heartbeat perangkat (`Manual`, `Auto IN`, `Auto OUT`); mode dikontrol dari tombol fisik alat. Untuk prediksi akurat, transaksi harus di-fetch penuh dengan `useFirebaseTransactions(null)`.
+Semua data web di-subscribe via `onValue` listener (bukan polling). Device online/offline dideteksi client-side: offline bila `lastSeen` >30 detik, re-evaluasi tiap 1 detik. `scanMode` di dashboard berasal dari heartbeat perangkat (`Manual`, `Auto IN`, `Auto OUT`); mode dikontrol dari tombol fisik alat. Untuk prediksi akurat, transaksi harus di-fetch penuh dengan `useFirebaseTransactions(null)`.
 
 ### Atomic Stock Update (anti race condition)
 

@@ -47,7 +47,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.14"
+#define FIRMWARE_VERSION   "6.5.15"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -227,6 +227,7 @@ void          handleScanModeStream();
 bool          connectToWiFi();
 bool          sendScanToFirebase(String barcode, bool processed = false, bool itemFound = false, const String& itemId = "");
 bool          sendHeartbeatToFirebase();
+void          serviceHeartbeat(bool force);
 bool          signInDevice(String email, String password);
 bool          refreshFirebaseToken(bool force = false);
 bool          ensureFirebaseAuth();
@@ -1346,7 +1347,7 @@ bool sendScanToFirebase(String barcode, bool processed, bool itemFound, const St
   client.setInsecure();
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
-  http.setTimeout(10000);
+  http.setTimeout(5000);
 
   DynamicJsonDocument doc(1024);
   doc["barcode"]   = barcode;
@@ -1398,7 +1399,7 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
   WiFiClientSecure client;
   client.setInsecure();
   http.begin(client, url);
-  http.setTimeout(8000);
+  http.setTimeout(5000);
   int code = http.GET();
 
   if (code == 200) {
@@ -1459,12 +1460,12 @@ bool adjustStockFromDevice(const InventoryItem& item, int delta) {
   client.setInsecure();
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
-  http.setTimeout(10000);
+  http.setTimeout(7000);
 
   const bool stockIn = delta > 0;
   String txId = makeFirebaseKey("tx");
   String operationId = makeOperationId();
-  DynamicJsonDocument doc(4096);
+  DynamicJsonDocument doc(6144);
 
   String quantityPath = "inventory/" + item.id + "/quantity";
   JsonObject quantityOp = doc.createNestedObject(quantityPath);
@@ -1493,6 +1494,20 @@ bool adjustStockFromDevice(const InventoryItem& item, int delta) {
   JsonObject txTimestamp = doc.createNestedObject(txPath + "/timestamp");
   txTimestamp[".sv"] = "timestamp";
 
+  String scanId = makeFirebaseKey("scan");
+  String scanPath = "scans/" + scanId;
+  doc[scanPath + "/barcode"] = item.barcode;
+  doc[scanPath + "/deviceId"] = deviceConfig.deviceId;
+  doc[scanPath + "/location"] = "Warehouse-Scanner";
+  doc[scanPath + "/mode"] = "inventory";
+  doc[scanPath + "/scanMode"] = activeScanMode;
+  doc[scanPath + "/processed"] = true;
+  doc[scanPath + "/itemFound"] = true;
+  doc[scanPath + "/itemId"] = item.id;
+  doc[scanPath + "/type"] = "inventory_scan";
+  JsonObject scanTimestamp = doc.createNestedObject(scanPath + "/timestamp");
+  scanTimestamp[".sv"] = "timestamp";
+
   String json;
   serializeJson(doc, json);
   Serial.println("PATCH auto stock: " + item.id + " delta " + String(delta));
@@ -1500,6 +1515,7 @@ bool adjustStockFromDevice(const InventoryItem& item, int delta) {
   int code = http.sendRequest("PATCH", json);
   bool ok = (code >= 200 && code < 300);
   if (ok) {
+    lastFirebaseScanId = scanId;
     Serial.printf("Auto stock OK (HTTP %d)\n", code);
   } else {
     Serial.printf("Auto stock gagal (HTTP %d): %s\n", code, http.getString().c_str());
@@ -1767,6 +1783,25 @@ bool sendHeartbeatToFirebase() {
   }
   http.end();
   return ok;
+}
+
+void serviceHeartbeat(bool force) {
+  if (!force && millis() - lastHeartbeat <= 5000) return;
+
+  sampleBattery();  // read ADC BEFORE WiFi HTTP to avoid voltage sag noise
+  if (isWiFiConnected) {
+    ensureFirebaseAuth();
+    bool hbOk = sendHeartbeatToFirebase();
+    // First successful heartbeat after an OTA reboot confirms the new image.
+    validateOtaBootSuccess(hbOk);
+    if (hbOk) {
+      lastHeartbeat = millis();
+    } else {
+      lastHeartbeat = millis() - 4000; // retry in ~1 detik
+    }
+  } else {
+    lastHeartbeat = millis();
+  }
 }
 
 
@@ -2146,8 +2181,9 @@ void processInventoryBarcode(String barcode) {
         afterQty = item.quantity;
       }
 
-      bool scanProcessed = adjusted || !stockEnough;
-      sendScanToFirebase(barcode, scanProcessed, true, item.id);
+      if (!adjusted) {
+        sendScanToFirebase(barcode, !stockEnough, true, item.id);
+      }
       oledShowAutoStockResult(
         activeScanMode,
         item.name,
@@ -2278,6 +2314,7 @@ void processBarcodeInput(String input) {
   lastScanTime = millis();
   scanCount++;
   processInventoryBarcode(input);
+  serviceHeartbeat(false);
 }
 
 
@@ -2504,22 +2541,7 @@ void loop() {
     serialBuffer = "";
   }
 
-  if (millis() - lastHeartbeat > 5000) {
-    sampleBattery();  // read ADC BEFORE WiFi HTTP to avoid voltage sag noise
-    if (isWiFiConnected) {
-      ensureFirebaseAuth();
-      bool hbOk = sendHeartbeatToFirebase();
-      // First successful heartbeat after an OTA reboot confirms the new image.
-      validateOtaBootSuccess(hbOk);
-      if (hbOk) {
-        lastHeartbeat = millis();
-      } else {
-        lastHeartbeat = millis() - 4000; // retry in ~1 detik
-      }
-    } else {
-      lastHeartbeat = millis();
-    }
-  }
+  serviceHeartbeat(false);
 
   checkDeviceLookupStatus();
   handleScanModeStream();

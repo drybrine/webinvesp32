@@ -40,7 +40,7 @@ Firebase Realtime Database + Auth is the backend. Client config keys are `NEXT_P
 
 ## Architecture
 
-This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.5.14). The web app and the firmware share one Firebase Realtime Database.
+This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.5.15). The web app and the firmware share one Firebase Realtime Database.
 
 ### Data flow
 
@@ -48,7 +48,7 @@ This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sk
 - **Firebase → web**: every `hooks/use-firebase.ts` hook subscribes via `onValue` — inventory, scans, devices, transactions are all reactive. No polling.
 - **Web → Firebase**: all stock changes (dashboard + ESP32 scan popup) use **atomic `adjustStock()`** — a single multi-path `update()` that writes `inventory/{id}/quantity` via server-side `increment(delta)` AND creates `transactions/{id}` in one atomic operation. This eliminates race conditions from concurrent writes (scanner + dashboard + multi-tab). Operator = `"Dashboard"` for manual, `"Scanner"` for ESP32.
 - **Unknown barcode quick add**: `components/unified-quick-action-popup.tsx` handles ESP32 scans whose barcode is not yet in `/inventory`. It queries the Next.js API `/api/lookup?barcode=...` which queries Searchanise API (`searchserverapi1.com`) with fallback catalog scraping of the Honda Cengkareng website to auto-fill the "Tambah Produk Baru" form (barcode, name, category, quantity, minStock, supplier, description, lastUpdated). `id`, `createdAt`, and `updatedAt` are handled by `firebaseHelpers.addInventoryItem`. Do not reintroduce a `price` field.
-- **Device liveness & status**: `hooks/use-realtime-device-status.ts` subscribes to `/devices` via `onValue`. Firmware controls `scanMode` from the physical UP/OK/DOWN buttons and reports `"Manual"`, `"Auto IN"`, or `"Auto OUT"` inside each heartbeat. If a device goes offline (lastSeen age > 15s, evaluated every 1s), the dashboard treats it as offline until the next heartbeat.
+- **Device liveness & status**: `hooks/use-realtime-device-status.ts` subscribes to `/devices` via `onValue`. Firmware controls `scanMode` from the physical UP/OK/DOWN buttons and reports `"Manual"`, `"Auto IN"`, or `"Auto OUT"` inside each heartbeat. If a device goes offline (lastSeen age > 30s, evaluated every 1s), the dashboard treats it as offline until the next heartbeat.
 - **Auto stock mode**: When scanner mode is set to `Auto IN` or `Auto OUT` on the device, scanned barcodes matching existing inventory automatically adjust stock by +1 or -1 directly from the firmware and create a `transactions/{id}` record with `operator: "Scanner"`. Manual mode still sends scans for the web quick-action flow.
 - **Admin server API**: `/api/admin/*` are Next.js Route Handlers for user/device administration. `/api/lookup` is the Next.js route handler for the Honda catalog/Searchanise scraper API. `/api/predict` is mapped to the Python serverless function at `api/predict.py`.
 - **Audit scope**: Karena Firebase Spark tidak mendukung database triggers, `/auditLogs` server-generated mencakup mutasi user/device melalui Vercel admin API. Write inventory/transaksi/scan yang langsung menuju RTDB tidak otomatis diaudit oleh Vercel.
@@ -114,7 +114,7 @@ The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/tab
 
 ### Firmware notes (`GM67_ESP32_BARCODESCANNER.ino`)
 
-Single file, ~1800 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, `driver/adc` libraries; OTA additionally uses `Update.h`, `esp_ota_ops.h`, `WiFiClientSecure`, and mbedTLS (`mbedtls_sha256`, `mbedtls_pk_verify`). OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.5.14"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state (including batteryLevel, rssi, scanMode) to `/devices/{deviceId}` every 5s. Scan mode is controlled from the physical buttons and `/deviceCommands/{deviceId}/scanMode` is ignored by current firmware.
+Single file, ~1800 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, `driver/adc` libraries; OTA additionally uses `Update.h`, `esp_ota_ops.h`, `WiFiClientSecure`, and mbedTLS (`mbedtls_sha256`, `mbedtls_pk_verify`). OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.5.15"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state (including batteryLevel, rssi, scanMode) to `/devices/{deviceId}` every 5s. Scan mode is controlled from the physical buttons and `/deviceCommands/{deviceId}/scanMode` is ignored by current firmware.
 
 Battery monitoring: `esp_adc_cal` eFuse Vref calibration, EMA smoothing (α=0.05), hysteresis ±2%, range 3200–3800mV. Battery sampled before HTTP request to avoid WiFi voltage sag. OLED shows 4-bar battery icon + 4-bar WiFi signal icon (RSSI-based).
 

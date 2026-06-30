@@ -64,10 +64,10 @@ Buka http://localhost:3000
 
 ### Device Management (ESP32)
 - Setiap scanner memakai akun Firebase Auth unik yang dipetakan ke satu `deviceId`
-- Firmware 6.5.14 menyimpan refresh token saja di Preferences/NVS dan memperbarui ID token otomatis
+- Firmware 6.5.15 menyimpan refresh token saja di Preferences/NVS dan memperbarui ID token otomatis
 - **OTA firmware update** — admin dispatch versi dari panel, perangkat HTTP-pull, verifikasi SHA-256 + ECDSA P-256, flash + auto-rollback (lihat bagian OTA Firmware Update)
 - Monitoring realtime via Firebase `onValue` listener (bukan polling)
-- Deteksi online/offline client-side: offline bila `lastSeen` >15 detik, re-evaluasi tiap 1 detik
+- Deteksi online/offline client-side: offline bila `lastSeen` >30 detik, re-evaluasi tiap 1 detik
 - Battery level monitoring (voltage divider GPIO34, `esp_adc_cal` eFuse Vref, EMA + hysteresis ±2%)
 - Battery icon + WiFi signal icon di OLED display
 - Notifikasi baterai rendah (<20%) otomatis
@@ -179,7 +179,7 @@ GND           ←    GND                GND          ← GND
 
 ### Firmware
 - File: `GM67_ESP32_BARCODESCANNER/GM67_ESP32_BARCODESCANNER.ino`
-- Version: 6.5.14
+- Version: 6.5.15
 - Mode: Inventory only (single mode)
 - Heartbeat: tiap ~5 detik ke Firebase `/devices/{id}` berisi `batteryLevel`, `rssi`, dan `scanMode`
 - Battery: `esp_adc_cal` eFuse Vref + EMA(α=0.05) + hysteresis ±2%, MIN=3200mV, MAX=3800mV
@@ -344,11 +344,11 @@ Semua `/api/admin/*` berjalan sebagai Vercel Functions, mewajibkan Firebase ID t
 2. Set `FIREBASE_SERVICE_ACCOUNT` pada Vercel untuk Preview dan Production, lalu deploy aplikasi.
 3. Deploy `firebase-rules-migration.json` dan jalankan bootstrap admin.
 4. Buat akun pengguna dan scanner dari panel admin; operasi admin dicatat ke `/auditLogs` oleh Vercel Functions.
-5. Flash firmware 6.5.14, scan QR WiFi, daftarkan `deviceId` dari OLED, lalu scan PDF417 kredensial yang ditampilkan panel admin.
+5. Flash firmware 6.5.15, scan QR WiFi, daftarkan `deviceId` dari OLED, lalu scan PDF417 kredensial yang ditampilkan panel admin.
 6. Verifikasi login, heartbeat, scan, role, dan audit administrasi.
 7. Jalankan workflow `Deploy Strict Firebase Rules` setelah approval environment.
 
-`firebase.json` sengaja menunjuk rules migrasi. Cutover strict memakai `firebase.strict.json` sehingga request anonim dan firmware lama baru ditolak setelah scanner 6.5.14 diverifikasi. Karena Firebase Spark tidak mendukung blocking/database-trigger Functions, tidak ada self-registration UI dan akun tanpa profil + custom claim yang sah tidak mendapat akses; audit otomatis hanya dijamin untuk operasi admin melalui Vercel Functions.
+`firebase.json` sengaja menunjuk rules migrasi. Cutover strict memakai `firebase.strict.json` sehingga request anonim dan firmware lama baru ditolak setelah scanner 6.5.15 diverifikasi. Karena Firebase Spark tidak mendukung blocking/database-trigger Functions, tidak ada self-registration UI dan akun tanpa profil + custom claim yang sah tidak mendapat akses; audit otomatis hanya dijamin untuk operasi admin melalui Vercel Functions.
 
 ## License
 

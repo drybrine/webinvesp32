@@ -24,7 +24,7 @@ export const ESP32_CONFIG = {
   DEVICE_ID_PATTERN: /^ESP32-[0-9A-Fa-f]{8}$/,
   
   // Version from ESP32 .ino file
-  VERSION: "6.5.14",
+  VERSION: "6.5.15",
   
   // Heartbeat interval from ESP32 .ino
   HEARTBEAT_INTERVAL: 5000,

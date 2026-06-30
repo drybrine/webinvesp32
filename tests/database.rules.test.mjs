@@ -248,6 +248,18 @@ test("device can append scanner stock transactions with one-unit inventory delta
       operationId: "operation-device-in-1",
       timestamp: serverTimestamp(),
     },
+    "scans/scan-device-in-1": {
+      barcode: "8990001",
+      deviceId: "ESP32-1234ABCD",
+      location: "Warehouse-Scanner",
+      mode: "inventory",
+      scanMode: "Auto IN",
+      processed: true,
+      itemFound: true,
+      itemId: "item-1",
+      type: "inventory_scan",
+      timestamp: serverTimestamp(),
+    },
   }))
 
   await assertSucceeds(update(ref(db), {
