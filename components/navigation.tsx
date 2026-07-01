@@ -4,10 +4,11 @@ import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { BarChart3, Receipt, Menu, X, Package, TrendingUp, LogOut, ShieldCheck } from "lucide-react"
+import { BarChart3, Receipt, Menu, X, TrendingUp, LogOut, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NotificationBell } from "@/components/notification-bell"
 import { useAuth } from "@/components/auth-provider"
+import { BrandMark } from "@/components/brand-logo"
 
 const baseNavigation = [
 	{ name: "Dashboard", href: "/", icon: BarChart3, key: "1" },
@@ -51,9 +52,7 @@ export default function Navigation() {
 					{/* Logo */}
 					<div className="flex items-center">
 						<Link href="/" className="flex items-center gap-2 group">
-							<div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-sm ring-1 ring-primary/20 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:translate-y-0">
-								<Package className="w-4 h-4 text-primary-foreground" />
-							</div>
+							<BrandMark className="h-8 w-8 shadow-sm ring-1 ring-primary/20 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:translate-y-0" />
 							<span className="text-base font-extrabold text-foreground">
 								StokManager
 							</span>

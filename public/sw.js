@@ -4,8 +4,10 @@ const FIREBASE_CACHE_DURATION = 24 * 60 * 60 * 1000 // 24 hours
 
 const urlsToCache = [
   '/manifest.json',
-  '/placeholder-logo.png',
-  '/placeholder-logo.svg',
+  '/stokmanager-logo.svg',
+  '/stokmanager-logo-180.png',
+  '/stokmanager-logo-192.png',
+  '/stokmanager-logo-512.png',
 ]
 
 // Firebase domains to cache (static assets only — RTDB realtime traffic is excluded below)

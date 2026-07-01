@@ -2,8 +2,9 @@
 
 import { FormEvent, useState } from "react"
 import { useRouter } from "next/navigation"
-import { LockKeyhole, Package } from "lucide-react"
+import { LockKeyhole } from "lucide-react"
 import { firebaseAuth } from "@/lib/firebase"
+import { BrandMark } from "@/components/brand-logo"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -52,9 +53,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center space-y-3">
-          <div className="mx-auto w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
-            <Package className="w-6 h-6 text-primary-foreground" />
-          </div>
+          <BrandMark className="mx-auto h-14 w-14 shadow-md ring-1 ring-primary/15" />
           <div>
             <CardTitle className="text-2xl">StokManager</CardTitle>
             <CardDescription>
@@ -110,4 +109,3 @@ export default function LoginPage() {
     </div>
   )
 }
-

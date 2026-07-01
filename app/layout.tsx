@@ -46,7 +46,7 @@ export const viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: "cover",
-  themeColor: "#faf8f5",
+  themeColor: "#29483B",
   colorScheme: "light",
 }
 
@@ -70,15 +70,16 @@ export default function RootLayout({
         
         {/* PWA and meta tags */}
         <link rel="manifest" href="/manifest.json" />
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/placeholder-logo.png" />
-        <meta name="theme-color" content="#faf8f5" />
+        <link rel="icon" href="/stokmanager-logo.svg" type="image/svg+xml" />
+        <link rel="mask-icon" href="/stokmanager-logo.svg" color="#29483B" />
+        <link rel="apple-touch-icon" href="/stokmanager-logo-180.png" />
+        <meta name="theme-color" content="#29483B" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="StokManager" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="msapplication-TileColor" content="#faf8f5" />
+        <meta name="msapplication-TileColor" content="#29483B" />
         <meta name="msapplication-tap-highlight" content="no" />
         
         {/* Inline critical CSS to prevent render blocking */}
