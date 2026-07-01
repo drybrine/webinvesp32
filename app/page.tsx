@@ -561,10 +561,9 @@ export default function DashboardPage() {
           devices={devices}
         />
 
-        {/* Two Column Section: Predictions & Device Status Overview */}
+        {/* Predictions Summary */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Predictions Summary Card (Stretched to span 2 columns on lg) */}
-          <div className="lg:col-span-2 bg-primary/[0.03] border border-primary/10 rounded-xl p-5 shadow-sm animate-fade-in-up">
+          <div className="lg:col-span-3 bg-primary/[0.03] border border-primary/10 rounded-xl p-5 shadow-sm animate-fade-in-up">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
               <div>
                 <div className="flex items-center gap-2">
@@ -622,36 +621,6 @@ export default function DashboardPage() {
                 })}
               </div>
             )}
-          </div>
-
-          {/* Sidebar widget explaining scanning modes / quick tools (Takes 1 column on lg) */}
-          <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between animate-fade-in-up">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-2">Panduan Mode Scanner</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Hubungkan scanner ESP32 untuk memproses scan barcode secara instan. Mode yang aktif menentukan perilaku database:
-              </p>
-              <ul className="mt-3 space-y-2 text-xs">
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground mt-1.5" />
-                  <span><strong>Manual (Ask):</strong> Menampilkan popup detail untuk item baru/tidak dikenal.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5" />
-                  <span><strong>Auto IN:</strong> Otomatis menambahkan 1 ke jumlah stok item yang dikenal.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5" />
-                  <span><strong>Auto OUT:</strong> Otomatis mengurangi 1 dari jumlah stok item yang dikenal.</span>
-                </li>
-              </ul>
-            </div>
-            <div className="mt-4 pt-3 border-t text-[11px] text-muted-foreground flex justify-between items-center">
-              <span>Status ESP32:</span>
-              <span className={`font-semibold ${onlineDevices > 0 ? "text-green-600" : "text-amber-600"}`}>
-                {onlineDevices > 0 ? `${onlineDevices} Online` : "Offline"}
-              </span>
-            </div>
           </div>
         </div>
 

@@ -16,6 +16,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -195,6 +203,23 @@ export default function PrediksiPage() {
     }
   }, [prediction])
 
+  const predictionSummary = useMemo(() => {
+    if (!prediction || !selectedItem) return null
+
+    const predictedLowest = prediction.forecast.reduce(
+      (lowest, point) => Math.min(lowest, point.predictedQuantity),
+      Number(selectedItem.quantity) || 0,
+    )
+    const status =
+      predictedLowest <= 0
+        ? { label: "Habis", variant: "destructive" as const }
+        : predictedLowest < selectedItem.minStock
+          ? { label: "Di bawah minimum", variant: "secondary" as const }
+          : { label: "Aman", variant: "outline" as const }
+
+    return { predictedLowest, status }
+  }, [prediction, selectedItem])
+
   const loading = inventoryLoading || txLoading
 
   return (
@@ -325,6 +350,77 @@ export default function PrediksiPage() {
               }
             />
           </div>
+
+          {predictionSummary && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Ringkasan Hasil Prediksi</CardTitle>
+                <CardDescription>
+                  Indikator utama hasil forecast untuk barang terpilih
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[180px]">Barang</TableHead>
+                      <TableHead className="text-right">Stok Saat Ini</TableHead>
+                      <TableHead className="text-right">Stok Minimum</TableHead>
+                      <TableHead className="text-right">Avg Konsumsi</TableHead>
+                      <TableHead className="text-right">Stok Terendah Forecast</TableHead>
+                      <TableHead className="text-right">Perkiraan Habis</TableHead>
+                      <TableHead className="text-right">Akurasi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="font-medium">
+                        <div className="max-w-[260px] truncate" title={selectedItem.name}>
+                          {selectedItem.name}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-semibold">
+                        {selectedItem.quantity}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {selectedItem.minStock}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {prediction.model.avgDailyConsumption.toFixed(2)}/hari
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="font-mono font-semibold">
+                            {predictionSummary.predictedLowest.toFixed(1)}
+                          </span>
+                          <Badge variant={predictionSummary.status.variant} className="text-[10px]">
+                            {predictionSummary.status.label}
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {forecastStockout
+                          ? forecastStockout.date.toLocaleDateString("id-ID", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            })
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="font-mono text-xs leading-relaxed">
+                          <div className="font-semibold">R² {prediction.metrics.r2.toFixed(3)}</div>
+                          <div className="text-muted-foreground">
+                            MAE {prediction.metrics.mae.toFixed(2)} · RMSE {prediction.metrics.rmse.toFixed(2)}
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-primary/10">
             <CardHeader>
