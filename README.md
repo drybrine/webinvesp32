@@ -111,7 +111,6 @@ Next.js Website (Vercel)
     ├── Dashboard             (inventaris, stock +/-, prediksi ringkas, device status)
     ├── /transaksi            (history, filter jenis/sumber/periode, export CSV, pagination)
     ├── /prediksi             (detailed SVG Linear Regression chart, forecast tabel, metrics)
-    ├── /scan                 (manual barcode input)
     ├── /api/admin/*          (Vercel Functions + Firebase Admin SDK)
     └── /api/predict          (Python serverless, Simple Linear Regression)
 ```
@@ -345,7 +344,7 @@ Semua `/api/admin/*` berjalan sebagai Vercel Functions, mewajibkan Firebase ID t
 3. Deploy `firebase-rules-migration.json` dan jalankan bootstrap admin.
 4. Buat akun pengguna dan scanner dari panel admin; operasi admin dicatat ke `/auditLogs` oleh Vercel Functions.
 5. Flash firmware 6.5.15, scan QR WiFi, daftarkan `deviceId` dari OLED, lalu scan PDF417 kredensial yang ditampilkan panel admin.
-6. Verifikasi login, heartbeat, scan, role, dan audit administrasi.
+6. Verifikasi login, heartbeat, scan, role, dan audit administrasi backend.
 7. Jalankan workflow `Deploy Strict Firebase Rules` setelah approval environment.
 
 `firebase.json` sengaja menunjuk rules migrasi. Cutover strict memakai `firebase.strict.json` sehingga request anonim dan firmware lama baru ditolak setelah scanner 6.5.15 diverifikasi. Karena Firebase Spark tidak mendukung blocking/database-trigger Functions, tidak ada self-registration UI dan akun tanpa profil + custom claim yang sah tidak mendapat akses; audit otomatis hanya dijamin untuk operasi admin melalui Vercel Functions.

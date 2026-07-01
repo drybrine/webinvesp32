@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { BarChart3, Receipt, Menu, X, Package, TrendingUp, LogOut, ShieldCheck, ScrollText, Radio } from "lucide-react"
+import { BarChart3, Receipt, Menu, X, Package, TrendingUp, LogOut, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NotificationBell } from "@/components/notification-bell"
 import { useAuth } from "@/components/auth-provider"
@@ -13,7 +13,6 @@ const baseNavigation = [
 	{ name: "Dashboard", href: "/", icon: BarChart3, key: "1" },
 	{ name: "Transaksi", href: "/transaksi", icon: Receipt, key: "2" },
 	{ name: "Prediksi", href: "/prediksi", icon: TrendingUp, key: "3" },
-	{ name: "Scan", href: "/scan", icon: Radio, key: "4" },
 ]
 
 export default function Navigation() {
@@ -24,12 +23,11 @@ export default function Navigation() {
 	const navigation = useMemo(() => role === "admin"
 		? [
 			...baseNavigation,
-			{ name: "Pengguna", href: "/admin/users", icon: ShieldCheck, key: "5" },
-			{ name: "Audit", href: "/audit", icon: ScrollText, key: "6" },
+			{ name: "Pengguna", href: "/admin/users", icon: ShieldCheck, key: "4" },
 		]
 		: baseNavigation, [role])
 
-	// Page navigation shortcuts: 1-3
+	// Page navigation shortcuts
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			const target = e.target as HTMLElement

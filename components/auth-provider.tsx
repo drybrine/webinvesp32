@@ -180,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loading = !authReady || !profileReady
   const isLoginPage = pathname === "/login"
-  const isAdminRoute = pathname.startsWith("/admin") || pathname === "/audit"
+  const isAdminRoute = pathname.startsWith("/admin")
 
   useEffect(() => {
     if (loading) return

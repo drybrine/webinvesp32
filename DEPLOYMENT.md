@@ -135,7 +135,7 @@ npm run bootstrap:admin -- --email=admin@example.com --password='minimum-12-char
 ```
 
 5. Deploy `firebase-rules-migration.json` lebih dulu. File ini mempertahankan akses legacy sementara firmware dimigrasikan.
-6. Login sebagai admin, daftarkan scanner di `/admin/devices`, lalu scan PDF417 kredensial satu kali dengan firmware 6.5.15. Verifikasi inventory lookup, heartbeat, scan, dan `/audit`.
+6. Login sebagai admin, daftarkan scanner di `/admin/devices`, lalu scan PDF417 kredensial satu kali dengan firmware 6.5.15. Verifikasi inventory lookup, heartbeat, scan, dan audit administrasi backend.
 7. Buat GitHub environment `firebase-production` dengan approval, Workload Identity secrets, serta `FIREBASE_PROJECT_ID` untuk deploy rules.
 8. Setelah backup RTDB dan verifikasi firmware, jalankan workflow `Deploy Strict Firebase Rules` (`firebase.strict.json`).
 

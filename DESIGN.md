@@ -44,7 +44,6 @@ StokManager adalah sistem manajemen inventory untuk AHASS (Honda Authorized Serv
 │  Dashboard   → inventaris, stock ±, prediksi ringkas    │
 │  /transaksi  → history, filter, export CSV, pagination  │
 │  /prediksi   → Linear Regression chart + forecast       │
-│  /scan       → manual barcode input                     │
 │  /api/*      → Next.js API Routes + Python serverless   │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -249,7 +248,6 @@ Pendekatan ini menghilangkan race condition read-modify-write: scanner, dashboar
 | `/` | `app/page.tsx` | Dashboard: inventory, stock ±, search/filter/sort, prediksi ringkas (server-side batch), device status dengan battery level (hanya tampil saat scanner online) |
 | `/transaksi` | `app/transaksi/page.tsx` | History transaksi, filter, export CSV, pagination 50/halaman |
 | `/prediksi` | `app/prediksi/page.tsx` | Linear Regression chart (30 hari historis + forecast), metrics, badge model. Anomaly detection tidak ditampilkan di UI (di luar scope skripsi) |
-| `/scan` | `app/scan/page.tsx` | Manual barcode input, riwayat scan, export CSV |
 
 ### Komponen Utama
 
