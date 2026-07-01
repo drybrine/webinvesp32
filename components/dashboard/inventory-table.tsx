@@ -79,11 +79,11 @@ export default function InventoryTable({
   return (
     <>
       <LowStockAlert lowStockItems={lowStockItems} />
-      <Card className="shadow-sm">
-        <CardHeader className="border-b">
+      <Card className="overflow-hidden border-border/80 bg-card/95 shadow-sm ring-1 ring-border/30">
+        <CardHeader className="border-b bg-muted/25">
           <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
             <div>
-              <CardTitle className="text-xl font-bold text-foreground tracking-tight">
+              <CardTitle className="text-xl font-bold text-foreground">
                 Inventory ({filteredInventory.length})
               </CardTitle>
               <CardDescription className="text-sm text-muted-foreground mt-0.5">
@@ -197,14 +197,14 @@ function LowStockAlert({ lowStockItems }: { lowStockItems: InventoryItem[] }) {
   const warningItems = lowStockItems.filter(item => item.quantity > 0 && item.quantity <= item.minStock)
 
   return (
-    <div className="mb-6 p-4 bg-amber-50/60 border border-amber-200/60 rounded-xl">
+    <div className="mb-6 rounded-lg border border-amber-200/70 bg-amber-50/70 p-4 shadow-sm ring-1 ring-amber-100">
       <div className="flex items-center gap-2 font-semibold text-amber-800 mb-3">
         <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
         {lowStockItems.length} Item Memerlukan Perhatian
       </div>
       <div className="space-y-3">
         {criticalItems.length > 0 && (
-          <div className="bg-red-50/80 rounded-lg p-3 border border-red-200">
+          <div className="rounded-md border border-red-200 bg-red-50/80 p-3">
             <div className="font-medium text-red-700 mb-2 text-xs uppercase tracking-wide">Habis ({criticalItems.length})</div>
             <div className="flex flex-wrap gap-2">
               {criticalItems.slice(0, 6).map(item => (
@@ -220,7 +220,7 @@ function LowStockAlert({ lowStockItems }: { lowStockItems: InventoryItem[] }) {
           </div>
         )}
         {warningItems.length > 0 && (
-          <div className="bg-card rounded-lg p-3 border border-amber-200">
+          <div className="rounded-md border border-amber-200 bg-card/90 p-3">
             <div className="font-medium text-amber-700 mb-2 text-xs uppercase tracking-wide">Stok Rendah ({warningItems.length})</div>
             <div className="flex flex-wrap gap-2">
               {warningItems.slice(0, 6).map(item => (
@@ -243,7 +243,9 @@ function LowStockAlert({ lowStockItems }: { lowStockItems: InventoryItem[] }) {
 function EmptyState() {
   return (
     <div className="text-center py-12">
-      <Package className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+        <Package className="h-6 w-6" />
+      </div>
       <p className="text-muted-foreground font-medium">Tidak ada item yang ditemukan</p>
       <p className="text-sm text-muted-foreground/70 mt-1">Coba ubah filter atau tambah item baru</p>
     </div>
@@ -262,7 +264,7 @@ function MobileCard({ item, onView, onEdit, onDelete, onStockAdjust, canWrite }:
   const isOutOfStock = item.quantity === 0
 
   return (
-    <div className="border rounded-lg p-4 bg-card hover:shadow-md transition-shadow">
+    <div className="rounded-lg border border-border/80 bg-card/95 p-4 shadow-sm transition-[box-shadow,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md">
       <div className="flex justify-between items-start mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">

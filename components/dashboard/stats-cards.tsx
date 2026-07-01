@@ -69,7 +69,8 @@ export default function StatsCards({
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 stagger-children">
       {/* Total Items */}
-      <div className="rounded-lg border border-border bg-card p-4 card-hover">
+      <div className="relative overflow-hidden rounded-lg border border-border/80 bg-card/95 p-4 shadow-sm ring-1 ring-border/30 card-hover">
+        <div className="absolute inset-x-0 top-0 h-1 bg-primary/70" />
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Item</span>
           <Package className="h-3.5 w-3.5 text-primary/50" />
@@ -80,9 +81,10 @@ export default function StatsCards({
 
       {/* Low Stock */}
       <div className={cn(
-        "rounded-lg border border-border bg-card p-4 card-hover",
-        lowStockItems.length > 0 && "border-l-4 border-l-amber-400"
+        "relative overflow-hidden rounded-lg border border-border/80 bg-card/95 p-4 shadow-sm ring-1 ring-border/30 card-hover",
+        lowStockItems.length > 0 && "border-amber-200/80 bg-amber-50/50 ring-amber-200/50"
       )}>
+        <div className={cn("absolute inset-x-0 top-0 h-1", lowStockItems.length > 0 ? "bg-amber-500" : "bg-muted-foreground/25")} />
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Stok Rendah</span>
           <AlertCircle className={cn("h-3.5 w-3.5", lowStockItems.length > 0 ? "text-amber-500" : "text-muted-foreground")} />
@@ -97,9 +99,10 @@ export default function StatsCards({
 
       {/* Device Status */}
       <div className={cn(
-        "rounded-lg border border-border bg-card p-4 card-hover",
-        hasOnlineDevices && "border-l-4 border-l-emerald-400"
+        "relative overflow-hidden rounded-lg border border-border/80 bg-card/95 p-4 shadow-sm ring-1 ring-border/30 card-hover",
+        hasOnlineDevices && "border-emerald-200/80 bg-emerald-50/40 ring-emerald-200/50"
       )}>
+        <div className={cn("absolute inset-x-0 top-0 h-1", hasOnlineDevices ? "bg-emerald-500" : "bg-muted-foreground/25")} />
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Scanner</span>
           <div className="flex items-center gap-1.5">

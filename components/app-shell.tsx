@@ -11,9 +11,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <RealtimeScanProvider>
+      <a href="#main-content" className="skip-link">
+        Lewati ke konten utama
+      </a>
       <Navigation />
-      <main>{children}</main>
+      <main id="main-content" tabIndex={-1}>
+        {children}
+      </main>
     </RealtimeScanProvider>
   )
 }
-
