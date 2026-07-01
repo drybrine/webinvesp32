@@ -29,7 +29,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AlertTriangle, TrendingDown, TrendingUp, Activity, ArrowLeft } from "lucide-react"
 
-import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase"
+import { useFirebaseInventory, useFirebaseTransactions, type InventoryItem } from "@/hooks/use-firebase"
 import { firebaseHelpers } from "@/lib/firebase"
 import {
   buildDailySeriesFromTransactions,
@@ -41,11 +41,195 @@ import PredictionChart from "@/components/prediction-chart"
 import { useAuth } from "@/components/auth-provider"
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
+const SUMMARY_BATCH_LIMIT = 500
+
+type SummaryStatus = "habis" | "rendah" | "aman" | "insufficient"
+
+interface BatchPredictionRisk {
+  itemId?: string
+  itemName?: string
+  barcode?: string
+  currentQuantity?: number
+  minStock?: number
+  avgDailyConsumption?: number
+  predictedLowest?: number
+  daysToStockout?: number | null
+  r2?: number
+  mae?: number
+  rmse?: number
+  slope?: number
+  forecast?: Array<{ timestamp: number; predictedQuantity: number; estimatedConsumption: number }>
+}
+
+interface PredictionSummaryRow {
+  itemId: string
+  itemName: string
+  barcode: string
+  currentQuantity: number
+  minStock: number
+  avgDailyConsumption: number | null
+  predictedLowest: number | null
+  daysToStockout: number | null
+  stockoutDate: Date | null
+  r2: number | null
+  mae: number | null
+  rmse: number | null
+  status: SummaryStatus
+}
 
 function fmt(ts: number): string {
   return new Date(ts).toLocaleDateString("id-ID", {
     day: "2-digit",
     month: "short",
+  })
+}
+
+function fmtFullDate(date: Date): string {
+  return date.toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
+
+function getSummaryStatus(predictedLowest: number, minStock: number): SummaryStatus {
+  if (predictedLowest <= 0) return "habis"
+  if (predictedLowest < minStock) return "rendah"
+  return "aman"
+}
+
+function getSummaryBadge(status: SummaryStatus): { label: string; variant: "destructive" | "secondary" | "outline" } {
+  switch (status) {
+    case "habis":
+      return { label: "Habis", variant: "destructive" }
+    case "rendah":
+      return { label: "Rendah", variant: "secondary" }
+    case "insufficient":
+      return { label: "Data belum cukup", variant: "outline" }
+    default:
+      return { label: "Aman", variant: "outline" }
+  }
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function buildSummaryRows(items: InventoryItem[], risks: BatchPredictionRisk[]): PredictionSummaryRow[] {
+  const risksByItemId = new Map(
+    risks
+      .filter((risk) => risk.itemId)
+      .map((risk) => [String(risk.itemId), risk]),
+  )
+  const analyzedRows: PredictionSummaryRow[] = []
+  const insufficientRows: PredictionSummaryRow[] = []
+
+  for (const item of items) {
+    const risk = risksByItemId.get(item.id)
+    if (!risk) {
+      insufficientRows.push({
+        itemId: item.id,
+        itemName: item.name,
+        barcode: item.barcode ?? "",
+        currentQuantity: Number(item.quantity) || 0,
+        minStock: Number(item.minStock) || 0,
+        avgDailyConsumption: null,
+        predictedLowest: null,
+        daysToStockout: null,
+        stockoutDate: null,
+        r2: null,
+        mae: null,
+        rmse: null,
+        status: "insufficient",
+      })
+      continue
+    }
+
+    const minStock = toNumber(risk.minStock, Number(item.minStock) || 0)
+    const predictedLowest = toNumber(risk.predictedLowest, Number(item.quantity) || 0)
+    const rawDaysToStockout = risk.daysToStockout
+    const daysToStockout =
+      rawDaysToStockout === null || rawDaysToStockout === undefined
+        ? null
+        : toNumber(rawDaysToStockout, Number.NaN)
+
+    analyzedRows.push({
+      itemId: item.id,
+      itemName: risk.itemName || item.name,
+      barcode: risk.barcode || item.barcode || "",
+      currentQuantity: toNumber(risk.currentQuantity, Number(item.quantity) || 0),
+      minStock,
+      avgDailyConsumption: toNumber(risk.avgDailyConsumption),
+      predictedLowest,
+      daysToStockout: daysToStockout === null || Number.isNaN(daysToStockout) ? null : daysToStockout,
+      stockoutDate:
+        daysToStockout === null || Number.isNaN(daysToStockout)
+          ? null
+          : new Date(Date.now() + daysToStockout * MS_PER_DAY),
+      r2: toNumber(risk.r2),
+      mae: toNumber(risk.mae),
+      rmse: toNumber(risk.rmse),
+      status: getSummaryStatus(predictedLowest, minStock),
+    })
+  }
+
+  analyzedRows.sort((a, b) => {
+    const stockoutA = a.daysToStockout ?? Number.POSITIVE_INFINITY
+    const stockoutB = b.daysToStockout ?? Number.POSITIVE_INFINITY
+    if (stockoutA !== stockoutB) return stockoutA - stockoutB
+    return (a.predictedLowest ?? Number.POSITIVE_INFINITY) - (b.predictedLowest ?? Number.POSITIVE_INFINITY)
+  })
+  insufficientRows.sort((a, b) => a.itemName.localeCompare(b.itemName))
+
+  return [...analyzedRows, ...insufficientRows]
+}
+
+function buildClientBatchRisks(
+  items: InventoryItem[],
+  transactions: Array<{ productBarcode: unknown; timestamp: number; quantity: number; type: "in" | "out" | "adjustment" }>,
+  horizonDays: number,
+  trainRatio: number,
+): BatchPredictionRisk[] {
+  const txByBarcode = new Map<string, typeof transactions>()
+  for (const tx of transactions) {
+    if (typeof tx.productBarcode !== "string" || tx.productBarcode.length === 0) continue
+    const existing = txByBarcode.get(tx.productBarcode) ?? []
+    existing.push(tx)
+    txByBarcode.set(tx.productBarcode, existing)
+  }
+
+  return items.flatMap((item) => {
+    if (!item.barcode) return []
+    const itemTx = txByBarcode.get(item.barcode) ?? []
+    const series = buildDailySeriesFromTransactions(itemTx, Number(item.quantity) || 0)
+    if (series.length < 2) return []
+
+    try {
+      const result = predictStock(series, { horizonDays, trainRatio })
+      const predictedLowest = Math.min(
+        ...result.forecast.map((point) => point.predictedQuantity),
+      )
+      const stockoutIndex = result.forecast.findIndex((point) => point.predictedQuantity <= 0)
+
+      return [{
+        itemId: item.id,
+        itemName: item.name,
+        barcode: item.barcode,
+        currentQuantity: Number(item.quantity) || 0,
+        minStock: Number(item.minStock) || 0,
+        avgDailyConsumption: result.model.avgDailyConsumption,
+        predictedLowest,
+        daysToStockout: stockoutIndex === -1 ? null : stockoutIndex + 1,
+        r2: result.metrics.r2,
+        mae: result.metrics.mae,
+        rmse: result.metrics.rmse,
+        slope: result.model.slope,
+        forecast: result.forecast,
+      }]
+    } catch {
+      return []
+    }
   })
 }
 
@@ -70,6 +254,10 @@ export default function PrediksiPage() {
 
   const [predictionSource, setPredictionSource] = useState<"server" | "client" | null>(null)
   const [predictionError, setPredictionError] = useState<string | null>(null)
+  const [summaryRows, setSummaryRows] = useState<PredictionSummaryRow[]>([])
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
+  const [summaryAnalyzedCount, setSummaryAnalyzedCount] = useState(0)
 
   const history: StockDataPoint[] = useMemo(() => {
     if (!selectedItem) return []
@@ -167,6 +355,103 @@ export default function PrediksiPage() {
     return () => controller.abort()
   }, [getIdToken, history, horizonDays, trainRatio, selectedItem, transactions])
 
+  useEffect(() => {
+    if (inventoryLoading) {
+      setSummaryLoading(true)
+      return
+    }
+
+    if (activeInventory.length === 0) {
+      setSummaryRows([])
+      setSummaryAnalyzedCount(0)
+      setSummaryError(null)
+      setSummaryLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    setSummaryLoading(true)
+    setSummaryError(null)
+
+    const fetchSummary = async () => {
+      try {
+        const allTxData = await firebaseHelpers.fetchAllTransactions()
+        const txs = (allTxData as Array<Record<string, unknown>>).map((t) => ({
+          productBarcode: t.productBarcode,
+          timestamp: Number(t.timestamp) || Date.now(),
+          quantity: Number(t.quantity) || 0,
+          type: t.type as "in" | "out" | "adjustment",
+        }))
+        const items = activeInventory.map((item) => ({
+          id: item.id,
+          barcode: item.barcode,
+          name: item.name,
+          quantity: Number(item.quantity) || 0,
+          minStock: Number(item.minStock) || 0,
+        }))
+        const token = await getIdToken()
+        const risks: BatchPredictionRisk[] = []
+        let analyzedCount = 0
+
+        for (let i = 0; i < items.length; i += SUMMARY_BATCH_LIMIT) {
+          if (controller.signal.aborted) return
+          const chunk = items.slice(i, i + SUMMARY_BATCH_LIMIT)
+          const res = await fetch("/api/predict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              mode: "batch",
+              items: chunk,
+              transactions: txs,
+              horizonDays,
+              trainRatio,
+              topN: chunk.length,
+              recentDays: 3650,
+            }),
+            signal: controller.signal,
+          })
+          if (!res.ok) throw new Error(`Server error: HTTP ${res.status}`)
+          const data = await res.json()
+          if (data.error) throw new Error(data.error)
+
+          risks.push(...((data.risks || []) as BatchPredictionRisk[]))
+          analyzedCount += Number(data.totalAnalyzed) || 0
+        }
+
+        if (controller.signal.aborted) return
+        setSummaryRows(buildSummaryRows(activeInventory, risks))
+        setSummaryAnalyzedCount(analyzedCount)
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return
+
+        try {
+          const allTxData = await firebaseHelpers.fetchAllTransactions()
+          const txs = (allTxData as Array<Record<string, unknown>>).map((t) => ({
+            productBarcode: t.productBarcode,
+            timestamp: Number(t.timestamp) || Date.now(),
+            quantity: Number(t.quantity) || 0,
+            type: t.type as "in" | "out" | "adjustment",
+          }))
+          const fallbackRisks = buildClientBatchRisks(activeInventory, txs, horizonDays, trainRatio)
+          setSummaryRows(buildSummaryRows(activeInventory, fallbackRisks))
+          setSummaryAnalyzedCount(fallbackRisks.length)
+          setSummaryError(null)
+        } catch (fallbackErr) {
+          setSummaryRows(buildSummaryRows(activeInventory, []))
+          setSummaryAnalyzedCount(0)
+          setSummaryError((fallbackErr as Error).message || "Gagal menghitung ringkasan prediksi.")
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setSummaryLoading(false)
+        }
+      }
+    }
+
+    fetchSummary()
+    return () => controller.abort()
+  }, [activeInventory, getIdToken, horizonDays, inventoryLoading, trainRatio])
+
   const chartData = useMemo(() => {
     if (!prediction || history.length === 0) return []
     // Limit historical data to last 30 days for readability
@@ -202,23 +487,6 @@ export default function PrediksiPage() {
       daysFromForecastStart: stockoutIndex + 1,
     }
   }, [prediction])
-
-  const predictionSummary = useMemo(() => {
-    if (!prediction || !selectedItem) return null
-
-    const predictedLowest = prediction.forecast.reduce(
-      (lowest, point) => Math.min(lowest, point.predictedQuantity),
-      Number(selectedItem.quantity) || 0,
-    )
-    const status =
-      predictedLowest <= 0
-        ? { label: "Habis", variant: "destructive" as const }
-        : predictedLowest < selectedItem.minStock
-          ? { label: "Di bawah minimum", variant: "secondary" as const }
-          : { label: "Aman", variant: "outline" as const }
-
-    return { predictedLowest, status }
-  }, [prediction, selectedItem])
 
   const loading = inventoryLoading || txLoading
 
@@ -289,6 +557,113 @@ export default function PrediksiPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="text-base">Ringkasan Hasil Prediksi Semua Barang</CardTitle>
+              <CardDescription>
+                {summaryLoading
+                  ? "Menghitung ringkasan prediksi seluruh barang..."
+                  : `${summaryAnalyzedCount} dari ${activeInventory.length} barang memiliki data cukup untuk prediksi.`}
+              </CardDescription>
+            </div>
+            {!summaryLoading && (
+              <Badge variant="outline" className="w-fit">
+                {summaryRows.length} Barang
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className={summaryLoading || summaryError || summaryRows.length === 0 ? "" : "p-0"}>
+          {summaryLoading ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              Memuat ringkasan prediksi...
+            </div>
+          ) : summaryError ? (
+            <div className="py-8 text-center">
+              <p className="font-medium text-destructive">Gagal memuat ringkasan prediksi</p>
+              <p className="text-sm text-muted-foreground mt-1">{summaryError}</p>
+            </div>
+          ) : summaryRows.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              Belum ada barang untuk diringkas.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[220px]">Barang</TableHead>
+                  <TableHead className="text-right">Stok Saat Ini</TableHead>
+                  <TableHead className="text-right">Stok Minimum</TableHead>
+                  <TableHead className="text-right">Avg Konsumsi</TableHead>
+                  <TableHead className="text-right">Stok Terendah Forecast</TableHead>
+                  <TableHead className="text-right">Perkiraan Habis</TableHead>
+                  <TableHead className="text-right">Akurasi</TableHead>
+                  <TableHead className="text-right">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {summaryRows.map((row) => {
+                  const badge = getSummaryBadge(row.status)
+                  return (
+                    <TableRow key={row.itemId}>
+                      <TableCell className="font-medium">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(row.itemId)}
+                          className="max-w-[260px] truncate text-left hover:text-primary hover:underline"
+                          title={row.itemName}
+                        >
+                          {row.itemName}
+                        </button>
+                        {row.barcode ? (
+                          <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                            {row.barcode}
+                          </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-semibold">
+                        {row.currentQuantity}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {row.minStock}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {row.avgDailyConsumption === null ? "—" : `${row.avgDailyConsumption.toFixed(2)}/hari`}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-semibold">
+                        {row.predictedLowest === null ? "—" : row.predictedLowest.toFixed(1)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {row.stockoutDate ? fmtFullDate(row.stockoutDate) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {row.r2 === null || row.mae === null || row.rmse === null ? (
+                          "—"
+                        ) : (
+                          <div className="font-mono text-xs leading-relaxed">
+                            <div className="font-semibold">R² {row.r2.toFixed(3)}</div>
+                            <div className="text-muted-foreground">
+                              MAE {row.mae.toFixed(2)} · RMSE {row.rmse.toFixed(2)}
+                            </div>
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant={badge.variant} className="text-[10px] whitespace-nowrap">
+                          {badge.label}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
       {!selectedItem && !loading && (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
@@ -350,77 +725,6 @@ export default function PrediksiPage() {
               }
             />
           </div>
-
-          {predictionSummary && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Ringkasan Hasil Prediksi</CardTitle>
-                <CardDescription>
-                  Indikator utama hasil forecast untuk barang terpilih
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="min-w-[180px]">Barang</TableHead>
-                      <TableHead className="text-right">Stok Saat Ini</TableHead>
-                      <TableHead className="text-right">Stok Minimum</TableHead>
-                      <TableHead className="text-right">Avg Konsumsi</TableHead>
-                      <TableHead className="text-right">Stok Terendah Forecast</TableHead>
-                      <TableHead className="text-right">Perkiraan Habis</TableHead>
-                      <TableHead className="text-right">Akurasi</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell className="font-medium">
-                        <div className="max-w-[260px] truncate" title={selectedItem.name}>
-                          {selectedItem.name}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-semibold">
-                        {selectedItem.quantity}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {selectedItem.minStock}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {prediction.model.avgDailyConsumption.toFixed(2)}/hari
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-mono font-semibold">
-                            {predictionSummary.predictedLowest.toFixed(1)}
-                          </span>
-                          <Badge variant={predictionSummary.status.variant} className="text-[10px]">
-                            {predictionSummary.status.label}
-                          </Badge>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {forecastStockout
-                          ? forecastStockout.date.toLocaleDateString("id-ID", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="font-mono text-xs leading-relaxed">
-                          <div className="font-semibold">R² {prediction.metrics.r2.toFixed(3)}</div>
-                          <div className="text-muted-foreground">
-                            MAE {prediction.metrics.mae.toFixed(2)} · RMSE {prediction.metrics.rmse.toFixed(2)}
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
 
           <Card className="border-primary/10">
             <CardHeader>

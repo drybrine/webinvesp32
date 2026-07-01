@@ -186,7 +186,7 @@ class handler(BaseHTTPRequestHandler):
         transactions = data.get('transactions', [])
         horizon_days = bounded_int(data.get('horizonDays'), 14, 1, 90, "horizonDays")
         train_ratio = bounded_float(data.get('trainRatio'), 0.85, 0.5, 0.95, "trainRatio")
-        top_n = bounded_int(data.get('topN'), 3, 1, 20, "topN")
+        top_n = bounded_int(data.get('topN'), 3, 1, MAX_BATCH_ITEMS, "topN")
         recent_days = bounded_int(data.get('recentDays'), 90, 1, 3650, "recentDays")
 
         if not isinstance(items, list) or not items:
