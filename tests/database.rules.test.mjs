@@ -227,6 +227,38 @@ test("device can read inventory and write only its own heartbeat and scans", asy
   }))
 })
 
+test("device can clear its battery calibration command and report max above 4200mV", async () => {
+  const now = Date.now()
+  const admin = human("admin-1", "admin")
+  const db = device()
+
+  await assertSucceeds(set(ref(admin, "deviceCommands/ESP32-1234ABCD/batteryCalibrate"), {
+    status: "pending",
+    requestedAt: now,
+  }))
+  await assertSucceeds(get(ref(db, "deviceCommands/ESP32-1234ABCD/batteryCalibrate")))
+  await assertFails(set(ref(db, "deviceCommands/ESP32-1234ABCD/batteryCalibrate"), {
+    status: "pending",
+    requestedAt: now,
+  }))
+  await assertSucceeds(remove(ref(db, "deviceCommands/ESP32-1234ABCD/batteryCalibrate")))
+  await assertSucceeds(set(ref(db, "deviceCalibrationResult/ESP32-1234ABCD"), {
+    status: "done",
+    maxMv: 4250,
+    updatedAt: now,
+  }))
+  await assertFails(set(ref(db, "deviceCalibrationResult/ESP32-1234ABCD"), {
+    status: "done",
+    maxMv: 3499,
+    updatedAt: now,
+  }))
+  await assertFails(set(ref(db, "deviceCalibrationResult/ESP32-FFFFFFFF"), {
+    status: "done",
+    maxMv: 4250,
+    updatedAt: now,
+  }))
+})
+
 test("device can append scanner stock transactions with one-unit inventory delta only", async () => {
   const db = device()
   const now = Date.now()

@@ -52,7 +52,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.16"
+#define FIRMWARE_VERSION   "6.5.17"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -98,6 +98,7 @@ ZJfN84aY52ZkOOxZG8Yq6GBQadq269UEtQXPvwZXT/ZjZFqORuqBifgmWg==
 #define BATTERY_DIVIDER        2.0f  // (R1+R2)/R2 = 200k/100k
 #define BATTERY_SAMPLES         10  // averaging samples per read
 #define BATTERY_CALIB_SAMPLES   50  // samples used during calibration
+#define BATTERY_CALIB_MIN_MV  3500  // reject clearly invalid full-battery readings
 #define BATTERY_EMA_ALPHA     0.05f // EMA smoothing (lower = smoother, less WiFi sag noise)
 #define BATTERY_HYSTERESIS      2   // only update reported level if change >= 2%
 #define BATTERY_ADC_CHANNEL    ADC1_CHANNEL_6  // GPIO34 = ADC1_CH6
@@ -332,7 +333,7 @@ void          reportOtaStatus(const char* phase, const String& version, int prog
 bool          otaPreconditionsMet();
 void          validateOtaBootSuccess(bool heartbeatOk);
 void          oledShowOtaProgress(const String& version, const char* phase, int progress);
-void          performBatteryCalibration();
+void          performBatteryCalibration(bool returnHomeAfter = false);
 // -----------------------------------------------------------------------------
 
 
@@ -407,10 +408,60 @@ int readBatteryLevel() {
   return cachedBatteryLevel;
 }
 
+void clearBatteryCalibrationCommand() {
+  if (!isWiFiConnected || firebaseIdToken.length() == 0) return;
+
+  String cmdUrl = firebaseUrlWithAuth("/deviceCommands/" + String(deviceConfig.deviceId) + "/batteryCalibrate.json");
+  if (cmdUrl.length() == 0) return;
+
+  WiFiClientSecure cmdClient;
+  cmdClient.setInsecure();
+  HTTPClient cmdHttp;
+  cmdHttp.begin(cmdClient, cmdUrl);
+  int code = cmdHttp.sendRequest("DELETE", "");
+  Serial.printf("Battery calibration command delete: HTTP %d\n", code);
+  cmdHttp.end();
+}
+
+void reportBatteryCalibrationResult(int maxMv) {
+  if (!isWiFiConnected || firebaseIdToken.length() == 0) return;
+
+  HTTPClient http;
+  String url = firebaseUrlWithAuth("/deviceCalibrationResult/" + String(deviceConfig.deviceId) + ".json");
+  if (url.length() == 0) return;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  http.begin(client, url);
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(5000);
+
+  DynamicJsonDocument doc(256);
+  doc["maxMv"] = maxMv;
+  doc["status"] = "done";
+  JsonObject ts = doc.createNestedObject("updatedAt");
+  ts[".sv"] = "timestamp";
+  String body;
+  serializeJson(doc, body);
+  int code = http.PUT(body);
+  Serial.printf("Battery calibration result: HTTP %d\n", code);
+  http.end();
+}
+
+void finishBatteryCalibrationScreen(bool returnHomeAfter) {
+  if (!returnHomeAfter) return;
+
+  currentScreen = SCREEN_HOME;
+  lastUiInteraction = millis();
+  lastBarcodeOnOled = 0;
+  lastOledRefresh = 0;
+  if (oledAvailable) renderCurrentScreen();
+}
+
 // Kalibrasi ulang BATTERY_MAX_MV berdasarkan tegangan ADC saat ini.
 // Panggil saat baterai diketahui penuh (indikator biru TP4056 menyala).
 // Hasil disimpan di NVS Preferences agar persisten antar reboot.
-void performBatteryCalibration() {
+void performBatteryCalibration(bool returnHomeAfter) {
   Serial.println("Battery calibration started");
   if (oledAvailable) {
     oledBeginFrame();
@@ -432,17 +483,20 @@ void performBatteryCalibration() {
   float realMv = avgRawMv * BATTERY_DIVIDER;
 
   int newMaxMv = (int)(realMv + 0.5f);
-  if (newMaxMv < 3500 || newMaxMv > 4200) {
-    Serial.printf("Calibration rejected: %dmV diluar rentang (3500-4200)\n", newMaxMv);
+  if (newMaxMv < BATTERY_CALIB_MIN_MV) {
+    Serial.printf("Calibration rejected: %dmV di bawah batas kalibrasi (%d)\n",
+                  newMaxMv, BATTERY_CALIB_MIN_MV);
     if (oledAvailable) {
       oledBeginFrame();
       drawHeader("KALIBRASI GAGAL", "BATERAI");
       drawLabelValueInt(OLED_BODY_Y, "Hasil", newMaxMv, "mV");
-      drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Status", "Di luar rentang");
+      drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Status", "Terlalu rendah");
       drawFooter("Cek baterai", "Gagal");
       display.display();
       lastBarcodeOnOled = millis();
     }
+    clearBatteryCalibrationCommand();
+    finishBatteryCalibrationScreen(returnHomeAfter);
     return;
   }
 
@@ -465,37 +519,9 @@ void performBatteryCalibration() {
     lastBarcodeOnOled = millis();
   }
 
-  // Lapor hasil ke Firebase
-  if (isWiFiConnected && firebaseIdToken.length() > 0) {
-    HTTPClient http;
-    String url = firebaseUrlWithAuth("/deviceCalibrationResult/" + String(deviceConfig.deviceId) + ".json");
-    if (url.length() > 0) {
-      WiFiClientSecure client;
-      client.setInsecure();
-      http.begin(client, url);
-      http.addHeader("Content-Type", "application/json");
-      http.setTimeout(5000);
-      DynamicJsonDocument doc(256);
-      doc["maxMv"] = newMaxMv;
-      doc["status"] = "done";
-      JsonObject ts = doc.createNestedObject("updatedAt");
-      ts[".sv"] = "timestamp";
-      String body; serializeJson(doc, body);
-      http.PUT(body);
-      http.end();
-    }
-
-    // Hapus perintah kalibrasi
-    String cmdUrl = firebaseUrlWithAuth("/deviceCommands/" + String(deviceConfig.deviceId) + "/batteryCalibrate.json");
-    if (cmdUrl.length() > 0) {
-      WiFiClientSecure cmdClient;
-      cmdClient.setInsecure();
-      HTTPClient cmdHttp;
-      cmdHttp.begin(cmdClient, cmdUrl);
-      cmdHttp.sendRequest("DELETE", "");
-      cmdHttp.end();
-    }
-  }
+  reportBatteryCalibrationResult(newMaxMv);
+  clearBatteryCalibrationCommand();
+  finishBatteryCalibrationScreen(returnHomeAfter);
 
   Serial.println("Battery calibration done");
 }
@@ -1811,7 +1837,7 @@ void handleScanModeStream() {
                     JsonObject cal = dataObj["batteryCalibrate"];
                     if (!cal.isNull() && cal["status"] == "pending") {
                       Serial.println("Battery calibration requested via stream root");
-                      performBatteryCalibration();
+                      performBatteryCalibration(true);
                     }
                   }
                 }
@@ -1826,7 +1852,7 @@ void handleScanModeStream() {
                 JsonObject cal = doc["data"];
                 if (!cal.isNull() && cal["status"] == "pending") {
                   Serial.println("Battery calibration requested via stream child");
-                  performBatteryCalibration();
+                  performBatteryCalibration(true);
                 }
               }
             }
