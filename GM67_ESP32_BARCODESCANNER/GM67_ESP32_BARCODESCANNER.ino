@@ -34,6 +34,11 @@
 #define OLED_ADDRESS        0x3C
 #define OLED_SDA              21
 #define OLED_SCL              22
+#define OLED_TEXT_CHARS       21
+#define OLED_HEADER_SEP_Y     16
+#define OLED_BODY_Y           18
+#define OLED_ROW_H            10
+#define OLED_FOOTER_Y         55
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 bool          oledAvailable       = false;
@@ -63,6 +68,14 @@ unsigned long lastBarcodeOnOled   = 0;
 #define SCREEN_SAVER_TIMEOUT_MS 30000UL
 #define MAIN_MENU_COUNT      6
 #define MODE_MENU_COUNT      4
+#define CONFIRM_MENU_COUNT   2
+#define SERIAL_INPUT_MAX   512
+#define SERIAL_IDLE_FLUSH_MS 50UL
+
+// --- WiFi connection state ----------------------------------------------------
+#define WIFI_CONNECT_TIMEOUT_MS 10000UL
+#define WIFI_RECONNECT_INTERVAL_MS 10000UL
+#define WIFI_PROGRESS_INTERVAL_MS 500UL
 
 // --- OTA (over-the-air firmware update) --------------------------------------
 #define OTA_MIN_BATTERY_PCT     30      // do not flash below this charge
@@ -118,6 +131,7 @@ struct InventoryItem {
   int    minStock;
   // price removed in v6.2 (price-free schema)
   bool   found;
+  bool   lookupOk;
 };
 
 struct ScanData {
@@ -142,6 +156,7 @@ unsigned long bootTime        = 0;
 unsigned long lastWiFiCheck   = 0;
 bool          isOnline        = false;
 bool          authRejected    = false;
+bool          firebaseAuthPending = false;
 String        firebaseIdToken = "";
 String        firebaseRefreshToken = "";
 String        firebaseUserUid = "";
@@ -158,6 +173,16 @@ String        activeScanMode = "Manual";       // dikontrol dari tombol alat: "M
 #define LOOKUP_POLL_INTERVAL_MS 1000UL
 #define LOOKUP_TIMEOUT_MS       10000UL
 
+enum WiFiConnectState {
+  WIFI_CONN_IDLE,
+  WIFI_CONN_CONNECTING
+};
+
+WiFiConnectState wifiConnectState = WIFI_CONN_IDLE;
+unsigned long wifiConnectStartedAt = 0;
+unsigned long lastWiFiProgressAt = 0;
+unsigned long nextWiFiReconnectAt = 0;
+
 enum UiScreen {
   SCREEN_HOME,
   SCREEN_SAVER,
@@ -166,6 +191,7 @@ enum UiScreen {
   SCREEN_BATTERY,
   SCREEN_WIFI,
   SCREEN_STATUS,
+  SCREEN_BATTERY_CAL_CONFIRM,
   SCREEN_RESTART_CONFIRM
 };
 
@@ -191,6 +217,7 @@ struct ButtonState {
 UiScreen currentScreen = SCREEN_HOME;
 uint8_t mainMenuIndex = 0;
 uint8_t modeMenuIndex = 0;
+uint8_t batteryCalMenuIndex = 0;
 uint8_t restartMenuIndex = 0;
 unsigned long lastUiInteraction = 0;
 ButtonState btnUp = {BTN_UP_PIN, false, false, false, 0, 0};
@@ -219,25 +246,28 @@ Preferences   otaPreferences;
 // --- Function Declarations ---------------------------------------------------
 void          processBarcodeInput(String input);
 void          processProvisioningBarcode(String input);
-void          processInventoryBarcode(String barcode);
+void          processInventoryBarcode(const String& barcode);
 void          checkDeviceLookupStatus();
 void          startScanModeStream();
 void          stopScanModeStream();
 void          handleScanModeStream();
 bool          connectToWiFi();
-bool          sendScanToFirebase(String barcode, bool processed = false, bool itemFound = false, const String& itemId = "");
+void          serviceWiFiConnection();
+void          onWiFiConnected();
+void          onWiFiDisconnected(bool showNoWiFiScreen);
+bool          sendScanToFirebase(const String& barcode, bool processed = false, bool itemFound = false, const String& itemId = "");
 bool          sendHeartbeatToFirebase();
 void          serviceHeartbeat(bool force);
 bool          signInDevice(String email, String password);
 bool          refreshFirebaseToken(bool force = false);
 bool          ensureFirebaseAuth();
-String        firebaseUrlWithAuth(String pathAndQuery);
-String        urlEncode(String value);
+String        firebaseUrlWithAuth(const String& pathAndQuery);
+String        urlEncode(const String& value);
 String        makeFirebaseKey(const char* prefix);
 String        makeOperationId();
 void          loadFirebaseRefreshToken();
 void          scheduleAuthRetry();
-InventoryItem lookupInventoryByBarcode(String barcode);
+InventoryItem lookupInventoryByBarcode(const String& barcode);
 bool          adjustStockFromDevice(const InventoryItem& item, int delta);
 bool          parseWiFiQR(String qrData, String &ssid, String &password, String &security);
 void          saveWiFiConfig();
@@ -246,6 +276,16 @@ void          saveDeviceConfig();
 void          loadDeviceConfig();
 void          checkWiFiConnection();
 void          initOLED();
+void          oledBeginFrame();
+const char*   fitText(const char* text, char* out, size_t outSize, uint8_t maxChars = OLED_TEXT_CHARS);
+const char*   fitText(const String& text, char* out, size_t outSize, uint8_t maxChars = OLED_TEXT_CHARS);
+void          drawSeparator(int y = OLED_HEADER_SEP_Y);
+void          drawCenteredText(int y, const char* text, uint8_t textSize = 1);
+void          drawHeader(const char* title, const char* subtitle = nullptr);
+void          drawLabelValue(int y, const char* label, const char* value);
+void          drawLabelValueInt(int y, const char* label, long value, const char* suffix = "");
+void          drawFooter(const char* left, const char* right = nullptr);
+void          formatIpAddress(IPAddress ip, char* out, size_t outSize);
 void          drawBatteryIcon(int x, int y, int percent);
 void          drawWifiIcon(int x, int y, int rssi);
 void          initBatteryADC();
@@ -253,14 +293,14 @@ void          sampleBattery();
 int           readBatteryLevel();
 void          oledShowBoot();
 void          oledShowStatus();
-void          oledShowBarcode(String barcode, String itemName, bool sent);
-void          oledShowInventoryFound(String name, int qty, int minStock);
-void          oledShowAutoStockResult(String mode, String name, int beforeQty, int afterQty, bool ok, String message);
-void          oledShowProductLookupSearching(String barcode);
-void          oledShowProductLookupFound(String name, String category);
-void          oledShowProductLookupNotFound(String barcode, String message);
-void          oledShowWiFiConnecting(String ssid);
-void          oledShowWiFiConnected(String ip);
+void          oledShowBarcode(const String& barcode, const String& itemName, bool sent);
+void          oledShowInventoryFound(const String& name, int qty, int minStock);
+void          oledShowAutoStockResult(const String& mode, const String& name, int beforeQty, int afterQty, bool ok, const String& message);
+void          oledShowProductLookupSearching(const String& barcode);
+void          oledShowProductLookupFound(const String& name, const String& category);
+void          oledShowProductLookupNotFound(const String& barcode, const String& message);
+void          oledShowWiFiConnecting(const char* ssid);
+void          oledShowWiFiConnected(const char* ip);
 void          oledShowNoWiFi();
 void          oledShowAuthError();
 void          oledShowProvisioningPin();
@@ -271,6 +311,7 @@ void          initButtons();
 ButtonEvent   readButton(ButtonState &button, ButtonEvent shortEvent, ButtonEvent longEvent);
 void          handleButtons();
 void          handleUiEvent(ButtonEvent event);
+void          handleInputStream(Stream& stream, char* buffer, size_t& length, unsigned long& lastCharTime);
 void          setScanModeFromDevice(const String& mode);
 void          oledShowMainMenu();
 void          oledShowModeMenu();
@@ -278,6 +319,7 @@ void          oledShowScreenSaver();
 void          oledShowBatteryMenu();
 void          oledShowWiFiMenu();
 void          oledShowDeviceStatusMenu();
+void          oledShowBatteryCalConfirm();
 void          oledShowRestartConfirm();
 void          renderCurrentScreen();
 // --- OTA ---------------------------------------------------------------------
@@ -332,7 +374,7 @@ void sampleBattery() {
   uint32_t adcSum = 0;
   for (int i = 0; i < BATTERY_SAMPLES; i++) {
     adcSum += esp_adc_cal_raw_to_voltage(adc1_get_raw(BATTERY_ADC_CHANNEL), &adcCal);
-    delay(2);
+    delayMicroseconds(250);
   }
   float voltageMv = (adcSum / (float)BATTERY_SAMPLES) * BATTERY_DIVIDER;
 
@@ -370,12 +412,21 @@ int readBatteryLevel() {
 // Hasil disimpan di NVS Preferences agar persisten antar reboot.
 void performBatteryCalibration() {
   Serial.println("Battery calibration started");
+  if (oledAvailable) {
+    oledBeginFrame();
+    drawHeader("KALIBRASI", "BATERAI");
+    drawLabelValue(OLED_BODY_Y, "Status", "Sampling ADC");
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Catatan", "Baterai penuh");
+    drawFooter("Mohon tunggu", "ADC");
+    display.display();
+  }
 
   // Oversampling dengan jumlah sampel lebih banyak untuk akurasi
   uint32_t adcSum = 0;
   for (int i = 0; i < BATTERY_CALIB_SAMPLES; i++) {
     adcSum += esp_adc_cal_raw_to_voltage(adc1_get_raw(BATTERY_ADC_CHANNEL), &adcCal);
-    delay(5);
+    delayMicroseconds(500);
+    if ((i % 10) == 0) yield();
   }
   float avgRawMv = adcSum / (float)BATTERY_CALIB_SAMPLES;
   float realMv = avgRawMv * BATTERY_DIVIDER;
@@ -383,6 +434,15 @@ void performBatteryCalibration() {
   int newMaxMv = (int)(realMv + 0.5f);
   if (newMaxMv < 3500 || newMaxMv > 4200) {
     Serial.printf("Calibration rejected: %dmV diluar rentang (3500-4200)\n", newMaxMv);
+    if (oledAvailable) {
+      oledBeginFrame();
+      drawHeader("KALIBRASI GAGAL", "BATERAI");
+      drawLabelValueInt(OLED_BODY_Y, "Hasil", newMaxMv, "mV");
+      drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Status", "Di luar rentang");
+      drawFooter("Cek baterai", "Gagal");
+      display.display();
+      lastBarcodeOnOled = millis();
+    }
     return;
   }
 
@@ -395,6 +455,15 @@ void performBatteryCalibration() {
   cachedBatteryLevel = -1;
 
   Serial.printf("Battery calibration: maxMv=%d\n", newMaxMv);
+  if (oledAvailable) {
+    oledBeginFrame();
+    drawHeader("KALIBRASI OK", "BATERAI");
+    drawLabelValueInt(OLED_BODY_Y, "Max", newMaxMv, "mV");
+    drawLabelValueInt(OLED_BODY_Y + OLED_ROW_H, "Level", readBatteryLevel(), "%");
+    drawFooter("Tersimpan", "OK");
+    display.display();
+    lastBarcodeOnOled = millis();
+  }
 
   // Lapor hasil ke Firebase
   if (isWiFiConnected && firebaseIdToken.length() > 0) {
@@ -454,8 +523,6 @@ uint32_t calculateChecksum(const void* data, size_t length) {
 //    KUNING -> baris piksel y=0..15  (2 baris teks size 1: y=0 dan y=8)
 //    BIRU   -> baris piksel y=16..63 (6 baris teks size 1: y=16,24,32,40,48,56)
 // =============================================================================
-// Menginisialisasi komunikasi I2C dan modul OLED SSD1306.
-// Jika OLED tidak terdeteksi, flag oledAvailable dibuat false agar fungsi display dilewati.
 void initOLED() {
   Wire.begin(OLED_SDA, OLED_SCL);
   if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
@@ -469,50 +536,113 @@ void initOLED() {
   Serial.println("OLED SSD1306 Yellow-Blue OK");
 }
 
-// Menampilkan layar pembuka saat ESP32 baru menyala.
-// Informasi ini memberi tanda bahwa firmware dan OLED sudah mulai berjalan.
-void oledShowBoot() {
+void oledBeginFrame() {
   if (!oledAvailable) return;
   display.clearDisplay();
   display.setTextSize(1);
-
-  // -- ZONA KUNING (y=0..15) --
-  display.setCursor(16, 0); display.print("ESP32 SCANNER v"); display.println(FIRMWARE_VERSION);
-  display.setCursor(22, 8); display.println("GM67 Barcode Scanner");
-
-  // -- ZONA BIRU (y=16..63) --
-  display.setCursor(0, 18); display.println("Firebase Realtime DB");
-  display.setCursor(0, 28); display.println("Inventory Mode Only");
-  display.setCursor(0, 38); display.println("OLED: Yellow-Blue");
-  display.drawLine(0, 50, 127, 50, SSD1306_WHITE);
-  display.setCursor(26, 54); display.println("Initializing...");
-
-  display.display();
+  display.setTextColor(SSD1306_WHITE);
+  display.cp437(true);
 }
 
-// Menggambar ikon baterai berukuran kecil pada koordinat (x, y).
-// Jumlah bar di dalam ikon disesuaikan dengan persentase baterai.
+const char* fitText(const char* text, char* out, size_t outSize, uint8_t maxChars) {
+  if (outSize == 0) return "";
+  if (!text) text = "";
+  if (maxChars == 0 || maxChars >= outSize) maxChars = outSize - 1;
+
+  size_t len = strlen(text);
+  size_t copyLen = len > maxChars ? maxChars : len;
+  if (len > maxChars && maxChars >= 2) {
+    copyLen = maxChars - 2;
+    memcpy(out, text, copyLen);
+    out[copyLen++] = '.';
+    out[copyLen++] = '.';
+  } else {
+    memcpy(out, text, copyLen);
+  }
+  out[copyLen] = '\0';
+  return out;
+}
+
+const char* fitText(const String& text, char* out, size_t outSize, uint8_t maxChars) {
+  return fitText(text.c_str(), out, outSize, maxChars);
+}
+
+void drawSeparator(int y) {
+  display.drawLine(0, y, SCREEN_WIDTH - 1, y, SSD1306_WHITE);
+}
+
+void drawCenteredText(int y, const char* text, uint8_t textSize) {
+  char buf[32];
+  fitText(text, buf, sizeof(buf), OLED_TEXT_CHARS / textSize);
+  int16_t width = strlen(buf) * 6 * textSize;
+  int16_t x = (SCREEN_WIDTH - width) / 2;
+  if (x < 0) x = 0;
+  display.setTextSize(textSize);
+  display.setCursor(x, y);
+  display.print(buf);
+  display.setTextSize(1);
+}
+
+void drawHeader(const char* title, const char* subtitle) {
+  drawCenteredText(0, title, 1);
+  if (subtitle && strlen(subtitle) > 0) {
+    drawCenteredText(8, subtitle, 1);
+  }
+  drawSeparator(OLED_HEADER_SEP_Y);
+}
+
+void drawLabelValue(int y, const char* label, const char* value) {
+  char valueBuf[32];
+  uint8_t labelChars = strlen(label) + 2;
+  uint8_t maxValueChars = labelChars < OLED_TEXT_CHARS ? OLED_TEXT_CHARS - labelChars : 0;
+  if (maxValueChars == 0) valueBuf[0] = '\0';
+  else fitText(value, valueBuf, sizeof(valueBuf), maxValueChars);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, y);
+  display.print(label);
+  display.print(": ");
+  display.print(valueBuf);
+}
+
+void drawLabelValueInt(int y, const char* label, long value, const char* suffix) {
+  char buf[24];
+  snprintf(buf, sizeof(buf), "%ld%s", value, suffix ? suffix : "");
+  drawLabelValue(y, label, buf);
+}
+
+void drawFooter(const char* left, const char* right) {
+  char leftBuf[24];
+  char rightBuf[16];
+  drawSeparator(OLED_FOOTER_Y - 2);
+  display.setCursor(0, OLED_FOOTER_Y);
+  display.print(fitText(left, leftBuf, sizeof(leftBuf), 14));
+  if (right && strlen(right) > 0) {
+    fitText(right, rightBuf, sizeof(rightBuf), 7);
+    int16_t x = SCREEN_WIDTH - (strlen(rightBuf) * 6);
+    if (x < 0) x = 0;
+    display.setCursor(x, OLED_FOOTER_Y);
+    display.print(rightBuf);
+  }
+}
+
+void formatIpAddress(IPAddress ip, char* out, size_t outSize) {
+  snprintf(out, outSize, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+}
+
 void drawBatteryIcon(int x, int y, int percent) {
-  // Battery body outline (12x7)
   display.drawRect(x, y, 13, 7, SSD1306_WHITE);
-  // Battery tip (positive terminal)
   display.fillRect(x + 13, y + 2, 2, 3, SSD1306_WHITE);
-  // Fill level (0-4 bars inside)
   int bars = (percent > 80) ? 4 : (percent > 55) ? 3 : (percent > 30) ? 2 : (percent > 10) ? 1 : 0;
   for (int i = 0; i < bars; i++) {
     display.fillRect(x + 2 + (i * 3), y + 2, 2, 3, SSD1306_WHITE);
   }
 }
 
-// Menggambar ikon sinyal WiFi pada koordinat (x, y).
-// Kekuatan sinyal dihitung dari RSSI dan ditampilkan sebagai 0 sampai 4 bar.
 void drawWifiIcon(int x, int y, int rssi) {
-  // bars: bottom-to-top fill based on RSSI
-  // -30 to -50 dBm = 4 bars, -50 to -60 = 3, -60 to -70 = 2, -70 to -80 = 1, < -80 = 0
   int bars = (rssi >= -50) ? 4 : (rssi >= -60) ? 3 : (rssi >= -70) ? 2 : (rssi >= -80) ? 1 : 0;
-  int h = 2;  // bar height
+  int h = 2;
   for (int i = 0; i < 4; i++) {
-    int bw = (i + 1) * 2;   // bottom bar widest, top bar narrowest
+    int bw = (i + 1) * 2;
     int by = y + 6 - (i + 1) * h;
     if (i < bars) {
       display.fillRect(x + (4 - bw) / 2, by, bw, h - 1, SSD1306_WHITE);
@@ -522,68 +652,54 @@ void drawWifiIcon(int x, int y, int rssi) {
   }
 }
 
-// Menampilkan status idle scanner di OLED: online/offline, baterai, WiFi, IP, dan jumlah scan.
-// Layar ini menjadi tampilan utama saat tidak ada barcode baru yang sedang ditahan.
+void oledShowBoot() {
+  if (!oledAvailable) return;
+  oledBeginFrame();
+  char version[18];
+  snprintf(version, sizeof(version), "FW v%s", FIRMWARE_VERSION);
+  drawHeader("ESP32 SCANNER", version);
+  drawLabelValue(OLED_BODY_Y, "Modul", "GM67 Barcode");
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Backend", "Firebase RTDB");
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "Mode", "Inventory");
+  drawFooter("Initializing", "SSD1306");
+  display.display();
+}
+
 void oledShowStatus() {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
+  oledBeginFrame();
 
   int batLvl = readBatteryLevel();
+  drawHeader("SCANNER", isOnline ? "ONLINE" : "OFFLINE");
+  drawBatteryIcon(112, 0, batLvl);
+  char batText[8];
+  snprintf(batText, sizeof(batText), "%d%%", batLvl);
+  display.setCursor(107, 8);
+  display.print(batText);
 
-  // -- Row 1 (y=0): Title + Battery icon
-  display.setCursor(0, 0); display.print("SCANNER v"); display.print(FIRMWARE_VERSION);
-  drawBatteryIcon(105, 0, batLvl);
-
-  // -- Row 2 (y=9): Status + Battery %
-  display.setCursor(0, 9);
-  display.print(isOnline ? "[ONLINE]" : "[OFFLINE]");
-  display.setCursor(106, 9);
-  display.print(batLvl); display.print("%");
-
-  // -- Separator 1 (y=17)
-  display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
-
-  // -- Row 3 (y=20): WiFi name + signal icon (2 lines to avoid overlap)
   if (isWiFiConnected) {
+    char ssid[24];
+    fitText(wifiConfig.ssid, ssid, sizeof(ssid), 15);
     int rssi = WiFi.RSSI();
-    String ssid = String(wifiConfig.ssid);
-    if (ssid.length() > 14) ssid = ssid.substring(0, 14) + "..";
-    display.setCursor(0, 20);
-    display.print("WiFi: "); display.print(ssid);
-    display.setCursor(0, 29);
-    display.print("RSSI: "); display.print(rssi); display.print(" dBm");
-    drawWifiIcon(105, 23, rssi);
+    drawLabelValue(OLED_BODY_Y, "WiFi", ssid);
+    drawWifiIcon(116, OLED_BODY_Y + 2, rssi);
+    char ip[16];
+    formatIpAddress(WiFi.localIP(), ip, sizeof(ip));
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "IP", ip);
   } else {
-    display.setCursor(0, 20); display.println("WiFi: Disconnected");
+    drawLabelValue(OLED_BODY_Y, "WiFi", "Terputus");
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "IP", "--");
   }
-
-  // -- Row 4 (y=38): IP address
-  display.setCursor(0, 38);
-  display.print("IP: ");
-  display.println(isWiFiConnected ? WiFi.localIP().toString() : "--.--.--.--");
-
-  // -- Row 5 (y=47): Scan count
-  display.setCursor(0, 47);
-  display.print("Scan: "); display.println(scanCount);
-
-  // -- Separator 2 (y=55)
-  display.drawLine(0, 55, 127, 55, SSD1306_WHITE);
-
-  // -- Row 6 (y=57): Scan mode status
-  display.setCursor(0, 57); display.print("Mode: ");
-  if (activeScanMode.length() > 0) display.print(activeScanMode);
-  else display.print("Manual");
-
+  drawLabelValueInt(OLED_BODY_Y + OLED_ROW_H * 2, "Scan", scanCount);
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 3, "Mode", activeScanMode.length() > 0 ? activeScanMode.c_str() : "Manual");
+  drawFooter("OK: Menu", isDeviceProvisioned() ? "Ready" : "Prov");
   display.display();
 }
 
 void drawMenuList(const char* title, const char* const* items, uint8_t count, uint8_t selected) {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 0); display.println(title);
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  oledBeginFrame();
+  drawHeader(title);
   uint8_t visibleCount = count < 5 ? count : 5;
   uint8_t startIndex = 0;
   if (count > visibleCount && selected >= visibleCount) {
@@ -591,10 +707,20 @@ void drawMenuList(const char* title, const char* const* items, uint8_t count, ui
   }
   for (uint8_t row = 0; row < visibleCount; row++) {
     uint8_t i = startIndex + row;
-    display.setCursor(0, 16 + row * 9);
+    int y = OLED_BODY_Y + row * 9;
+    char item[24];
+    fitText(items[i], item, sizeof(item), 18);
+    if (i == selected) {
+      display.fillRect(0, y - 1, SCREEN_WIDTH, 9, SSD1306_WHITE);
+      display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
+    } else {
+      display.setTextColor(SSD1306_WHITE);
+    }
+    display.setCursor(2, y);
     display.print(i == selected ? "> " : "  ");
-    display.println(items[i]);
+    display.print(item);
   }
+  display.setTextColor(SSD1306_WHITE);
   display.display();
 }
 
@@ -610,38 +736,50 @@ void oledShowModeMenu() {
 
 void oledShowBatteryMenu() {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 0); display.println("BATTERY");
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-  display.setCursor(0, 18); display.print("Level: "); display.print(readBatteryLevel()); display.println("%");
-  display.setCursor(0, 30); display.print("Max: "); display.print(getBatteryMaxMv()); display.println("mV");
-  display.setCursor(0, 48); display.println("Kalibrasi: next phase");
+  oledBeginFrame();
+  drawHeader("BATTERY", "ADC CALIBRATED");
+  int level = readBatteryLevel();
+  drawBatteryIcon(112, 1, level);
+  drawLabelValueInt(OLED_BODY_Y, "Level", level, "%");
+  drawLabelValueInt(OLED_BODY_Y + OLED_ROW_H, "Max", getBatteryMaxMv(), "mV");
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "Min", "3200mV");
+  drawFooter("OK: Kalibrasi", "UP Back");
   display.display();
 }
 
 void oledShowWiFiMenu() {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 0); display.println("WIFI INFO");
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-  display.setCursor(0, 18); display.print("SSID: "); display.println(String(wifiConfig.ssid).substring(0, 15));
-  display.setCursor(0, 30); display.print("RSSI: "); display.print(isWiFiConnected ? WiFi.RSSI() : 0); display.println(" dBm");
-  display.setCursor(0, 42); display.print("IP: "); display.println(isWiFiConnected ? WiFi.localIP().toString() : "--");
+  oledBeginFrame();
+  drawHeader("WIFI INFO", isWiFiConnected ? "TERHUBUNG" : "TERPUTUS");
+  if (isWiFiConnected) {
+    char ssid[24];
+    char ip[16];
+    char rssi[12];
+    int signal = WiFi.RSSI();
+    fitText(wifiConfig.ssid, ssid, sizeof(ssid), 15);
+    formatIpAddress(WiFi.localIP(), ip, sizeof(ip));
+    snprintf(rssi, sizeof(rssi), "%d dBm", signal);
+    drawLabelValue(OLED_BODY_Y, "SSID", ssid);
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "RSSI", rssi);
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "IP", ip);
+    drawWifiIcon(116, OLED_BODY_Y + OLED_ROW_H + 2, signal);
+  } else {
+    drawLabelValue(OLED_BODY_Y, "SSID", wifiConfig.isValid ? wifiConfig.ssid : "Belum ada");
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Status", "Offline");
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "IP", "--");
+  }
+  drawFooter("UP/DOWN", "OK");
   display.display();
 }
 
 void oledShowDeviceStatusMenu() {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 0); display.println("DEVICE STATUS");
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-  display.setCursor(0, 18); display.println(deviceConfig.deviceId);
-  display.setCursor(0, 30); display.print("FW: "); display.println(FIRMWARE_VERSION);
-  display.setCursor(0, 42); display.print("Heap: "); display.print(ESP.getFreeHeap() / 1024); display.println(" KB");
-  display.setCursor(0, 54); display.print("Mode: "); display.println(activeScanMode);
+  oledBeginFrame();
+  drawHeader("DEVICE STATUS", deviceConfig.deviceId);
+  drawLabelValue(OLED_BODY_Y, "FW", FIRMWARE_VERSION);
+  drawLabelValueInt(OLED_BODY_Y + OLED_ROW_H, "Heap", ESP.getFreeHeap() / 1024, "KB");
+  drawLabelValueInt(OLED_BODY_Y + OLED_ROW_H * 2, "Uptime", (millis() - bootTime) / 1000, "s");
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 3, "Mode", activeScanMode.c_str());
   display.display();
 }
 
@@ -650,10 +788,14 @@ void oledShowRestartConfirm() {
   drawMenuList("RESTART?", items, 2, restartMenuIndex);
 }
 
+void oledShowBatteryCalConfirm() {
+  static const char* const items[] = {"Tidak", "Ya, kalibrasi"};
+  drawMenuList("KALIBRASI BATERAI?", items, CONFIRM_MENU_COUNT, batteryCalMenuIndex);
+}
+
 void oledShowScreenSaver() {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(2);
+  oledBeginFrame();
   struct tm timeinfo;
   int drift = (millis() / 10000UL) % 3;
   if (getLocalTime(&timeinfo, 10)) {
@@ -661,17 +803,21 @@ void oledShowScreenSaver() {
     char dateBuf[16];
     strftime(timeBuf, sizeof(timeBuf), "%H:%M", &timeinfo);
     strftime(dateBuf, sizeof(dateBuf), "%d/%m/%Y", &timeinfo);
-    display.setCursor(24 + drift * 2, 8); display.println(timeBuf);
+    display.setTextSize(2);
+    display.setCursor(24 + drift * 2, 10);
+    display.print(timeBuf);
     display.setTextSize(1);
-    display.setCursor(34 + drift * 2, 30); display.println(dateBuf);
+    drawCenteredText(34, dateBuf, 1);
   } else {
-    display.setCursor(26 + drift * 2, 12); display.println("--:--");
+    display.setTextSize(2);
+    display.setCursor(26 + drift * 2, 12);
+    display.print("--:--");
     display.setTextSize(1);
-    display.setCursor(18, 34); display.println("Sinkron waktu...");
+    drawCenteredText(34, "Sinkron waktu", 1);
   }
-  display.setTextSize(1);
-  display.setCursor(0, 52); display.print(activeScanMode);
-  display.setCursor(96, 52); display.print(readBatteryLevel()); display.print("%");
+  char bat[8];
+  snprintf(bat, sizeof(bat), "%d%%", readBatteryLevel());
+  drawFooter(activeScanMode.c_str(), bat);
   display.display();
 }
 
@@ -684,276 +830,182 @@ void renderCurrentScreen() {
     case SCREEN_BATTERY: oledShowBatteryMenu(); break;
     case SCREEN_WIFI: oledShowWiFiMenu(); break;
     case SCREEN_STATUS: oledShowDeviceStatusMenu(); break;
+    case SCREEN_BATTERY_CAL_CONFIRM: oledShowBatteryCalConfirm(); break;
     case SCREEN_RESTART_CONFIRM: oledShowRestartConfirm(); break;
     case SCREEN_HOME:
     default: oledShowStatus(); break;
   }
 }
 
-// Menampilkan hasil scan barcode pada OLED.
-// Parameter sent dipakai untuk menandai apakah data berhasil dikirim ke Firebase.
-void oledShowBarcode(String barcode, String itemName, bool sent) {
+void oledShowBarcode(const String& barcode, const String& itemName, bool sent) {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-
-  // -- ZONA KUNING (y=0..15) --
-  display.setCursor(19, 0); display.println("- BARCODE SCAN -");
-  // Tampilkan barcode di baris kuning ke-2 jika muat
-  if (barcode.length() <= 21) {
-    int cx = (128 - (int)barcode.length() * 6) / 2;
-    if (cx < 0) cx = 0;
-    display.setCursor(cx, 8); display.println(barcode);
-  } else {
-    display.setCursor(0, 8); display.println(barcode.substring(0, 21));
-  }
-
-  // -- ZONA BIRU (y=16..63) --
-  // Jika barcode panjang, lanjutkan di biru atas
-  if (barcode.length() > 21) {
-    display.setCursor(0, 18); display.println(barcode.substring(21, 42));
-  }
-
-  // Nama item
-  display.setCursor(0, 32);
+  oledBeginFrame();
+  char codeLine[24];
+  fitText(barcode, codeLine, sizeof(codeLine), OLED_TEXT_CHARS);
+  drawHeader("BARCODE SCAN", codeLine);
   if (itemName.length() > 0) {
-    String label = itemName;
-    if (label.length() > 20) label = label.substring(0, 20);
-    display.print("Item: "); display.println(label);
+    char item[24];
+    fitText(itemName, item, sizeof(item), 15);
+    drawLabelValue(OLED_BODY_Y, "Item", item);
   } else {
-    display.println("Item: Tidak ditemukan");
+    drawLabelValue(OLED_BODY_Y, "Item", "Tidak ditemukan");
   }
-
-  display.drawLine(0, 43, 127, 43, SSD1306_WHITE);
-
-  display.setCursor(0, 47);
-  display.println(isOnline ? "Firebase: TERKIRIM" : "Firebase: OFFLINE");
-
-  display.setCursor(0, 57);
-  display.println(sent ? "Sync: OK" : "Sync: GAGAL");
-
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Firebase", isOnline ? "Online" : "Offline");
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "Sync", sent ? "OK" : "Gagal");
+  drawFooter(activeScanMode.c_str(), sent ? "Terkirim" : "Lokal");
   display.display();
   lastBarcodeOnOled = millis();
 }
 
-// Menampilkan ringkasan item inventory yang ditemukan berdasarkan barcode.
-// Jika stok kurang dari atau sama dengan minStock, OLED menampilkan peringatan stok menipis.
-void oledShowInventoryFound(String name, int qty, int minStock) {
+void oledShowInventoryFound(const String& name, int qty, int minStock) {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-
-  // -- ZONA KUNING (y=0..15) --
-  display.setCursor(13, 0); display.println("- ITEM DITEMUKAN -");
-  display.drawLine(0, 9, 127, 9, SSD1306_WHITE);
-  if (name.length() > 21) name = name.substring(0, 21);
-  display.setCursor(0, 12); display.println(name);
-
-  // -- ZONA BIRU (y=16..63) --
-  display.drawLine(0, 21, 127, 21, SSD1306_WHITE);
-
-  display.setCursor(0, 24);
-  display.print("Stok saat ini : "); display.println(qty);
-
-  display.setCursor(0, 34);
-  display.print("Stok minimum  : "); display.println(minStock);
-
+  oledBeginFrame();
+  char item[24];
+  fitText(name, item, sizeof(item), OLED_TEXT_CHARS);
+  drawHeader("ITEM DITEMUKAN", item);
+  drawLabelValueInt(OLED_BODY_Y, "Stok", qty);
+  drawLabelValueInt(OLED_BODY_Y + OLED_ROW_H, "Minimum", minStock);
   if (qty <= minStock) {
-    display.drawLine(0, 46, 127, 46, SSD1306_WHITE);
-    display.setCursor(13, 50); display.println("!! STOK MENIPIS !!");
-    display.setCursor(0,  58); display.println("Segera lakukan restock");
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "Status", "Stok menipis");
+    drawFooter("Segera restock", "LOW");
   } else {
-    display.setCursor(0, 48);
-    display.println("Stok: Aman");
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "Status", "Aman");
+    drawFooter("Inventory", "AMAN");
   }
-
   display.display();
   lastBarcodeOnOled = millis();
 }
 
-void oledShowAutoStockResult(String mode, String name, int beforeQty, int afterQty, bool ok, String message) {
+void oledShowAutoStockResult(const String& mode, const String& name, int beforeQty, int afterQty, bool ok, const String& message) {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 0); display.print(mode);
-  display.print(ok ? " BERHASIL" : " GAGAL");
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-
-  if (name.length() > 21) name = name.substring(0, 21);
-  display.setCursor(0, 16); display.println(name);
-
-  display.setCursor(0, 28); display.print("Sebelum: "); display.println(beforeQty);
-  display.setCursor(0, 38); display.print("Sesudah: "); display.println(afterQty);
-
-  if (message.length() > 21) message = message.substring(0, 21);
-  display.setCursor(0, 54); display.println(message);
-
+  oledBeginFrame();
+  char title[22];
+  snprintf(title, sizeof(title), "%s %s", mode.c_str(), ok ? "OK" : "GAGAL");
+  char item[24];
+  fitText(name, item, sizeof(item), OLED_TEXT_CHARS);
+  drawHeader(title, item);
+  drawLabelValueInt(OLED_BODY_Y, "Sebelum", beforeQty);
+  drawLabelValueInt(OLED_BODY_Y + OLED_ROW_H, "Sesudah", afterQty);
+  char msg[24];
+  fitText(message, msg, sizeof(msg), OLED_TEXT_CHARS);
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "Info", msg);
+  drawFooter("Auto Stock", ok ? "Simpan" : "Cek");
   display.display();
   lastBarcodeOnOled = millis();
 }
 
-void oledShowProductLookupSearching(String barcode) {
+void oledShowProductLookupSearching(const String& barcode) {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(20, 0); display.println("- DATA BARANG -");
-  if (barcode.length() > 21) barcode = barcode.substring(0, 21);
-  display.setCursor(0, 10); display.println(barcode);
-  display.drawLine(0, 20, 127, 20, SSD1306_WHITE);
-  display.setCursor(0, 26); display.println("Mencari data...");
-  display.setCursor(0, 38); display.println("Honda Cengkareng");
-  display.setCursor(0, 54); display.println("Mohon tunggu");
+  oledBeginFrame();
+  char codeLine[24];
+  fitText(barcode, codeLine, sizeof(codeLine), OLED_TEXT_CHARS);
+  drawHeader("DATA BARANG", codeLine);
+  drawLabelValue(OLED_BODY_Y, "Status", "Mencari");
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Sumber", "Web catalog");
+  drawFooter("Mohon tunggu", "Lookup");
   display.display();
   lastBarcodeOnOled = millis();
 }
 
-void oledShowProductLookupFound(String name, String category) {
+void oledShowProductLookupFound(const String& name, const String& category) {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(12, 0); display.println("DATA DITEMUKAN");
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-  if (name.length() > 21) name = name.substring(0, 21);
-  display.setCursor(0, 18); display.println(name);
-  if (category.length() > 21) category = category.substring(0, 21);
-  display.setCursor(0, 32); display.println(category);
-  display.setCursor(0, 48); display.println("Cek form di website");
+  oledBeginFrame();
+  char item[24];
+  char cat[24];
+  fitText(name, item, sizeof(item), OLED_TEXT_CHARS);
+  fitText(category, cat, sizeof(cat), OLED_TEXT_CHARS);
+  drawHeader("DATA DITEMUKAN", "CATALOG");
+  drawLabelValue(OLED_BODY_Y, "Item", item);
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Kategori", cat);
+  drawFooter("Cek form web", "OK");
   display.display();
   lastBarcodeOnOled = millis();
 }
 
-void oledShowProductLookupNotFound(String barcode, String message) {
+void oledShowProductLookupNotFound(const String& barcode, const String& message) {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(4, 0); display.println("DATA TIDAK DITEMUKAN");
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-  if (barcode.length() > 21) barcode = barcode.substring(0, 21);
-  display.setCursor(0, 18); display.println(barcode);
-  if (message.length() == 0) message = "Isi manual di web";
-  if (message.length() > 21) message = message.substring(0, 21);
-  display.setCursor(0, 36); display.println(message);
-  display.setCursor(0, 52); display.println("Tambah via popup");
+  oledBeginFrame();
+  char codeLine[24];
+  char msg[24];
+  fitText(barcode, codeLine, sizeof(codeLine), OLED_TEXT_CHARS);
+  fitText(message.length() > 0 ? message.c_str() : "Isi manual di web", msg, sizeof(msg), OLED_TEXT_CHARS);
+  drawHeader("DATA TIDAK ADA", codeLine);
+  drawLabelValue(OLED_BODY_Y, "Status", msg);
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Aksi", "Tambah via web");
+  drawFooter("Popup dashboard", "Manual");
   display.display();
   lastBarcodeOnOled = millis();
 }
 
-// Menampilkan layar proses koneksi WiFi.
-// SSID dipotong agar tetap muat pada layar OLED 128x64.
-void oledShowWiFiConnecting(String ssid) {
+void oledShowWiFiConnecting(const char* ssid) {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-
-  // -- ZONA KUNING (y=0..15) --
-  display.setCursor(16, 0); display.println("Connecting WiFi...");
-  display.setCursor(40, 8); display.println(". . . . .");
-
-  // -- ZONA BIRU (y=16..63) --
-  display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
-
-  display.setCursor(0, 20); display.println("SSID:");
-  String s = ssid;
-  if (s.length() > 21) s = s.substring(0, 21);
-  display.setCursor(0, 30); display.println(s);
-
-  display.setCursor(20, 48); display.println("Mohon tunggu...");
-
+  oledBeginFrame();
+  char name[24];
+  fitText(ssid, name, sizeof(name), OLED_TEXT_CHARS);
+  drawHeader("CONNECTING WIFI", name);
+  drawLabelValue(OLED_BODY_Y, "Status", "Menghubungkan");
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Timeout", "10 detik");
+  drawFooter("Non-blocking", "WiFi");
   display.display();
 }
 
-// Menampilkan status WiFi berhasil terhubung, termasuk IP lokal dan mode scanner.
-// Fungsi ini juga memberi jeda singkat agar pesan sukses sempat terbaca.
-void oledShowWiFiConnected(String ip) {
+void oledShowWiFiConnected(const char* ip) {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-
-  // -- ZONA KUNING (y=0..15) --
-  display.setCursor(20, 0); display.println("WiFi CONNECTED!");
-  display.setCursor(0,  8); display.print("IP: "); display.println(ip);
-
-  // -- ZONA BIRU (y=16..63) --
-  display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
-
-  String ssid = String(wifiConfig.ssid);
-  if (ssid.length() > 17) ssid = ssid.substring(0, 17) + "..";
-  display.setCursor(0, 20); display.print("SSID: "); display.println(ssid);
-  display.setCursor(0, 30); display.println("Mode: INVENTORY");
-  display.setCursor(0, 40); display.println("Firebase: SIAP");
-
-  display.drawLine(0, 52, 127, 52, SSD1306_WHITE);
-  display.setCursor(16, 56); display.println("Scanner aktif!");
-
+  oledBeginFrame();
+  drawHeader("WIFI CONNECTED", ip);
+  drawLabelValue(OLED_BODY_Y, "SSID", wifiConfig.ssid);
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Mode", "Inventory");
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "Firebase", isDeviceProvisioned() ? "Auth pending" : "Provision");
+  drawFooter("Scanner aktif", "OK");
   display.display();
-  delay(2000);
+  lastBarcodeOnOled = millis();
 }
 
-// Menampilkan instruksi konfigurasi saat belum ada WiFi tersimpan di EEPROM.
-// Pengguna diminta scan QR WiFi dengan format standar WIFI:S:...;T:...;P:...;;.
 void oledShowNoWiFi() {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-
-  // -- ZONA KUNING (y=0..15) --
-  display.setCursor(22, 0); display.println("ESP32 SCANNER");
-  display.setCursor(14, 8); display.println("No WiFi Config!");
-
-  // -- ZONA BIRU (y=16..63) --
-  display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
-
-  display.setCursor(0, 20); display.println("Scan QR WiFi untuk");
-  display.setCursor(0, 30); display.println("konfigurasi jaringan.");
-  display.setCursor(0, 42); display.println("Format QR:");
-  display.setCursor(0, 52); display.println("WIFI:S:X;T:WPA;P:X;;");
-
+  oledBeginFrame();
+  drawHeader("ESP32 SCANNER", "WIFI BELUM SIAP");
+  drawLabelValue(OLED_BODY_Y, "Aksi", "Scan QR WiFi");
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Format", "WIFI:S:...");
+  drawFooter("Tunggu barcode", "Setup");
   display.display();
 }
 
-// Menampilkan kegagalan autentikasi secara eksplisit. Scanner tetap menyimpan
-// refresh token saja dan menunggu kredensial baru/rotasi dari administrator.
 void oledShowAuthError() {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(10, 0); display.println("AUTHENTICATION ERROR");
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-  display.setCursor(0, 18); display.println("Kredensial scanner");
-  display.setCursor(0, 28); display.println("ditolak / dicabut.");
-  display.setCursor(0, 42); display.println("Rotasi kredensial di");
-  display.setCursor(0, 52); display.println("panel admin.");
+  oledBeginFrame();
+  drawHeader("AUTH ERROR", "KREDENSIAL DITOLAK");
+  drawLabelValue(OLED_BODY_Y, "Status", "Token invalid");
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Aksi", "Rotasi admin");
+  drawFooter("Scan credential", "Auth");
   display.display();
   lastBarcodeOnOled = millis();
 }
 
 void oledShowProvisioningPin() {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(22, 0); display.println("PROVISIONING");
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+  oledBeginFrame();
+  drawHeader("PROVISIONING", deviceConfig.deviceId);
   if (isWiFiConnected) {
-    display.setCursor(0, 18); display.println(deviceConfig.deviceId);
-    display.setCursor(0, 32); display.println("Daftar ID di admin,");
-    display.setCursor(0, 42); display.println("lalu scan barcode.");
-    display.setCursor(0, 56); display.print("PIN reset: "); display.println(provisioningPin);
+    drawLabelValue(OLED_BODY_Y, "Admin", "Daftar device");
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Scan", "Credential PDF417");
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "PIN", provisioningPin.c_str());
+    drawFooter("Menunggu auth", "Ready");
   } else {
-    display.setCursor(0, 22); display.println("Scan QR WiFi dahulu.");
-    display.setCursor(0, 42); display.println(deviceConfig.deviceId);
+    drawLabelValue(OLED_BODY_Y, "Aksi", "Scan QR WiFi");
+    drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Device", deviceConfig.deviceId);
+    drawFooter("WiFi required", "Setup");
   }
   display.display();
 }
 
 void oledShowProvisioningSuccess() {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(12, 0); display.println("PROVISIONING BERHASIL");
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-  display.setCursor(0, 22); display.println(deviceConfig.deviceId);
-  display.setCursor(0, 40); display.println("Firebase terhubung.");
-  display.setCursor(0, 52); display.println("Scanner siap.");
+  oledBeginFrame();
+  drawHeader("PROVISIONING OK", deviceConfig.deviceId);
+  drawLabelValue(OLED_BODY_Y, "Firebase", "Terhubung");
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Scanner", "Siap dipakai");
+  drawFooter("Inventory", "Ready");
   display.display();
   lastBarcodeOnOled = millis();
 }
@@ -1081,48 +1133,95 @@ bool parseWiFiQR(String qrData, String &ssid, String &password, String &security
 // Jika berhasil, waktu NTP disetel dan status online/OLED diperbarui.
 bool connectToWiFi() {
   if (!wifiConfig.isValid || strlen(wifiConfig.ssid) == 0) return false;
-  Serial.printf("Connecting WiFi: %s\n", wifiConfig.ssid);
-  oledShowWiFiConnecting(String(wifiConfig.ssid));
-  WiFi.disconnect(true); delay(100);  // quick flush, tidak perlu 1000ms
-  WiFi.begin(wifiConfig.ssid, wifiConfig.password);
-  int att = 0;
-  while (WiFi.status() != WL_CONNECTED && att < 20) { delay(500); Serial.print("."); att++; }
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\nWiFi OK: %s\n", WiFi.localIP().toString().c_str());
-    isWiFiConnected = true; isOnline = true;
-    configTime(7 * 3600, 0, "pool.ntp.org");
-    oledShowWiFiConnected(WiFi.localIP().toString());
+    onWiFiConnected();
     return true;
   }
-  Serial.println("\nWiFi gagal");
-  isWiFiConnected = false; isOnline = false;
-  oledShowNoWiFi();
+
+  unsigned long now = millis();
+  if (wifiConnectState == WIFI_CONN_CONNECTING &&
+      now - wifiConnectStartedAt < WIFI_CONNECT_TIMEOUT_MS) {
+    return false;
+  }
+
+  Serial.printf("Connecting WiFi: %s\n", wifiConfig.ssid);
+  oledShowWiFiConnecting(wifiConfig.ssid);
+  WiFi.disconnect(false);
+  WiFi.begin(wifiConfig.ssid, wifiConfig.password);
+  wifiConnectState = WIFI_CONN_CONNECTING;
+  wifiConnectStartedAt = now;
+  lastWiFiProgressAt = now;
+  nextWiFiReconnectAt = now + WIFI_CONNECT_TIMEOUT_MS + WIFI_RECONNECT_INTERVAL_MS;
   return false;
+}
+
+void onWiFiConnected() {
+  char ip[16];
+  formatIpAddress(WiFi.localIP(), ip, sizeof(ip));
+  bool wasDisconnected = !isWiFiConnected || wifiConnectState == WIFI_CONN_CONNECTING;
+  wifiConnectState = WIFI_CONN_IDLE;
+  nextWiFiReconnectAt = 0;
+  isWiFiConnected = true;
+  isOnline = true;
+  if (wasDisconnected) {
+    firebaseAuthPending = true;
+    lastHeartbeat = 0;
+    configTime(7 * 3600, 0, "pool.ntp.org");
+    Serial.printf("\nWiFi OK: %s\n", ip);
+    oledShowWiFiConnected(ip);
+  }
+}
+
+void onWiFiDisconnected(bool showNoWiFiScreen) {
+  if (isWiFiConnected) {
+    Serial.println("WiFi putus, jadwalkan reconnect");
+  }
+  isWiFiConnected = false;
+  isOnline = false;
+  firebaseAuthPending = false;
+  stopScanModeStream();
+  if (showNoWiFiScreen) oledShowNoWiFi();
+}
+
+void serviceWiFiConnection() {
+  if (WiFi.status() == WL_CONNECTED) {
+    onWiFiConnected();
+    if (firebaseAuthPending && isDeviceProvisioned()) {
+      firebaseAuthPending = false;
+      ensureFirebaseAuth();
+    }
+    return;
+  }
+
+  unsigned long now = millis();
+  if (wifiConnectState == WIFI_CONN_CONNECTING) {
+    if (now - lastWiFiProgressAt >= WIFI_PROGRESS_INTERVAL_MS) {
+      Serial.print(".");
+      lastWiFiProgressAt = now;
+    }
+    if (now - wifiConnectStartedAt >= WIFI_CONNECT_TIMEOUT_MS) {
+      Serial.println("\nWiFi gagal");
+      wifiConnectState = WIFI_CONN_IDLE;
+      nextWiFiReconnectAt = now + WIFI_RECONNECT_INTERVAL_MS;
+      onWiFiDisconnected(true);
+    }
+    return;
+  }
+
+  if (isWiFiConnected) {
+    onWiFiDisconnected(false);
+  }
+
+  if (wifiConfig.isValid && strlen(wifiConfig.ssid) > 0 &&
+      (nextWiFiReconnectAt == 0 || (long)(now - nextWiFiReconnectAt) >= 0)) {
+    connectToWiFi();
+  }
 }
 
 // Mengecek koneksi WiFi setiap 10 detik dan mencoba reconnect jika terputus.
 // Saat koneksi putus, perangkat juga ditandai offline di Firebase bila memungkinkan.
 void checkWiFiConnection() {
-  if (millis() - lastWiFiCheck < 10000) return;
-  lastWiFiCheck = millis();
-  if (WiFi.status() != WL_CONNECTED) {
-    if (isWiFiConnected) {
-      Serial.println("WiFi putus, reconnecting...");
-      isWiFiConnected = false; isOnline = false;
-      if (wifiConfig.isValid) {
-        oledShowWiFiConnecting(String(wifiConfig.ssid));
-        WiFi.reconnect(); delay(5000);
-        if (WiFi.status() == WL_CONNECTED) {
-          Serial.println("WiFi reconnected");
-          isWiFiConnected = true; isOnline = true;
-          oledShowWiFiConnected(WiFi.localIP().toString());
-          lastHeartbeat = 0;
-        }
-      }
-    }
-  } else {
-    if (!isWiFiConnected) { isWiFiConnected = true; isOnline = true; lastHeartbeat = 0; }
-  }
+  serviceWiFiConnection();
 }
 
 
@@ -1130,8 +1229,9 @@ void checkWiFiConnection() {
 //  FIREBASE FUNCTIONS
 // =============================================================================
 
-String urlEncode(String value) {
+String urlEncode(const String& value) {
   String encoded = "";
+  encoded.reserve(value.length() * 3);
   const char* hex = "0123456789ABCDEF";
   for (size_t i = 0; i < value.length(); i++) {
     char c = value.charAt(i);
@@ -1154,7 +1254,10 @@ String makeFirebaseKey(const char* prefix) {
 }
 
 String makeOperationId() {
-  return "esp32-" + String(deviceConfig.deviceId) + "-" + String(millis()) + "-" + String((uint32_t)esp_random(), HEX);
+  char buffer[72];
+  snprintf(buffer, sizeof(buffer), "esp32-%s-%lu-%08lx",
+           deviceConfig.deviceId, (unsigned long)millis(), (unsigned long)esp_random());
+  return String(buffer);
 }
 
 void loadFirebaseRefreshToken() {
@@ -1324,17 +1427,23 @@ bool ensureFirebaseAuth() {
   return refreshFirebaseToken(false);
 }
 
-String firebaseUrlWithAuth(String pathAndQuery) {
+String firebaseUrlWithAuth(const String& pathAndQuery) {
   if (!ensureFirebaseAuth()) return "";
   String delimiter = pathAndQuery.indexOf('?') >= 0 ? "&" : "?";
-  return String(FIREBASE_DATABASE_URL) + pathAndQuery + delimiter +
-         "auth=" + firebaseIdToken;
+  String url;
+  url.reserve(strlen(FIREBASE_DATABASE_URL) + pathAndQuery.length() + firebaseIdToken.length() + 8);
+  url += FIREBASE_DATABASE_URL;
+  url += pathAndQuery;
+  url += delimiter;
+  url += "auth=";
+  url += firebaseIdToken;
+  return url;
 }
 
 // Mengirim hasil scan barcode ke node /scans di Firebase Realtime Database.
 // Auto mode yang sudah diproses di alat dikirim sebagai processed=true agar
 // website tidak membuka popup stok kedua untuk scan yang sama.
-bool sendScanToFirebase(String barcode, bool processed, bool itemFound, const String& itemId) {
+bool sendScanToFirebase(const String& barcode, bool processed, bool itemFound, const String& itemId) {
   lastFirebaseScanId = "";
   if (!isWiFiConnected) {
     Serial.println("Tidak bisa kirim scan: no WiFi");
@@ -1362,15 +1471,19 @@ bool sendScanToFirebase(String barcode, bool processed, bool itemFound, const St
   JsonObject ts    = doc.createNestedObject("timestamp");
   ts[".sv"]        = "timestamp";
 
-  String json; serializeJson(doc, json);
-  Serial.println("POST /scans: " + json);
+  String json;
+  json.reserve(512);
+  serializeJson(doc, json);
+  Serial.print("POST /scans bytes=");
+  Serial.println(json.length());
 
   int code = http.POST(json);
   bool ok  = (code >= 200 && code < 300);
   if (ok) {
     DynamicJsonDocument res(256); deserializeJson(res, http.getString());
     lastFirebaseScanId = res["name"].as<String>();
-    Serial.println("Scan ID: " + lastFirebaseScanId);
+    Serial.print("Scan ID: ");
+    Serial.println(lastFirebaseScanId);
   } else {
     Serial.printf("/scans HTTP error: %d\n", code);
     if (code == 401 || code == 403) {
@@ -1386,9 +1499,10 @@ bool sendScanToFirebase(String barcode, bool processed, bool itemFound, const St
 
 // Mencari item inventory di Firebase berdasarkan barcode.
 // Fungsi mengembalikan InventoryItem dengan found=false jika barcode tidak ditemukan.
-InventoryItem lookupInventoryByBarcode(String barcode) {
+InventoryItem lookupInventoryByBarcode(const String& barcode) {
   InventoryItem item;
   item.found = false;
+  item.lookupOk = false;
   if (!isWiFiConnected) return item;
 
   HTTPClient http;
@@ -1403,8 +1517,10 @@ InventoryItem lookupInventoryByBarcode(String barcode) {
   int code = http.GET();
 
   if (code == 200) {
+    item.lookupOk = true;
     String body = http.getString();
-    Serial.println("Inventory lookup: " + body);
+    Serial.print("Inventory lookup bytes=");
+    Serial.println(body.length());
     DynamicJsonDocument doc(2048);
     DeserializationError err = deserializeJson(doc, body);
     if (!err && !doc.isNull() && doc.as<JsonObject>().size() > 0) {
@@ -1509,8 +1625,9 @@ bool adjustStockFromDevice(const InventoryItem& item, int delta) {
   scanTimestamp[".sv"] = "timestamp";
 
   String json;
+  json.reserve(2048);
   serializeJson(doc, json);
-  Serial.println("PATCH auto stock: " + item.id + " delta " + String(delta));
+  Serial.printf("PATCH auto stock: %s delta %d\n", item.id.c_str(), delta);
 
   int code = http.sendRequest("PATCH", json);
   bool ok = (code >= 200 && code < 300);
@@ -1631,6 +1748,11 @@ void startScanModeStream() {
 
 void handleScanModeStream() {
   static String sseLineBuffer = "";
+  static bool sseBufferReserved = false;
+  if (!sseBufferReserved) {
+    sseLineBuffer.reserve(2048);
+    sseBufferReserved = true;
+  }
 
   if (!isWiFiConnected) {
     stopScanModeStream();
@@ -1749,8 +1871,10 @@ bool sendHeartbeatToFirebase() {
   http.setTimeout(5000);
 
   DynamicJsonDocument doc(512);
+  char ip[16];
+  formatIpAddress(WiFi.localIP(), ip, sizeof(ip));
   doc["status"]        = "online";
-  doc["ipAddress"]     = WiFi.localIP().toString();
+  doc["ipAddress"]     = ip;
   doc["uptime"]        = (millis() - bootTime) / 1000;
   doc["freeHeap"]      = ESP.getFreeHeap();
   doc["batteryLevel"]  = readBatteryLevel();
@@ -1763,8 +1887,11 @@ bool sendHeartbeatToFirebase() {
   JsonObject ls        = doc.createNestedObject("lastSeen");
   ls[".sv"]            = "timestamp";
 
-  String json; serializeJson(doc, json);
-  Serial.println("PUT /devices/" + String(deviceConfig.deviceId));
+  String json;
+  json.reserve(384);
+  serializeJson(doc, json);
+  Serial.print("PUT /devices/");
+  Serial.println(deviceConfig.deviceId);
 
   int code = http.PUT(json);
   bool ok  = (code >= 200 && code < 300);
@@ -1790,7 +1917,6 @@ void serviceHeartbeat(bool force) {
 
   sampleBattery();  // read ADC BEFORE WiFi HTTP to avoid voltage sag noise
   if (isWiFiConnected) {
-    ensureFirebaseAuth();
     bool hbOk = sendHeartbeatToFirebase();
     // First successful heartbeat after an OTA reboot confirms the new image.
     validateOtaBootSuccess(hbOk);
@@ -1816,17 +1942,21 @@ void serviceHeartbeat(bool force) {
 // Menampilkan progres OTA pada OLED agar operator tahu perangkat sedang update.
 void oledShowOtaProgress(const String& version, const char* phase, int progress) {
   if (!oledAvailable) return;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(20, 0); display.println("FIRMWARE UPDATE");
-  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-  display.setCursor(0, 16); display.print("Versi : v"); display.println(version);
-  display.setCursor(0, 26); display.print("Tahap : "); display.println(phase);
+  oledBeginFrame();
+  drawHeader("FIRMWARE UPDATE", phase);
+  char ver[24];
+  snprintf(ver, sizeof(ver), "v%s", version.c_str());
+  drawLabelValue(OLED_BODY_Y, "Versi", ver);
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Tahap", phase);
   if (progress >= 0) {
-    display.drawRect(0, 40, 128, 10, SSD1306_WHITE);
+    display.drawRect(0, 41, 128, 10, SSD1306_WHITE);
     int w = (progress > 100 ? 100 : progress) * 126 / 100;
-    display.fillRect(1, 41, w, 8, SSD1306_WHITE);
-    display.setCursor(52, 54); display.print(progress); display.println("%");
+    display.fillRect(1, 42, w, 8, SSD1306_WHITE);
+    char pct[8];
+    snprintf(pct, sizeof(pct), "%d%%", progress);
+    drawFooter("OTA", pct);
+  } else {
+    drawFooter("OTA", "Wait");
   }
   display.display();
 }
@@ -1896,7 +2026,7 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
   otaInProgress = true;
   // Bebaskan TLS/socket SSE sebelum download OTA; ESP32 heap ketat saat 2 HTTPS aktif.
   stopScanModeStream();
-  delay(500); // beri waktu stack WiFi/TLS melepas buffer lama sebelum HTTPS OTA
+  yield();
   oledShowOtaProgress(version, "Unduh", 0);
 
   // Decode signature dari base64 (DER ECDSA, panjang ~70-72 byte).
@@ -1958,7 +2088,7 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
     size_t avail = stream->available();
     if (avail == 0) {
       if (millis() - lastData > 15000) { Serial.println("OTA: stream stall"); break; }
-      delay(1);
+      yield();
       continue;
     }
     int n = stream->readBytes(buf, avail > sizeof(buf) ? sizeof(buf) : avail);
@@ -1970,7 +2100,7 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
       break;
     }
     written += n;
-    delay(1); // yield/feed watchdog saat stream lancar terus
+    yield();
     int pct = (int)(written * 100 / total);
     if (pct != lastPct && pct % 5 == 0) {
       lastPct = pct;
@@ -2031,7 +2161,7 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
   reportOtaStatus("flashing", version, 100, "rebooting");
   oledShowOtaProgress(version, "Reboot", 100);
   Serial.println("OTA: sukses, reboot...");
-  delay(1500);
+  delay(250);
   ESP.restart();
 }
 
@@ -2146,7 +2276,7 @@ void validateOtaBootSuccess(bool heartbeatOk) {
     otaPreferences.putUChar("bootFails", 0);
     reportOtaStatus("rollback", otaPreferences.getString("pendingVer", ""), -1, "boot failures");
     Serial.println("OTA: rollback ke firmware sebelumnya");
-    delay(1000);
+    delay(250);
     if (Update.canRollBack() && Update.rollBack()) {
       ESP.restart();
     }
@@ -2160,8 +2290,9 @@ void validateOtaBootSuccess(bool heartbeatOk) {
 // Memproses barcode inventory. Mode Manual tetap mengirim scan untuk popup web.
 // Mode Auto IN/OUT bekerja standalone: alat menambah/mengurangi stok dan membuat
 // transaksi langsung ke RTDB tanpa perlu dashboard terbuka.
-void processInventoryBarcode(String barcode) {
-  Serial.println("Inventory barcode: " + barcode);
+void processInventoryBarcode(const String& barcode) {
+  Serial.print("Inventory barcode: ");
+  Serial.println(barcode);
 
   bool autoMode = activeScanMode == "Auto IN" || activeScanMode == "Auto OUT";
 
@@ -2195,6 +2326,11 @@ void processInventoryBarcode(String barcode) {
       return;
     }
 
+    if (!item.lookupOk) {
+      oledShowBarcode(barcode, "", false);
+      return;
+    }
+
     bool sent = sendScanToFirebase(barcode);
     if (sent && lastFirebaseScanId.length() > 0) {
       pendingLookupScanId = lastFirebaseScanId;
@@ -2210,6 +2346,10 @@ void processInventoryBarcode(String barcode) {
 
   // POST ke /scans dulu agar website popup muncul cepat pada mode Manual.
   bool sent = sendScanToFirebase(barcode);
+  if (!sent) {
+    oledShowBarcode(barcode, "", false);
+    return;
+  }
 
   // Lookup inventory setelah scan terkirim (untuk OLED display)
   InventoryItem item = lookupInventoryByBarcode(barcode);
@@ -2305,12 +2445,16 @@ void processBarcodeInput(String input) {
       wifiConfig.password[sizeof(wifiConfig.password) - 1] = '\0';
       wifiConfig.isValid = true;
       saveWiFiConfig();
+      wifiConnectState = WIFI_CONN_IDLE;
+      nextWiFiReconnectAt = 0;
+      WiFi.disconnect(false);
       connectToWiFi();
     }
     return;
   }
 
-  Serial.println("Input: " + input);
+  Serial.print("Input: ");
+  Serial.println(input);
   lastScanTime = millis();
   scanCount++;
   processInventoryBarcode(input);
@@ -2364,7 +2508,8 @@ void setScanModeFromDevice(const String& mode) {
   lastUiInteraction = millis();
   if (changed) lastHeartbeat = 0;
   lastOledRefresh = 0;
-  Serial.println("Scan mode (button): " + activeScanMode);
+  Serial.print("Scan mode (button): ");
+  Serial.println(activeScanMode);
 }
 
 void handleUiEvent(ButtonEvent event) {
@@ -2402,6 +2547,28 @@ void handleUiEvent(ButtonEvent event) {
         else setScanModeFromDevice(modeMenuIndex == 0 ? "Manual" : modeMenuIndex == 1 ? "Auto IN" : "Auto OUT");
       }
       break;
+    case SCREEN_BATTERY:
+      if (event == BTN_UP_SHORT || event == BTN_DOWN_SHORT) {
+        currentScreen = SCREEN_MAIN_MENU;
+      } else if (event == BTN_OK_SHORT) {
+        batteryCalMenuIndex = 0;
+        currentScreen = SCREEN_BATTERY_CAL_CONFIRM;
+      }
+      break;
+    case SCREEN_BATTERY_CAL_CONFIRM:
+      if (event == BTN_UP_SHORT || event == BTN_DOWN_SHORT) {
+        batteryCalMenuIndex = batteryCalMenuIndex == 0 ? 1 : 0;
+      } else if (event == BTN_OK_SHORT) {
+        if (batteryCalMenuIndex == 1) {
+          performBatteryCalibration();
+          currentScreen = SCREEN_BATTERY;
+          lastOledRefresh = millis();
+          return;
+        } else {
+          currentScreen = SCREEN_BATTERY;
+        }
+      }
+      break;
     case SCREEN_RESTART_CONFIRM:
       if (event == BTN_UP_SHORT || event == BTN_DOWN_SHORT) restartMenuIndex = restartMenuIndex == 0 ? 1 : 0;
       else if (event == BTN_OK_SHORT) {
@@ -2430,6 +2597,55 @@ void handleButtons() {
   handleUiEvent(event);
 }
 
+void flushInputBuffer(char* buffer, size_t& length) {
+  if (length == 0) return;
+  buffer[length] = '\0';
+  String input;
+  input.reserve(length + 1);
+  input = buffer;
+  length = 0;
+  buffer[0] = '\0';
+  processBarcodeInput(input);
+}
+
+void handleInputStream(Stream& stream, char* buffer, size_t& length, unsigned long& lastCharTime) {
+  while (stream.available() > 0) {
+    char c = stream.read();
+    unsigned long now = millis();
+    lastCharTime = now;
+    if (c == '\n' || c == '\r') {
+      flushInputBuffer(buffer, length);
+      continue;
+    }
+    if (length < SERIAL_INPUT_MAX) {
+      buffer[length++] = c;
+      buffer[length] = '\0';
+    } else {
+      Serial.println("Input barcode terlalu panjang, buffer direset");
+      length = 0;
+      buffer[0] = '\0';
+    }
+  }
+
+  if (length > 0 && millis() - lastCharTime > SERIAL_IDLE_FLUSH_MS) {
+    flushInputBuffer(buffer, length);
+  }
+}
+
+void reserveRuntimeStrings() {
+  firebaseIdToken.reserve(1400);
+  firebaseRefreshToken.reserve(512);
+  firebaseUserUid.reserve(80);
+  provisioningPin.reserve(8);
+  lastFirebaseScanId.reserve(32);
+  pendingLookupScanId.reserve(32);
+  pendingLookupBarcode.reserve(64);
+  activeScanMode.reserve(10);
+  sseTokenUsed.reserve(1400);
+  otaActiveCommandId.reserve(80);
+  otaLastFailedId.reserve(80);
+}
+
 
 // =============================================================================
 //  SETUP & LOOP
@@ -2439,22 +2655,24 @@ void handleButtons() {
 void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
-  delay(100);  // minimal stabilize
+  reserveRuntimeStrings();
+  yield();
   bootTime = millis();
   activeScanMode = "Manual";
   initButtons();
 
   initOLED();
   oledShowBoot();
-  delay(500);  // singkat, cukup baca "Initializing..."
   provisioningPin = String(100000 + (esp_random() % 900000));
-  Serial.println("Provisioning PIN: " + provisioningPin);
+  Serial.print("Provisioning PIN: ");
+  Serial.println(provisioningPin);
 
   Serial.println("\nESP32 GM67 Scanner v" FIRMWARE_VERSION " - Inventory Only");
   Serial.println("=========================================");
   Serial.println("Firebase: barcodescanesp32");
   Serial.println("Paths: /scans /devices /inventory /analytics");
-  Serial.println("OLED: " + String(oledAvailable ? "OK" : "NOT FOUND"));
+  Serial.print("OLED: ");
+  Serial.println(oledAvailable ? "OK" : "NOT FOUND");
 
   EEPROM.begin(EEPROM_SIZE);
   authPreferences.begin("deviceAuth", false);
@@ -2465,7 +2683,6 @@ void setup() {
   loadFirebaseRefreshToken();
   if (!isDeviceProvisioned()) {
     oledShowProvisioningPin();
-    delay(3000);
   }
 
   // Fast WiFi init — persistent=false cegah tulis flash, lebih cepat boot
@@ -2474,11 +2691,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
 
   if (wifiConfig.isValid) {
-    if (connectToWiFi()) {
-      ensureFirebaseAuth();
-    } else {
-      oledShowNoWiFi();
-    }
+    connectToWiFi();
   } else {
     Serial.println("Scan QR WiFi: WIFI:S:SSID;T:WPA;P:PASS;H:false;;");
     oledShowNoWiFi();
@@ -2497,49 +2710,15 @@ void loop() {
   handleButtons();
   checkWiFiConnection();
 
-  static String serial2Buffer = "";
+  static char serial2Buffer[SERIAL_INPUT_MAX + 1] = {0};
+  static size_t serial2Length = 0;
   static unsigned long lastSerial2CharTime = 0;
-  while (Serial2.available() > 0) {
-    char c = Serial2.read();
-    lastSerial2CharTime = millis();
-    if (c == '\n' || c == '\r') {
-      if (serial2Buffer.length() > 0) {
-        processBarcodeInput(serial2Buffer);
-        serial2Buffer = "";
-      }
-    } else {
-      serial2Buffer += c;
-      if (serial2Buffer.length() > 512) {
-        serial2Buffer = "";
-      }
-    }
-  }
-  if (serial2Buffer.length() > 0 && millis() - lastSerial2CharTime > 50) {
-    processBarcodeInput(serial2Buffer);
-    serial2Buffer = "";
-  }
+  handleInputStream(Serial2, serial2Buffer, serial2Length, lastSerial2CharTime);
 
-  static String serialBuffer = "";
+  static char serialBuffer[SERIAL_INPUT_MAX + 1] = {0};
+  static size_t serialLength = 0;
   static unsigned long lastSerialCharTime = 0;
-  while (Serial.available() > 0) {
-    char c = Serial.read();
-    lastSerialCharTime = millis();
-    if (c == '\n' || c == '\r') {
-      if (serialBuffer.length() > 0) {
-        processBarcodeInput(serialBuffer);
-        serialBuffer = "";
-      }
-    } else {
-      serialBuffer += c;
-      if (serialBuffer.length() > 512) {
-        serialBuffer = "";
-      }
-    }
-  }
-  if (serialBuffer.length() > 0 && millis() - lastSerialCharTime > 50) {
-    processBarcodeInput(serialBuffer);
-    serialBuffer = "";
-  }
+  handleInputStream(Serial, serialBuffer, serialLength, lastSerialCharTime);
 
   serviceHeartbeat(false);
 
@@ -2555,5 +2734,5 @@ void loop() {
   checkForOtaCommand(false);
 
   oledUpdateIdle();
-  delay(10);
+  yield();
 }
