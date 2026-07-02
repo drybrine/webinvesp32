@@ -87,7 +87,7 @@ GND           ←   GND             GND          ← GND
 ## 4. Firmware
 
 **File**: `GM67_ESP32_BARCODESCANNER/GM67_ESP32_BARCODESCANNER.ino`  
-**Version**: 6.5.15
+**Version**: 6.5.16
 
 ### Flow Utama
 
@@ -121,7 +121,7 @@ GM67 scan barcode
 
 ```
 ┌────────────────────────────────┐
-│ SCANNER v6.5.15       [▓▓▓░]  │  title + battery icon
+│ SCANNER v6.5.16       [▓▓▓░]  │  title + battery icon
 │ [ONLINE]               98%    │  status + battery %
 │────────────────────────────────│
 │ WiFi: MySSID                  │  ssid (max 14 char)
@@ -166,7 +166,7 @@ GM67 scan barcode
       "lastSeen": 1716123456789,
       "uptime": 3600,
       "scanCount": 42,
-      "version": "6.5.15",
+      "version": "6.5.16",
       "scanMode": "Manual"
     }
   },
@@ -195,7 +195,7 @@ GM67 scan barcode
     "{deviceId}": {
       "ota": {
         "commandId": "cmd-123",
-        "version": "6.5.15",
+        "version": "6.5.16",
         "binaryUrl": "https://github.com/.../firmware.bin",
         "sha256": "...",
         "signature": "...",
@@ -206,7 +206,7 @@ GM67 scan barcode
   "deviceOtaStatus": {
     "{deviceId}": {
       "phase": "success",
-      "version": "6.5.15",
+      "version": "6.5.16",
       "updatedAt": 1716123456789
     }
   },
