@@ -94,65 +94,6 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAESfNSHy9GKbRYMLwbN0PpUco70un0
 ZJfN84aY52ZkOOxZG8Yq6GBQadq269UEtQXPvwZXT/ZjZFqORuqBifgmWg==
 -----END PUBLIC KEY-----)PEM";
 
-// Bundled root CA certificates for TLS verification.
-// GTS Root R1 (Google/Firebase) + DigiCert Global Root G2 (GitHub Releases for OTA).
-// Valid until 2036 (GTS) / 2038 (DigiCert). Replace if servers migrate to new roots.
-static const char BUNDLED_CA[] PROGMEM = R"CERT(
------BEGIN CERTIFICATE-----
-MIIFVzCCAz+gAwIBAgINAgPlk28xsBNJiGuiFzANBgkqhkiG9w0BAQwFADBHMQsw
-CQYDVQQGEwJVUzEiMCAGA1UEChMZR29vZ2xlIFRydXN0IFNlcnZpY2VzIExMQzEU
-MBIGA1UEAxMLR1RTIFJvb3QgUjEwHhcNMTYwNjIyMDAwMDAwWhcNMzYwNjIyMDAw
-MDAwWjBHMQswCQYDVQQGEwJVUzEiMCAGA1UEChMZR29vZ2xlIFRydXN0IFNlcnZp
-Y2VzIExMQzEUMBIGA1UEAxMLR1RTIFJvb3QgUjEwggIiMA0GCSqGSIb3DQEBAQUA
-A4ICDwAwggIKAoICAQC2E0Ux7nMQH07t3hpDn2gz/CfVYn4R4pDQZLn1cWGe34s+
-zYvXNVJ+LWULQ2eR1K33mRPqVgcs+qPpYXbPND4N4m0RB3dhgbFzXJHjaR3hEHga
-zY+3d6pAbulrm4X3FqMjct2N0JmSSThM8dNXL5S8q+2RMq7Trm6D37+LI5UzQygt
-8A9D0gfKMbFj7R9e2KINH8PVkXgCNx3sGFFrFidN7JgsYZ6uwFyANLRbQ4/HmXnn
-3BHVx6Tzk6UY1LJpGJZSP7XKvOcdBcpjkCu6RXoFAkrsx+H3JBxMbmA45MIRflPc
-AKGuOoOFv/jbBPRYQ2mg+qH4zCUwzMV1yfnCjvH+k1lJZxhqDw3n7kUVdBXpqx4h
-IKYL+0FSXB9Sm5Q7qYg0A5qKt4LVPFLxBQZSL4B3R+PK8IdCRQ/Brs6mEfBJFZ8q
-N/uAqXjVKsQl8l/AzSxF4BMF+xU0JknQ/v5dDIfQeEFQg7SBdx3f4pV6LnxSRbmP
-CHASqDBl5pXFF4NGhLzjXTROzNGGKumTGX0x+X+yiNNr3KwZQy0UKKWnyPyxGQ5o
-EOsQ2nYQ9CEAKGE3uhWRrcKtAY3nVzlOiBbxpMqj6j8Fq0qDd0Hgx7UJpBTAG4ba
-UCWWRlk2CmFYcbHpNbBNMzzk8LnW/k30rmCl5B46r/qVqyRKgR5+IfbI3r9jrwID
-AQABo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4E
-FgQUtGJ4O4KG+Lv0BSYH4Ubk8MPo3howDQYJKoZIhvcNAQEMBQADggIBABOVFO7E
-+mlUlCg/pYDkOky5N1HqZqryR0sAxXHfBqfQHp8sLc3LQgJkJmMGqMgkE7Wyk8BW
-eJ1Bzs8XbSlIn1BscbM8Sfh+KJ2mNziMMBUPCBhWngT3mjDY1wPmHPCMKh5SMDT5
-5o3zVxGMm1MYUcDZy+xEhj9eEhA4fK+bSHPjLFY+rPPy4I3BNWp+PXE9KWbs3Glx
-/jZ1HlPDBuuEsx+GhrIdcEKLSWTBr0e3GaLNU1h8KZy2TF2so6TvT2wHMGzHE0Gp
-PJN9ROgNmI+zJ6dhCRpJ5mjEN9Aqx7p+FcS8qgYWlP26etE4bQp6kCc+a0Pch6ir
-S+3DDlO1G9HvVpBVnCqPBC0LPyqfMfQ9nL2mkVJGLW5BNBK9DwLCjA2U4jS+Wj+q
-QnDwPOCz3Om2bAd9KcMBBsXIdqMThTE++oHAyzkHXqgEwVZ41kGwfOys1G52fEdh
-W5zUdkc4A7OQ5IPq0s+R0/HR9G1z5UO+R7r2K6sTvQc1qmtI7GvMtI6mGp5Y5nP
-2/lMdVd5U5cHKwYx+0aRrGXF0JjzKjHmM2nYD7pEKkN4y6G0oUDXvjxvRx/hAz0
-vDwZL5s5uR4bLHBPpG2NJd4/BKfEPJqN7qJ4XrJxGmfBRQCEs1dTnQW1s3H3MQJ4
-2/knqVfLyfNEPlR2o4EkW5o3vSPHVwOV
------END CERTIFICATE-----
------BEGIN CERTIFICATE-----
-MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh
-MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
-d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH
-MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT
-MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j
-b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG
-9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI
-2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx
-1xYXeHSQdg0jXLpgmnA8sjbU2nL4FQC4nsdQvknLR5zVNhLQngqLdOQ8mw7WjPzT
-8JWMQFvbgyukCFkzMM6vhLKTG+GebtQxqJ0f5PqJ6pOXNkAfBKKRcqoYSxJpVxqZ
-PLJY1jqL1MbCA+GWKqJIdlhN9M6eQel4F1xqTfLcnopJw9xjBcnEpHPQuQOI+c++
-MAtB6oN1PHu0f3LmOQGClm4XMpmjAYgF7Q2RLFXxSic+JTKhfwIDAQABo0IwQDAP
-BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUoJvjLg9N
-nA4pFMZKy+mTB0p7rg8wDQYJKoZIhvcNAQELBQADggEBACJZIHjyo3TlVwUlNDKJ
-TPh7RCBh4SPh4nBMnjw+3Bk5sUjkPqlPvHpz0PQL/c/pEpIphrVbMYFnUQxaxNzn
-X8BrnFmfDjiJ9Rj0CrPYPAq0bA+KVwVEkDqTEbhP8vjfKHTZbQtZ/4YlNgPmEnES
-I7W1hw7JTWhKcnEHjVRgACnC0fWxq6/7xyDDk5geMxVH9xj3HTIJsNRB3k+xHh44
-cEHeoqwDkNNJAq3TNMQLe3u82HqvK5Qa/TcBEdgJGVY1tnI8RZQ2NFG+Fb4GStLn
-U6ZxS7JdB0R1+KYcRTnUHKfVnkjGNGRAkJl0LxPLru6V0fZbDxHhK3w3rNXdrJDr
-bdE=
------END CERTIFICATE-----
-)CERT";
-
 // --- Battery Monitoring (voltage divider R1=R2=100kΩ) ------------------------
 #define BATTERY_PIN          34
 #define BATTERY_DEFAULT_MAX_MV 3800  // fallback: full charge reads ~3785mV via divider
@@ -477,7 +418,7 @@ void clearBatteryCalibrationCommand() {
   if (cmdUrl.length() == 0) return;
 
   WiFiClientSecure cmdClient;
-  cmdClient.setCACert(BUNDLED_CA);
+  cmdClient.setInsecure();
   HTTPClient cmdHttp;
   cmdHttp.begin(cmdClient, cmdUrl);
   int code = cmdHttp.sendRequest("DELETE", "");
@@ -493,7 +434,7 @@ void reportBatteryCalibrationResult(int maxMv) {
   if (url.length() == 0) return;
 
   WiFiClientSecure client;
-  client.setCACert(BUNDLED_CA);
+  client.setInsecure();
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(5000);
@@ -1387,7 +1328,7 @@ bool signInDevice(String email, String password) {
 
   HTTPClient http;
   WiFiClientSecure client;
-  client.setCACert(BUNDLED_CA);
+  client.setInsecure();
   String url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" +
                String(FIREBASE_WEB_API_KEY);
   http.begin(client, url);
@@ -1470,7 +1411,7 @@ bool refreshFirebaseToken(bool force) {
 
   HTTPClient http;
   WiFiClientSecure client;
-  client.setCACert(BUNDLED_CA);
+  client.setInsecure();
   String url = "https://securetoken.googleapis.com/v1/token?key=" + String(FIREBASE_WEB_API_KEY);
   http.begin(client, url);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -1543,7 +1484,7 @@ bool sendScanToFirebase(const String& barcode, bool processed, bool itemFound, c
   String url = firebaseUrlWithAuth("/scans.json");
   if (url.length() == 0) return false;
   WiFiClientSecure client;
-  client.setCACert(BUNDLED_CA);
+  client.setInsecure();
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(5000);
@@ -1601,7 +1542,7 @@ InventoryItem lookupInventoryByBarcode(const String& barcode) {
   );
   if (url.length() == 0) return item;
   WiFiClientSecure client;
-  client.setCACert(BUNDLED_CA);
+  client.setInsecure();
   http.begin(client, url);
   http.setTimeout(5000);
   int code = http.GET();
@@ -1663,7 +1604,7 @@ bool adjustStockFromDevice(const InventoryItem& item, int delta) {
   String url = firebaseUrlWithAuth("/.json");
   if (url.length() == 0) return false;
   WiFiClientSecure client;
-  client.setCACert(BUNDLED_CA);
+  client.setInsecure();
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(7000);
@@ -1753,7 +1694,7 @@ void checkDeviceLookupStatus() {
   String url = firebaseUrlWithAuth("/deviceLookupStatus/" + String(deviceConfig.deviceId) + ".json");
   if (url.length() == 0) return;
   WiFiClientSecure client;
-  client.setCACert(BUNDLED_CA);
+  client.setInsecure();
   http.begin(client, url);
   http.setTimeout(3000);
   int code = http.GET();
@@ -1803,7 +1744,7 @@ void startScanModeStream() {
   stopScanModeStream(); // ensure clean state
 
   Serial.println("SSE: connecting to scanMode stream...");
-  sseClient.setCACert(BUNDLED_CA);
+  sseClient.setInsecure();
   sseClient.setTimeout(5000);
 
   String url = String(FIREBASE_DATABASE_URL) + "/deviceCommands/"
@@ -1956,7 +1897,7 @@ bool sendHeartbeatToFirebase() {
     return false;
   }
   WiFiClientSecure client;
-  client.setCACert(BUNDLED_CA);
+  client.setInsecure();
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(5000);
@@ -2059,7 +2000,7 @@ void reportOtaStatus(const char* phase, const String& version, int progress, con
   String url = firebaseUrlWithAuth("/deviceOtaStatus/" + String(deviceConfig.deviceId) + ".json");
   if (url.length() == 0) return;
   WiFiClientSecure client;
-  client.setCACert(BUNDLED_CA);
+  client.setInsecure();
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(8000);
@@ -2132,7 +2073,7 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
   }
 
   WiFiClientSecure client;
-  client.setCACert(BUNDLED_CA);  // GitHub release CDN; integritas dijamin signature+hash, bukan TLS pinning
+  client.setInsecure();  // GitHub release CDN; integritas dijamin signature+hash, bukan TLS pinning
   client.setTimeout(15000);
   HTTPClient http;
   if (!http.begin(client, binaryUrl)) {
@@ -2270,7 +2211,7 @@ void checkForOtaCommand(bool force) {
   String url = firebaseUrlWithAuth("/deviceCommands/" + String(deviceConfig.deviceId) + "/ota.json");
   if (url.length() == 0) return;
   WiFiClientSecure client;
-  client.setCACert(BUNDLED_CA);
+  client.setInsecure();
   http.begin(client, url);
   http.setTimeout(8000);
   int code = http.GET();
