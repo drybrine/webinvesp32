@@ -102,8 +102,8 @@ ZJfN84aY52ZkOOxZG8Yq6GBQadq269UEtQXPvwZXT/ZjZFqORuqBifgmWg==
 #define BATTERY_SAMPLES         10  // averaging samples per read
 #define BATTERY_CALIB_SAMPLES   50  // samples used during calibration
 #define BATTERY_CALIB_MIN_MV  3500  // reject clearly invalid full-battery readings
-#define BATTERY_EMA_ALPHA     0.05f // EMA smoothing (lower = smoother, less WiFi sag noise)
-#define BATTERY_HYSTERESIS      2   // only update reported level if change >= 2%
+#define BATTERY_EMA_ALPHA     0.02f // EMA smoothing (lower = smoother, less WiFi sag noise)
+#define BATTERY_HYSTERESIS      5   // only update reported level if change >= 5%
 #define BATTERY_ADC_CHANNEL    ADC1_CHANNEL_6  // GPIO34 = ADC1_CH6
 #define BATTERY_ADC_ATTEN      ADC_ATTEN_DB_11 // 0-3.3V range
 // -----------------------------------------------------------------------------
@@ -373,20 +373,39 @@ void initBatteryADC() {
 
 // Mengambil sampel tegangan baterai dari ADC, menghitung persentase, lalu menyimpannya
 // ke cache. Fungsi ini dipanggil sebelum aktivitas WiFi/HTTP untuk mengurangi noise sag.
-void sampleBattery() {
-  // Use esp_adc_cal multisampling for accurate mV reading
-  uint32_t adcSum = 0;
-  for (int i = 0; i < BATTERY_SAMPLES; i++) {
-    adcSum += esp_adc_cal_raw_to_voltage(adc1_get_raw(BATTERY_ADC_CHANNEL), &adcCal);
-    delayMicroseconds(250);
+// Helper: sort small array of floats for median filter
+static void sortFloats(float* arr, int len) {
+  for (int i = 0; i < len - 1; i++) {
+    for (int j = i + 1; j < len; j++) {
+      if (arr[i] > arr[j]) {
+        float tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+      }
+    }
   }
-  float voltageMv = (adcSum / (float)BATTERY_SAMPLES) * BATTERY_DIVIDER;
+}
 
-  // EMA smoothing across calls
+void sampleBattery() {
+  // Collect samples and reject outlier extremes via median filter
+  float samples[BATTERY_SAMPLES];
+  for (int i = 0; i < BATTERY_SAMPLES; i++) {
+    samples[i] = esp_adc_cal_raw_to_voltage(adc1_get_raw(BATTERY_ADC_CHANNEL), &adcCal) * BATTERY_DIVIDER;
+    delayMicroseconds(500);
+  }
+  sortFloats(samples, BATTERY_SAMPLES);
+  float voltageMv = samples[BATTERY_SAMPLES / 2];  // median
+
+  // EMA smoothing across calls (clamp large single-step spikes)
   if (batteryEma < 0) {
-    batteryEma = voltageMv;  // first reading: initialize
+    batteryEma = voltageMv;
   } else {
-    batteryEma = BATTERY_EMA_ALPHA * voltageMv + (1.0f - BATTERY_EMA_ALPHA) * batteryEma;
+    // Limit max mV step per sample to reduce WiFi sag artifacts
+    float diff = voltageMv - batteryEma;
+    float maxStep = 100.0f;  // 100mV per reading cap
+    if (diff > maxStep) diff = maxStep;
+    if (diff < -maxStep) diff = -maxStep;
+    batteryEma = BATTERY_EMA_ALPHA * (batteryEma + diff) + (1.0f - BATTERY_EMA_ALPHA) * batteryEma;
   }
 
   int maxMv = getBatteryMaxMv();
