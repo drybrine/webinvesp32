@@ -54,7 +54,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.19"
+#define FIRMWARE_VERSION   "6.5.20"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -703,7 +703,8 @@ void oledShowStatus() {
   drawBatteryIcon(112, 0, batLvl);
   char batText[8];
   snprintf(batText, sizeof(batText), "%d%%", batLvl);
-  display.setCursor(84, 8);
+  int batTextWidth = strlen(batText) * 6;
+  display.setCursor(112 - batTextWidth - 2, 8);
   display.print(batText);
 
   if (isWiFiConnected) {
@@ -719,10 +720,8 @@ void oledShowStatus() {
     drawLabelValue(OLED_BODY_Y, "WiFi", "Terputus");
     drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "IP", "--");
   }
-  char scanModeLine[24];
-  snprintf(scanModeLine, sizeof(scanModeLine), "%lu / %s", scanCount,
-           activeScanMode.length() > 0 ? activeScanMode.c_str() : "Manual");
-  drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "Scan/Mode", scanModeLine);
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H * 2, "Mode",
+    activeScanMode.length() > 0 ? activeScanMode.c_str() : "Manual");
   drawFooter("OK: Menu", isDeviceProvisioned() ? "Ready" : "Prov");
   display.display();
 }
