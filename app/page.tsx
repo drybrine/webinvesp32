@@ -343,6 +343,45 @@ export default function DashboardPage() {
     batteryAlertedRef.current = true
   }, [devices, devicesLoading, toast])
 
+  // Toast notifikasi untuk transaksi Auto Scanner (operator === "Scanner")
+  const scannerTxToastRef = useRef(false)
+  useEffect(() => {
+    if (scannerTxToastRef.current) return
+    if (transactionsLoading || transactions.length === 0) return
+
+    const today = new Date().toISOString().slice(0, 10)
+    const seenKey = `scanner-tx-seen-${today}`
+    const seenIds = new Set(
+      ((typeof window !== "undefined" ? sessionStorage.getItem(seenKey) : null) || "")
+        .split(",")
+        .filter(Boolean)
+    )
+
+    const newScannerTxs = transactions.filter(
+      (tx) => tx.operator === "Scanner" && !seenIds.has(tx.id)
+    )
+
+    if (newScannerTxs.length === 0) {
+      scannerTxToastRef.current = true
+      return
+    }
+
+    // Batasi 3 toast terbaru (hindari flood saat Firebase reconnect)
+    newScannerTxs.slice(0, 3).forEach((tx) => {
+      const isIn = tx.type === "in"
+      toast({
+        title: isIn ? "Barang Masuk (Auto)" : "Barang Keluar (Auto)",
+        description: `${tx.productName} — ${isIn ? "+" : ""}${tx.quantity} stok via Scanner`,
+        variant: "default",
+        duration: 5000,
+      })
+      seenIds.add(tx.id)
+    })
+
+    sessionStorage.setItem(seenKey, Array.from(seenIds).join(","))
+    scannerTxToastRef.current = true
+  }, [transactions, transactionsLoading, toast])
+
   // Keyboard shortcuts: / to focus search, N to add item
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
