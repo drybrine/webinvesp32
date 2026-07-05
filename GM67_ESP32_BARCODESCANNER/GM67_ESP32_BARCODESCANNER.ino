@@ -2390,8 +2390,20 @@ void validateOtaBootSuccess(bool heartbeatOk) {
 // Lihat processBarcodeQueue() untuk state handler.
 void processInventoryBarcode(const String& barcode) {
   if (barcodeJob.state != BARCODE_IDLE) {
-    // Masih memproses scan sebelumnya — skip (tidak queue)
-    Serial.println("Barcode ditolak: masih ada job aktif");
+    // Overwrite job yang sedang berjalan dengan barcode baru. HTTP call
+    // sebelumnya tetap selesai (state sekarang), tapi hasil OLED untuk
+    // scan lama tidak ditampilkan. Update barcode + reset flow.
+    Serial.printf("Barcode override: %s -> %s\n", barcodeJob.barcode.c_str(), barcode.c_str());
+    barcodeJob.barcode = barcode;
+    barcodeJob.scanMode = activeScanMode;
+    // Reset state sesuai mode, mulai ulang dari awal
+    bool autoMode = activeScanMode == "Auto IN" || activeScanMode == "Auto OUT";
+    barcodeJob.state = autoMode ? BARCODE_LOOKUP : BARCODE_SEND_SCAN;
+    barcodeJob.scanSent = false;
+    barcodeJob.adjusted = false;
+    barcodeJob.afterQty = 0;
+    barcodeJob.item = {};
+    esp_task_wdt_reset();
     return;
   }
   Serial.print("Inventory barcode: ");
