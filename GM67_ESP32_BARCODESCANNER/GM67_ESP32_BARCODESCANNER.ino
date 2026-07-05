@@ -2593,6 +2593,14 @@ void handleUiEvent(ButtonEvent event) {
   lastUiInteraction = millis();
   if (currentScreen == SCREEN_SAVER) currentScreen = SCREEN_HOME;
 
+  // Skip satu event setelah transisi screen untuk mencegah release event
+  // dari press sebelumnya (mis. OK_SHORT) terproses di screen baru dan
+  // memicu aksi yang tidak diinginkan.
+  static uint8_t prevScreen = 0xFF;
+  bool transition = currentScreen != prevScreen;
+  prevScreen = currentScreen;
+  if (transition) return;
+
   switch (currentScreen) {
     case SCREEN_HOME:
       if (event == BTN_OK_SHORT) currentScreen = SCREEN_MAIN_MENU;
