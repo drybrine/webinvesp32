@@ -2804,6 +2804,10 @@ void loop() {
 
   serviceHeartbeat(false);
 
+  // Panggil handleButtons lagi setelah operasi blocking (HTTP, scan)
+  // agar press yang terjadi saat loop sibuk tidak terlewat.
+  handleButtons();
+
   checkDeviceLookupStatus();
   handleScanModeStream();
 
