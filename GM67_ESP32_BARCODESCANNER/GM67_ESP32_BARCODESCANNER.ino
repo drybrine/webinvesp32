@@ -723,7 +723,9 @@ void oledShowStatus() {
   char batText[8];
   snprintf(batText, sizeof(batText), "%d%%", batLvl);
   int batTextWidth = strlen(batText) * 6;
-  display.setCursor(112 - batTextWidth - 2, 8);
+  // Posisikan teks persentase tepat di tengah bawah icon baterai
+  int iconCenter = 112 + 13 / 2;  // icon x=112, lebar=13
+  display.setCursor(iconCenter - batTextWidth / 2, 9);
   display.print(batText);
 
   if (isWiFiConnected) {
