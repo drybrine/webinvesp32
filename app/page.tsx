@@ -350,24 +350,24 @@ export default function DashboardPage() {
     if (transactionsLoading || transactions.length === 0) return
 
     const today = new Date().toISOString().slice(0, 10)
-    const seenKey = `scanner-tx-seen-${today}`
-    const seenIds = new Set(
-      ((typeof window !== "undefined" ? sessionStorage.getItem(seenKey) : null) || "")
-        .split(",")
-        .filter(Boolean)
+    const seenTsKey = `scanner-tx-last-seen-${today}`
+    const lastSeen = parseInt(
+      (typeof window !== "undefined" ? sessionStorage.getItem(seenTsKey) : null) || "0",
+      10
     )
 
-    const newScannerTxs = transactions.filter(
-      (tx) => tx.operator === "Scanner" && !seenIds.has(tx.id)
-    )
+    // Ambil transaksi Scanner yang timestamp-nya lebih baru dari yang sudah ditampilkan
+    const scannerTxs = transactions
+      .filter((tx) => tx.operator === "Scanner" && typeof tx.timestamp === "number" && tx.timestamp > lastSeen)
+      .sort((a, b) => a.timestamp - b.timestamp)
 
-    if (newScannerTxs.length === 0) {
+    if (scannerTxs.length === 0) {
       scannerTxToastRef.current = true
       return
     }
 
-    // Batasi 3 toast terbaru (hindari flood saat Firebase reconnect)
-    newScannerTxs.slice(0, 3).forEach((tx) => {
+    // Toast maksimal 3 transaksi terbaru per batch agar tidak flood UI
+    scannerTxs.slice(-3).forEach((tx) => {
       const isIn = tx.type === "in"
       toast({
         title: isIn ? "Barang Masuk (Auto)" : "Barang Keluar (Auto)",
@@ -375,10 +375,15 @@ export default function DashboardPage() {
         variant: "default",
         duration: 5000,
       })
-      seenIds.add(tx.id)
     })
 
-    sessionStorage.setItem(seenKey, Array.from(seenIds).join(","))
+    // Simpan timestamp terbaru dari SEMUA transaksi Scanner agar tidak muncul lagi saat navigate
+    const maxTs = Math.max(
+      ...transactions
+        .filter((tx) => tx.operator === "Scanner" && typeof tx.timestamp === "number")
+        .map((tx) => tx.timestamp)
+    )
+    sessionStorage.setItem(seenTsKey, String(maxTs))
     scannerTxToastRef.current = true
   }, [transactions, transactionsLoading, toast])
 
