@@ -201,36 +201,6 @@ struct BarcodeJob {
 
 BarcodeJob barcodeJob = {BARCODE_IDLE, "", "", false, {}, false, 0};
 
-// Queue untuk barcode burst: FIFO, maks 5 antrian. Cegah overwrite pada
-// mode Auto IN/OUT agar setiap scan menghasilkan 1 transaksi terpisah.
-#define BARCODE_QUEUE_MAX 5
-struct BarcodeQueue {
-  String barcodes[BARCODE_QUEUE_MAX];
-  String modes[BARCODE_QUEUE_MAX];
-  uint8_t head;
-  uint8_t tail;
-  uint8_t count;
-};
-BarcodeQueue barcodeQueue = {{}, {}, 0, 0, 0};
-
-bool pushBarcode(const String& barcode, const String& mode) {
-  if (barcodeQueue.count >= BARCODE_QUEUE_MAX) return false;
-  barcodeQueue.barcodes[barcodeQueue.tail] = barcode;
-  barcodeQueue.modes[barcodeQueue.tail] = mode;
-  barcodeQueue.tail = (barcodeQueue.tail + 1) % BARCODE_QUEUE_MAX;
-  barcodeQueue.count++;
-  return true;
-}
-
-bool popBarcode(String& barcode, String& mode) {
-  if (barcodeQueue.count == 0) return false;
-  barcode = barcodeQueue.barcodes[barcodeQueue.head];
-  mode = barcodeQueue.modes[barcodeQueue.head];
-  barcodeQueue.head = (barcodeQueue.head + 1) % BARCODE_QUEUE_MAX;
-  barcodeQueue.count--;
-  return true;
-}
-
 enum WiFiConnectState {
   WIFI_CONN_IDLE,
   WIFI_CONN_CONNECTING
@@ -2420,16 +2390,27 @@ void validateOtaBootSuccess(bool heartbeatOk) {
 // Lihat processBarcodeQueue() untuk state handler.
 void processInventoryBarcode(const String& barcode) {
   if (barcodeJob.state != BARCODE_IDLE) {
-    // Queue barcode: cegah overwrite agar setiap scan menghasilkan transaksi.
-    if (!pushBarcode(barcode, activeScanMode)) {
-      Serial.println("Barcode queue penuh, scan ditolak");
-    }
+    // Overwrite job yang sedang berjalan dengan barcode baru. HTTP call
+    // sebelumnya tetap selesai (state sekarang), tapi hasil OLED untuk
+    // scan lama tidak ditampilkan. Update barcode + reset flow.
+    Serial.printf("Barcode override: %s -> %s\n", barcodeJob.barcode.c_str(), barcode.c_str());
+    barcodeJob.barcode = barcode;
+    barcodeJob.scanMode = activeScanMode;
+    // Reset state sesuai mode, mulai ulang dari awal
+    bool autoMode = activeScanMode == "Auto IN" || activeScanMode == "Auto OUT";
+    barcodeJob.state = autoMode ? BARCODE_LOOKUP : BARCODE_SEND_SCAN;
+    barcodeJob.scanSent = false;
+    barcodeJob.adjusted = false;
+    barcodeJob.afterQty = 0;
+    barcodeJob.item = {};
+    esp_task_wdt_reset();
     return;
   }
   Serial.print("Inventory barcode: ");
   Serial.println(barcode);
   esp_task_wdt_reset();
 
+  barcodeJob.state = BARCODE_IDLE;
   barcodeJob.barcode = barcode;
   barcodeJob.scanMode = activeScanMode;
   barcodeJob.scanSent = false;
@@ -2450,38 +2431,8 @@ void processInventoryBarcode(const String& barcode) {
 
 // Dipanggil tiap loop() — menjalankan satu HTTP call per iterasi.
 // handleButtons() jalan di loop() antar state, sehingga menu tetap responsif.
-// Ambil job berikutnya dari queue (kalau ada) saat job selesai.
-void loadNextBarcodeJob() {
-  String nextBarcode, nextMode;
-  if (!popBarcode(nextBarcode, nextMode)) {
-    barcodeJob.state = BARCODE_IDLE;
-    return;
-  }
-  barcodeJob.barcode = nextBarcode;
-  barcodeJob.scanMode = nextMode;
-  barcodeJob.scanSent = false;
-  barcodeJob.adjusted = false;
-  barcodeJob.afterQty = 0;
-  barcodeJob.item = {};
-  bool autoMode = nextMode == "Auto IN" || nextMode == "Auto OUT";
-  barcodeJob.state = autoMode ? BARCODE_LOOKUP : BARCODE_SEND_SCAN;
-}
-
 void processBarcodeQueue() {
-  if (barcodeJob.state == BARCODE_IDLE) {
-    // Cek apakah ada antrian
-    String nextBarcode, nextMode;
-    if (popBarcode(nextBarcode, nextMode)) {
-      barcodeJob.barcode = nextBarcode;
-      barcodeJob.scanMode = nextMode;
-      barcodeJob.scanSent = false;
-      barcodeJob.adjusted = false;
-      barcodeJob.item = {};
-      bool autoMode = nextMode == "Auto IN" || nextMode == "Auto OUT";
-      barcodeJob.state = autoMode ? BARCODE_LOOKUP : BARCODE_SEND_SCAN;
-    }
-    return;
-  }
+  if (barcodeJob.state == BARCODE_IDLE) return;
 
   bool autoMode = barcodeJob.scanMode == "Auto IN" || barcodeJob.scanMode == "Auto OUT";
 
@@ -2490,7 +2441,7 @@ void processBarcodeQueue() {
       barcodeJob.scanSent = sendScanToFirebase(barcodeJob.barcode);
       if (!barcodeJob.scanSent && !autoMode) {
         oledShowBarcode(barcodeJob.barcode, "", false);
-        loadNextBarcodeJob();
+        barcodeJob.state = BARCODE_IDLE;
         break;
       }
       if (autoMode) {
@@ -2507,7 +2458,7 @@ void processBarcodeQueue() {
       if (autoMode) {
         if (!barcodeJob.item.found && !barcodeJob.item.lookupOk) {
           oledShowBarcode(barcodeJob.barcode, "", false);
-          loadNextBarcodeJob();
+          barcodeJob.state = BARCODE_IDLE;
           break;
         }
         if (!barcodeJob.item.found) {
@@ -2534,7 +2485,7 @@ void processBarcodeQueue() {
         } else {
           oledShowBarcode(barcodeJob.barcode, "", barcodeJob.scanSent);
         }
-        loadNextBarcodeJob();
+        barcodeJob.state = BARCODE_IDLE;
       }
       break;
 
@@ -2576,11 +2527,11 @@ void processBarcodeQueue() {
             : (barcodeJob.adjusted ? "Transaksi tersimpan" : "Sync gagal")
         );
       }
-      loadNextBarcodeJob();
+      barcodeJob.state = BARCODE_IDLE;
       break;
 
     default:
-      loadNextBarcodeJob();
+      barcodeJob.state = BARCODE_IDLE;
       break;
   }
 }
