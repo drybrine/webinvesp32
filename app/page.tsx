@@ -409,9 +409,9 @@ export default function DashboardPage() {
 
   if (inventoryLoading || scansLoading || devicesLoading) {
     return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-border border-t-emerald-500 mx-auto mb-4"></div>
           <p className="text-muted-foreground">Memuat data...</p>
         </div>
       </div>
@@ -420,7 +420,7 @@ export default function DashboardPage() {
 
   if (inventoryError || scansError || devicesError) {
     return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center p-4">
         <div className="text-center max-w-md">
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
