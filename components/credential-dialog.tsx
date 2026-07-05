@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Check, Copy } from "lucide-react"
+import { AlertTriangle, Check, Copy } from "lucide-react"
 import Pdf417Barcode from "@/components/pdf417-barcode"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -22,18 +22,21 @@ export interface Credential {
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
+  const [failed, setFailed] = useState(false)
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(value)
       setCopied(true)
+      setFailed(false)
       setTimeout(() => setCopied(false), 2000)
     } catch {
       setCopied(false)
+      setFailed(true)
     }
   }
   return (
-    <Button type="button" variant="outline" size="sm" onClick={() => void copy()} className="shrink-0">
-      {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+    <Button type="button" variant="outline" size="sm" onClick={() => void copy()} className="shrink-0" title={failed ? "Gagal menyalin" : undefined}>
+      {copied ? <Check className="w-4 h-4" /> : failed ? <AlertTriangle className="w-4 h-4 text-destructive" /> : <Copy className="w-4 h-4" />}
     </Button>
   )
 }

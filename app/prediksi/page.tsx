@@ -236,7 +236,7 @@ function buildClientBatchRisks(
 export default function PrediksiPage() {
   const { getIdToken } = useAuth()
   const { items: inventory, loading: inventoryLoading } = useFirebaseInventory()
-  const { transactions, loading: txLoading } = useFirebaseTransactions(500)
+  const { transactions, loading: txLoading } = useFirebaseTransactions(null)
 
   const [selectedId, setSelectedId] = useState<string>("")
   const [horizonDays, setHorizonDays] = useState<number>(14)

@@ -183,7 +183,9 @@ fig.text(0.02, 0.01,
          'Generated: 2026-06-03 | StokManager | Data: honda_tune_model.ipynb + honda_test_model.ipynb | Deployed: api/predict.py',
          ha='left', va='bottom', fontsize=8, color='#a8a29e', style='italic')
 
-output_path = '/mnt/c/Users/aasur/webinvesp32/model-accuracy-export.png'
+import os
+
+output_path = os.path.join(os.path.dirname(__file__) or ".", "model-accuracy-export.png")
 plt.savefig(output_path, dpi=180, bbox_inches='tight',
             facecolor=fig.get_facecolor(), format='png')
 plt.close()

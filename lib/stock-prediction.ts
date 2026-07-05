@@ -279,7 +279,12 @@ export function estimateStockoutDate(
   let previousConsumption = model.lastConsumption ?? model.avgDailyConsumption
   for (let day = 1; day <= 3650; day++) {
     const consumption = predictNextConsumption(model, previousConsumption)
-    if (consumption <= 0 && model.avgDailyConsumption <= 0) return null
+    if (consumption <= 0) {
+      if (model.avgDailyConsumption <= 0) return null
+      // AR(1) clamp ke 0: jika stagnan 30 hari berturut-turut, anggap tidak
+      // terprediksi agar tidak loop 3650 hari sia-sia.
+      if (day >= 30 && previousConsumption <= 0) return null
+    }
 
     quantity = Math.max(0, quantity - consumption)
     previousConsumption = consumption
@@ -301,7 +306,8 @@ export function predictStock(
   const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp)
   const { train, test } = trainTestSplit(sorted, trainRatio)
   const model = fitLinearRegression(train)
-  const metrics = evaluate(model, sorted)
+  // Metrik pada test set (held-out) untuk hindari data leakage.
+  const metrics = evaluate(model, test.length >= 2 ? test : sorted)
 
   const lastTimestamp = sorted[sorted.length - 1].timestamp
   const lastQuantity = sorted[sorted.length - 1].quantity

@@ -9,6 +9,7 @@ export function Toaster() {
 
   return (
     <ToastProvider duration={5000} swipeDirection="right">
+      <ToastViewport />
       {toasts.map(({ id, title, description, action, variant, ...props }) => {
         const isDestructive = variant === "destructive"
         const Icon = isDestructive ? AlertTriangle : CheckCircle2
@@ -34,7 +35,6 @@ export function Toaster() {
           </Toast>
         )
       })}
-      <ToastViewport />
     </ToastProvider>
   )
 }

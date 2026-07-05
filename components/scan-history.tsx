@@ -70,26 +70,27 @@ export function ScanHistory({ scans, loading = false }: ScanHistoryProps) {
 
   // Export to CSV
   const exportToCSV = () => {
-    // Create CSV content
+    const csvCell = (v: unknown) => {
+      const s = v == null ? "" : String(v)
+      return `"${s.replace(/"/g, '""')}"`
+    }
     const headers = ["Barcode", "Device", "Timestamp", "Status", "Product", "Location"]
     const csvContent = [
       headers.join(","),
       ...filteredScans.map((scan) =>
         [
-          scan.barcode,
-          scan.deviceId,
-          formatDate(scan.timestamp),
-          scan.itemFound ? "Found" : "Not Found",
-          scan.productName || "",
-          scan.location || "",
-        ]
-          .map((v) => `"${v}"`)
-          .join(","),
+          csvCell(scan.barcode),
+          csvCell(scan.deviceId),
+          csvCell(formatDate(scan.timestamp)),
+          csvCell(scan.itemFound ? "Found" : "Not Found"),
+          csvCell(scan.productName || ""),
+          csvCell(scan.location || ""),
+        ].join(","),
       ),
     ].join("\n")
 
     // Create download link
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const blob = new Blob(["﻿" + csvContent], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.setAttribute("href", url)

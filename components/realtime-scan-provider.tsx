@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
-import { limitToLast, off, onValue, orderByChild, query, ref } from "firebase/database"
+import { limitToLast, onValue, orderByChild, query, ref } from "firebase/database"
 import { database, firebaseHelpers, isFirebaseConfigured } from "@/lib/firebase"
 import { UnifiedQuickActionPopup } from "./unified-quick-action-popup"
 import { RealtimeScanContext, type RealtimeScanContextType } from "@/hooks/use-realtime-scan"
@@ -83,8 +83,8 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
         
         // Cleanup test listener after 2 seconds
         setTimeout(() => {
-          if (testRef && unsubscribeTest) {
-            off(testRef, "value", unsubscribeTest)
+          if (unsubscribeTest) {
+            unsubscribeTest()
           }
         }, 2000)
       }

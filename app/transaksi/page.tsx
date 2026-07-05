@@ -115,6 +115,13 @@ export default function TransaksiPage() {
   }, [searchTerm, selectedType, selectedSource, selectedPeriod])
 
   const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE))
+
+  // Clamp currentPage ketika data menyusut (pencarian/filter) agar tidak
+  // berada di halaman yang sudah tidak valid.
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages)
+  }, [currentPage, totalPages])
+
   const pagedTransactions = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE
     return filteredTransactions.slice(start, start + PAGE_SIZE)

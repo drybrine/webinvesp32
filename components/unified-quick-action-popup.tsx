@@ -266,7 +266,18 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
   }
 
   const handleStockOut = async () => {
-    if (!product || quickActionAmount <= 0 || product.quantity < quickActionAmount || isLoading) return
+    if (!product || quickActionAmount <= 0 || isLoading) return
+    // Pre-check terhadap quantity cached memang bersifat best-effort karena
+    // concurrent update dari tab/device lain bisa membuatnya stale. Firestore
+    // increment + server-side validate (quantity >= 0) adalah guard sebenarnya.
+    if (product.quantity < quickActionAmount) {
+      toast({
+        title: "Stok tidak mencukupi",
+        description: `${product.name} hanya tersisa ${product.quantity} unit.`,
+        variant: "destructive",
+      })
+      return
+    }
 
     setIsLoading(true)
     try {

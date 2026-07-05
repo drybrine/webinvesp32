@@ -64,12 +64,12 @@ function tryLoadFromExport(path: string): Array<{ name: string; history: StockDa
   for (const tx of Object.values(transactions) as any[]) {
     const key = tx.productBarcode ?? tx.barcode ?? ""
     if (!key) continue
+    const ts = Number(tx.timestamp)
+    const qty = Number(tx.quantity)
+    // Skip transaksi dengan timestamp atau quantity non-finite (NaN/Inf)
+    if (!Number.isFinite(ts) || !Number.isFinite(qty)) continue
     if (!txByBarcode.has(key)) txByBarcode.set(key, [])
-    txByBarcode.get(key)!.push({
-      timestamp: Number(tx.timestamp) || Date.now(),
-      quantity: Number(tx.quantity) || 0,
-      type: tx.type,
-    })
+    txByBarcode.get(key)!.push({ timestamp: ts, quantity: qty, type: tx.type })
   }
 
   const datasets: Array<{ name: string; history: StockDataPoint[] }> = []
@@ -121,7 +121,7 @@ function runTest(dataset: { name: string; history: StockDataPoint[] }): void {
 
 function main(): void {
   const exportArg = process.argv.indexOf("--export")
-  const exportPath = exportArg !== -1 ? process.argv[exportArg + 1] : null
+  const exportPath = exportArg !== -1 && exportArg + 1 < process.argv.length ? process.argv[exportArg + 1] : null
 
   printDivider("Stock Prediction Model — Linear Regression")
 

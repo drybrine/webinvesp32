@@ -27,7 +27,12 @@ async function adminRequest<T>(path: string, init: RequestInit = {}): Promise<T>
   }
 
   let response = await send(false)
-  if (response.status === 401) response = await send(true)
+  // Retry on 401 hanya untuk operasi idempoten (GET/HEAD). POST/PATCH/DELETE
+  // tidak boleh otomatis di-retry: token expired di tengah request non-idempotent
+  // bisa menduplikasi side-effect (create user, dispatch OTA, dll).
+  const method = (init.method || "GET").toUpperCase()
+  const isIdempotent = method === "GET" || method === "HEAD"
+  if (response.status === 401 && isIdempotent) response = await send(true)
 
   const data = await response.json().catch(() => ({})) as ApiErrorBody & T
   if (!response.ok) throw new Error(data.error || "Permintaan administrasi gagal")

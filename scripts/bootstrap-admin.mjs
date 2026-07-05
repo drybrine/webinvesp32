@@ -22,6 +22,16 @@ if (!email || !password || password.length < 12 || !databaseURL) {
   process.exit(1)
 }
 
+if (args.password) {
+  console.warn("⚠️  Password diterima dari CLI — terlihat di process listing / shell history.")
+  console.warn("   Gunakan env BOOTSTRAP_ADMIN_PASSWORD sebaik mungkin.")
+}
+
+if (!databaseURL.startsWith("https://")) {
+  console.error("❌ Database URL harus dimulai dengan https://")
+  process.exit(1)
+}
+
 const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT
 const credential = serviceAccountJson ? cert(JSON.parse(serviceAccountJson)) : applicationDefault()
 if (!getApps().length) initializeApp({credential, databaseURL})
@@ -29,14 +39,19 @@ if (!getApps().length) initializeApp({credential, databaseURL})
 const auth = getAuth()
 let user
 try {
+  // Coba update user existing — aman karena idempoten.
   user = await auth.getUserByEmail(email)
   user = await auth.updateUser(user.uid, {password, displayName, disabled: false})
+  await auth.setCustomUserClaims(user.uid, {role: "admin", disabled: false})
 } catch (error) {
   if (error.code !== "auth/user-not-found") throw error
-  user = await auth.createUser({email, password, displayName, disabled: false, emailVerified: false})
+  // Buat user baru, custom claims included di create untuk hindari race
+  // antara createUser dan setCustomUserClaims dari proses konkuren.
+  user = await auth.createUser({
+    email, password, displayName, disabled: false, emailVerified: false,
+  })
+  await auth.setCustomUserClaims(user.uid, {role: "admin", disabled: false})
 }
-
-await auth.setCustomUserClaims(user.uid, {role: "admin", disabled: false})
 await auth.revokeRefreshTokens(user.uid)
 await getDatabase().ref(`users/${user.uid}`).set({
   uid: user.uid,

@@ -78,12 +78,17 @@ async function fetchSearchanise(code: string): Promise<LookupProduct | null> {
     if (!items.length) return null
 
     const needle = code.toLowerCase()
-    const matched =
+    // Cari exact match berdasarkan product_code dulu, baru title.
+    const exact =
       items.find(
-        (i) =>
-          (i.product_code || "").toLowerCase() === needle ||
-          (i.title || "").toLowerCase() === needle,
-      ) || items[0]
+        (i) => (i.product_code || "").toLowerCase() === needle,
+      )
+    const matched =
+      exact ||
+      items.find(
+        (i) => (i.title || "").toLowerCase() === needle,
+      ) ||
+      items[0]
 
     const title = (matched.title || "").trim()
     if (!title) return null
@@ -148,8 +153,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const product = await fetchSearchanise(barcode)
-    const catalog: CatalogItem[] = []
-    return NextResponse.json({ product, catalog, source: HONDA_PARTS_CATEGORY })
+    if (!product) {
+      // Searchanise tidak me-return hasil — fallback ke scrape catalog.
+      const catalog = await scrapeCatalog()
+      return NextResponse.json({ product: null, catalog, source: HONDA_PARTS_CATEGORY })
+    }
+    return NextResponse.json({ product, catalog: [], source: HONDA_PARTS_CATEGORY })
   } catch {
     const catalog = await scrapeCatalog()
     return NextResponse.json({ product: null, catalog, source: HONDA_PARTS_CATEGORY })

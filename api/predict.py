@@ -207,6 +207,8 @@ class handler(BaseHTTPRequestHandler):
 
         tx_by_barcode = {}
         for tx in recent_tx:
+            if not isinstance(tx, dict):
+                continue  # skip malformed entries
             barcode = tx.get('productBarcode')
             if barcode:
                 tx_by_barcode.setdefault(barcode, []).append(tx)
@@ -488,8 +490,16 @@ def estimate_stockout_date(model, current_quantity, base_timestamp):
 
     for day in range(1, 3651):
         consumption = predict_next_consumption(model, previous_consumption)
-        if consumption <= 0 and model['avgDailyConsumption'] <= 0:
-            return None
+        if consumption <= 0:
+            # AR(1) clamp ke 0: jika rata-rata konsumsi historis juga <= 0, stok
+            # tidak akan pernah habis -> tidak terprediksi. Jika rata-rata > 0
+            # tapi prediksi hari ini 0, lanjut iterasi (bisa naik lagi besok).
+            if model['avgDailyConsumption'] <= 0:
+                return None
+            # Hindari loop 3650 hari sia-sia jika konsumsi stagnan di 0: jika
+            # 30 hari berturut-turut prediksi 0, anggap tidak terprediksi.
+            if day >= 30 and previous_consumption <= 0:
+                return None
 
         quantity = max(0.0, quantity - consumption)
         previous_consumption = consumption
@@ -513,7 +523,9 @@ def predict_stock(series, horizon_days=14, train_ratio=0.85, now_timestamp=None)
     test = series[split_idx:]
 
     model = fit_consumption_regression(train)
-    metrics = evaluate_consumption(model, series)
+    # Metrik dihitung pada test set (held-out), bukan full series, untuk
+    # menghindari data leakage / menilai terlalu optimis di laporan thesis.
+    metrics = evaluate_consumption(model, test if test else series)
 
     last_qty = series[-1]['quantity']
     last_ts = series[-1]['timestamp']

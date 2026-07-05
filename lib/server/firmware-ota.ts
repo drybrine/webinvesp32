@@ -106,7 +106,9 @@ function findManifestAsset(assets: Array<{name: string; browser_download_url: st
 }
 
 function findBinaryAsset(assets: Array<{name: string; browser_download_url: string}>) {
-  return assets.find((asset) => asset.name.endsWith(".bin"))
+  // Cari binary dengan pola firmware-v* agar asset spoof (.bin acak) tidak
+  // terbaca sebagai firmware yang sah.
+  return assets.find((asset) => /^firmware-v\d+\.\d+\.\d+.*\.bin$/.test(asset.name))
 }
 
 function isCompleteManifest(value: unknown): value is FirmwareManifest {

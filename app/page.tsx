@@ -280,9 +280,7 @@ export default function DashboardPage() {
     return () => controller.abort()
   }, [getIdToken, inventory, transactions, inventoryLoading, transactionsLoading])
 
-  const stockoutAlertedRef = useRef(false)
   useEffect(() => {
-    if (stockoutAlertedRef.current) return
     if (inventoryLoading || transactionsLoading) return
     if (stockRisks.length === 0) return
 
@@ -309,12 +307,12 @@ export default function DashboardPage() {
       })
       sessionStorage.setItem(notifiedKey, Array.from(notifiedIds).join(","))
     }
-    stockoutAlertedRef.current = true
+    // Intentionally no ref guard: per-item dedup via sessionStorage above already
+    // prevents repeat alerts; a ref guard would suppress items that become urgent
+    // later in the same session.
   }, [stockRisks, inventoryLoading, transactionsLoading, toast])
 
-  const batteryAlertedRef = useRef(false)
   useEffect(() => {
-    if (batteryAlertedRef.current) return
     if (devicesLoading || devices.length === 0) return
 
     const lowBattery = devices.filter(
@@ -340,13 +338,10 @@ export default function DashboardPage() {
       })
       sessionStorage.setItem(`battery-notified-${today}`, Array.from(notifiedIds).join(","))
     }
-    batteryAlertedRef.current = true
   }, [devices, devicesLoading, toast])
 
   // Toast notifikasi untuk transaksi Auto Scanner (operator === "Scanner")
-  const scannerTxToastRef = useRef(false)
   useEffect(() => {
-    if (scannerTxToastRef.current) return
     if (transactionsLoading || transactions.length === 0) return
 
     const today = new Date().toISOString().slice(0, 10)
@@ -362,7 +357,6 @@ export default function DashboardPage() {
       .sort((a, b) => a.timestamp - b.timestamp)
 
     if (scannerTxs.length === 0) {
-      scannerTxToastRef.current = true
       return
     }
 
@@ -384,7 +378,7 @@ export default function DashboardPage() {
         .map((tx) => tx.timestamp)
     )
     sessionStorage.setItem(seenTsKey, String(maxTs))
-    scannerTxToastRef.current = true
+    // No ref guard: per-timestamp dedup via sessionStorage handles repeat alerts.
   }, [transactions, transactionsLoading, toast])
 
   // Keyboard shortcuts: / to focus search, N to add item

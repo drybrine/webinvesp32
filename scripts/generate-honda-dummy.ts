@@ -102,7 +102,7 @@ function generateYearTransactions(part: SparePart, days: number = 365): Transact
   const startTs = endTs - days * MS_PER_DAY
 
   let currentStock = part.initialStock
-  let lastRestockDay = -7  // boleh restock pertama kali
+  let lastRestockDay = -Infinity  // tidak pernah restock sebelum hari pertama
 
   // Random seed reproducible per item
   let seed = part.id.split("").reduce((s, c) => s + c.charCodeAt(0), 0)

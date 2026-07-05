@@ -1980,6 +1980,9 @@ void serviceHeartbeat(bool force) {
       lastHeartbeat = millis() > 4000 ? millis() - 4000 : 0; // retry in ~1 detik
     }
   } else {
+    // WiFi gagal total pada boot pasca-OTA: tetap hitung sebagai boot failure
+    // agar rollback terpicu setelah 3x (mencegah brick saat firmware baru merusak WiFi).
+    validateOtaBootSuccess(false);
     lastHeartbeat = millis();
   }
 }
@@ -2333,6 +2336,12 @@ void validateOtaBootSuccess(bool heartbeatOk) {
     Serial.println("OTA: rollback ke firmware sebelumnya");
     delay(250);
     if (Update.canRollBack() && Update.rollBack()) {
+      ESP.restart();
+    } else {
+      // Rollback tidak tersedia (mis. partisi factory hilang). Tetap restart
+      // agar device mencoba boot ulang; jika image benar-benar rusak, WDT
+      // 15s akan reboot berulang dan operator dapat reflash manual.
+      Serial.println("OTA: rollback tidak tersedia, restart darurat");
       ESP.restart();
     }
   }
