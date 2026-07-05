@@ -1502,6 +1502,7 @@ bool sendScanToFirebase(const String& barcode, bool processed, bool itemFound, c
     Serial.println("Tidak bisa kirim scan: no WiFi");
     return false;
   }
+  esp_task_wdt_reset();  // reset WDT — HTTP bisa blocking >1-5s
   HTTPClient http;
   String url = firebaseUrlWithAuth("/scans.json");
   if (url.length() == 0) return false;
@@ -1558,6 +1559,7 @@ InventoryItem lookupInventoryByBarcode(const String& barcode) {
   item.lookupOk = false;
   if (!isWiFiConnected) return item;
 
+  esp_task_wdt_reset();  // reset WDT — HTTP bisa blocking >1-5s
   HTTPClient http;
   String url = firebaseUrlWithAuth(
     "/inventory.json?orderBy=\"barcode\"&equalTo=\"" + urlEncode(barcode) + "\""
@@ -1612,6 +1614,7 @@ InventoryItem lookupInventoryByBarcode(const String& barcode) {
 bool adjustStockFromDevice(const InventoryItem& item, int delta) {
   if (!item.found || item.id.length() == 0 || (delta != 1 && delta != -1)) return false;
   if (!isWiFiConnected) return false;
+  esp_task_wdt_reset();  // reset WDT — HTTP bisa blocking >1-7s
   if (delta < 0 && item.quantity + delta < 0) {
     Serial.println("Auto stock ditolak: stok tidak cukup");
     return false;
@@ -1910,6 +1913,7 @@ bool sendHeartbeatToFirebase() {
     Serial.println("Heartbeat: no WiFi");
     return false;
   }
+  esp_task_wdt_reset();  // reset WDT — HTTP bisa blocking >1-5s
   HTTPClient http;
   String url = firebaseUrlWithAuth(
     "/devices/" + String(deviceConfig.deviceId) + ".json"
@@ -2357,6 +2361,7 @@ void validateOtaBootSuccess(bool heartbeatOk) {
 void processInventoryBarcode(const String& barcode) {
   Serial.print("Inventory barcode: ");
   Serial.println(barcode);
+  esp_task_wdt_reset();  // reset WDT sebelum HTTP chain — bisa total 17s
 
   bool autoMode = activeScanMode == "Auto IN" || activeScanMode == "Auto OUT";
 
