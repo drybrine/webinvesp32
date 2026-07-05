@@ -2,11 +2,11 @@
 
 import { FormEvent, useState } from "react"
 import { useRouter } from "next/navigation"
-import { LockKeyhole } from "lucide-react"
+import { motion } from "framer-motion"
+import { ArrowRight, LockKeyhole, Mail } from "lucide-react"
 import { firebaseAuth } from "@/lib/firebase"
 import { BrandMark } from "@/components/brand-logo"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
@@ -50,62 +50,98 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="text-center space-y-3">
-          <BrandMark className="mx-auto h-14 w-14 shadow-md ring-1 ring-primary/15" />
-          <div>
-            <CardTitle className="text-2xl">StokManager</CardTitle>
-            <CardDescription>
-              {resetMode ? "Kirim tautan reset kata sandi" : "Masuk ke sistem inventory internal"}
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={submit}>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
+    <main className="relative min-h-[100dvh] flex items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_hsl(160_30%_97%)_0%,_hsl(0_0%_99%)_50%)]">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0)_0%,_rgba(255,255,255,0.8)_100%)]" />
+      <div className="absolute inset-0 opacity-[0.03] [background-image:radial-gradient(hsl(var(--foreground))_1px,_transparent_1px)] [background-size:20px_20px]" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 w-full max-w-md px-4"
+      >
+        <div className="rounded-[2rem] border border-border/60 bg-white/80 backdrop-blur-sm p-8 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)]">
+          <div className="mb-8 flex flex-col items-center text-center">
+            <div className="mb-5 inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-500 shadow-lg shadow-emerald-500/20">
+              <BrandMark className="h-9 w-9 text-white" />
             </div>
-            {!resetMode && (
-              <div className="space-y-2">
-                <Label htmlFor="password">Kata sandi</Label>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              StokManager
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {resetMode ? "Kirim tautan reset kata sandi" : "Sistem manajemen inventory real-time"}
+            </p>
+          </div>
+
+          <form onSubmit={submit} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                   required
+                  placeholder="admin@stokmanager.app"
+                  className="h-12 rounded-xl pl-11"
                 />
               </div>
+            </div>
+
+            {!resetMode && (
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium">Kata sandi</Label>
+                <div className="relative">
+                  <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    required
+                    placeholder="••••••••"
+                    className="h-12 rounded-xl pl-11"
+                  />
+                </div>
+              </div>
             )}
-            <Button className="w-full" type="submit" disabled={loading}>
-              <LockKeyhole className="w-4 h-4 mr-2" />
-              {loading ? "Memproses..." : resetMode ? "Kirim Reset" : "Masuk"}
-            </Button>
+
             <Button
-              className="w-full"
+              type="submit"
+              disabled={loading}
+              className="h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-700 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:opacity-60"
+            >
+              {loading ? (
+                "Memproses..."
+              ) : (
+                <>
+                  {resetMode ? "Kirim Reset" : "Masuk"}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
+            </Button>
+
+            <button
               type="button"
-              variant="ghost"
               onClick={() => setResetMode((value) => !value)}
               disabled={loading}
+              className="block w-full text-center text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
             >
               {resetMode ? "Kembali ke login" : "Lupa kata sandi?"}
-            </Button>
+            </button>
           </form>
-          <p className="mt-5 text-center text-xs text-muted-foreground">
-            Pendaftaran publik dinonaktifkan. Hubungi administrator untuk akun baru.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+
+          <div className="mt-8 border-t border-border/60 pt-5 text-center">
+            <p className="text-xs text-muted-foreground">
+              Pendaftaran publik dinonaktifkan. Hubungi administrator untuk akun baru.
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    </main>
   )
 }

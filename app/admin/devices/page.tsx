@@ -117,10 +117,15 @@ export default function AdminDevicesPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div><h1 className="text-3xl font-bold">Scanner Terdaftar</h1><p className="text-sm text-muted-foreground">Setiap scanner dipetakan ke satu akun Firebase Auth dan satu deviceId.</p></div>
-        <Dialog open={open} onOpenChange={setOpen}>
+    <div className="min-h-[100dvh] bg-background">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10 space-y-8">
+        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between animate-fade-in-up">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Admin</p>
+            <h1 className="heading-1">Scanner</h1>
+            <p className="text-body max-w-2xl pt-1">Setiap scanner dipetakan ke satu akun Firebase Auth dan satu deviceId.</p>
+          </div>
+          <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-2" />Daftarkan Scanner</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Scanner Baru</DialogTitle></DialogHeader>
@@ -168,6 +173,7 @@ export default function AdminDevicesPage() {
       <FirmwareOtaPanel registeredDevices={devices} />
 
       <CredentialDialog credential={credential} onClose={() => setCredential(null)} />
+      </div>
     </div>
   )
 }

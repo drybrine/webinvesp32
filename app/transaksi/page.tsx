@@ -255,7 +255,7 @@ export default function TransaksiPage() {
 
   if (inventoryLoading || transactionsLoading) {
     return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mx-auto mb-4"></div>
           <p className="text-muted-foreground">Memuat data...</p>
@@ -266,7 +266,7 @@ export default function TransaksiPage() {
 
   if (transactionsError) {
     return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <Card className="max-w-md">
           <CardContent className="pt-6 text-destructive text-center">{transactionsError}</CardContent>
         </Card>
@@ -295,12 +295,13 @@ export default function TransaksiPage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-6">
+    <div className="min-h-[100dvh] bg-background">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10 space-y-8">
         {/* Header */}
-        <div className="animate-fade-in-up">
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">Riwayat Transaksi</h1>
-          <p className="text-sm text-muted-foreground mt-1">Ledger bersifat permanen; koreksi dicatat sebagai transaksi pembalik baru.</p>
+        <div className="animate-fade-in-up space-y-1">
+          <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Riwayat</p>
+          <h1 className="heading-1">Transaksi</h1>
+          <p className="text-body max-w-2xl pt-1">Ledger bersifat permanen; koreksi dicatat sebagai transaksi pembalik baru.</p>
         </div>
 
         {/* Stats Cards */}
