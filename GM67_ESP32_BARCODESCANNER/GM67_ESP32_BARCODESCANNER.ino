@@ -178,29 +178,6 @@ String        activeScanMode = "Manual";       // dikontrol dari tombol alat: "M
 #define LOOKUP_POLL_INTERVAL_MS 1000UL
 #define LOOKUP_TIMEOUT_MS       10000UL
 
-// State machine untuk memecah rantai HTTP scan ke beberapa iterasi loop.
-// Setiap state menjalankan SATU HTTP call, lalu return ke loop() agar
-// handleButtons() bisa jalan di antara state.
-enum BarcodeJobState {
-  BARCODE_IDLE,
-  BARCODE_SEND_SCAN,      // POST /scans.json
-  BARCODE_LOOKUP,         // GET /inventory.json?barcode=...
-  BARCODE_ADJUST_STOCK,   // PATCH /.json (root multi-path)
-  BARCODE_FINALIZE,       // tampilkan hasil di OLED + cleanup
-};
-
-struct BarcodeJob {
-  BarcodeJobState state;
-  String barcode;
-  String scanMode;     // snapshot mode saat scan
-  bool scanSent;
-  InventoryItem item;
-  bool adjusted;
-  int afterQty;
-};
-
-BarcodeJob barcodeJob = {BARCODE_IDLE, "", "", false, {}, false, 0};
-
 enum WiFiConnectState {
   WIFI_CONN_IDLE,
   WIFI_CONN_CONNECTING
@@ -2383,144 +2360,89 @@ void validateOtaBootSuccess(bool heartbeatOk) {
 
 
 // =============================================================================
-//  BARCODE PROCESSING (state machine — non-blocking)
+//  BARCODE PROCESSING
 // =============================================================================
-// Memproses barcode inventory via state machine agar loop() tidak diblokir
-// oleh rantai HTTP. Setiap state menjalankan SATU HTTP call, lalu return.
-// Lihat processBarcodeQueue() untuk state handler.
+// Memproses barcode inventory. Mode Manual tetap mengirim scan untuk popup web.
+// Mode Auto IN/OUT bekerja standalone: alat menambah/mengurangi stok dan membuat
+// transaksi langsung ke RTDB tanpa perlu dashboard terbuka.
 void processInventoryBarcode(const String& barcode) {
-  if (barcodeJob.state != BARCODE_IDLE) {
-    // Masih memproses scan sebelumnya — skip (tidak queue)
-    Serial.println("Barcode ditolak: masih ada job aktif");
-    return;
-  }
   Serial.print("Inventory barcode: ");
   Serial.println(barcode);
-  esp_task_wdt_reset();
-
-  barcodeJob.state = BARCODE_IDLE;
-  barcodeJob.barcode = barcode;
-  barcodeJob.scanMode = activeScanMode;
-  barcodeJob.scanSent = false;
-  barcodeJob.adjusted = false;
-  barcodeJob.afterQty = 0;
-  barcodeJob.item = {};
+  esp_task_wdt_reset();  // reset WDT sebelum HTTP chain — bisa total 17s
 
   bool autoMode = activeScanMode == "Auto IN" || activeScanMode == "Auto OUT";
 
   if (autoMode) {
-    // Auto mode: lookup dulu, lalu adjust stock
-    barcodeJob.state = BARCODE_LOOKUP;
-  } else {
-    // Manual mode: kirim scan dulu, lalu lookup buat OLED
-    barcodeJob.state = BARCODE_SEND_SCAN;
-  }
-}
-
-// Dipanggil tiap loop() — menjalankan satu HTTP call per iterasi.
-// handleButtons() jalan di loop() antar state, sehingga menu tetap responsif.
-void processBarcodeQueue() {
-  if (barcodeJob.state == BARCODE_IDLE) return;
-
-  bool autoMode = barcodeJob.scanMode == "Auto IN" || barcodeJob.scanMode == "Auto OUT";
-
-  switch (barcodeJob.state) {
-    case BARCODE_SEND_SCAN:
-      barcodeJob.scanSent = sendScanToFirebase(barcodeJob.barcode);
-      if (!barcodeJob.scanSent && !autoMode) {
-        oledShowBarcode(barcodeJob.barcode, "", false);
-        barcodeJob.state = BARCODE_IDLE;
-        break;
-      }
-      if (autoMode) {
-        // Auto mode: setelah scan, finish
-        barcodeJob.state = BARCODE_FINALIZE;
-      } else {
-        // Manual mode: lanjut lookup untuk OLED
-        barcodeJob.state = BARCODE_LOOKUP;
-      }
-      break;
-
-    case BARCODE_LOOKUP:
-      barcodeJob.item = lookupInventoryByBarcode(barcodeJob.barcode);
-      if (autoMode) {
-        if (!barcodeJob.item.found && !barcodeJob.item.lookupOk) {
-          oledShowBarcode(barcodeJob.barcode, "", false);
-          barcodeJob.state = BARCODE_IDLE;
-          break;
-        }
-        if (!barcodeJob.item.found) {
-          // Not found: kirim scan sebagai fallback
-          barcodeJob.state = BARCODE_SEND_SCAN;
-          break;
-        }
-        // Found: adjust stock
-        barcodeJob.state = BARCODE_ADJUST_STOCK;
-      } else {
-        // Manual mode: hasil lookup ditampilkan di OLED
-        if (barcodeJob.item.found) {
-          pendingLookupScanId = "";
-          pendingLookupBarcode = "";
-          Serial.printf("Item: %s | Qty: %d | MinStock: %d\n",
-                        barcodeJob.item.name.c_str(), barcodeJob.item.quantity, barcodeJob.item.minStock);
-          oledShowInventoryFound(barcodeJob.item.name, barcodeJob.item.quantity, barcodeJob.item.minStock);
-        } else if (barcodeJob.scanSent && lastFirebaseScanId.length() > 0) {
-          pendingLookupScanId = lastFirebaseScanId;
-          pendingLookupBarcode = barcodeJob.barcode;
-          pendingLookupDeadline = millis() + LOOKUP_TIMEOUT_MS;
-          lastLookupPoll = 0;
-          oledShowProductLookupSearching(barcodeJob.barcode);
-        } else {
-          oledShowBarcode(barcodeJob.barcode, "", barcodeJob.scanSent);
-        }
-        barcodeJob.state = BARCODE_IDLE;
-      }
-      break;
-
-    case BARCODE_ADJUST_STOCK: {
+    InventoryItem item = lookupInventoryByBarcode(barcode);
+    if (item.found) {
       pendingLookupScanId = "";
       pendingLookupBarcode = "";
-      int delta = barcodeJob.scanMode == "Auto IN" ? 1 : -1;
-      int afterQty = barcodeJob.item.quantity + delta;
+      int delta = activeScanMode == "Auto IN" ? 1 : -1;
+      int afterQty = item.quantity + delta;
       bool stockEnough = afterQty >= 0;
+      bool adjusted = false;
       if (stockEnough) {
-        barcodeJob.adjusted = adjustStockFromDevice(barcodeJob.item, delta);
-        if (!barcodeJob.adjusted) afterQty = barcodeJob.item.quantity;
+        adjusted = adjustStockFromDevice(item, delta);
+        if (!adjusted) afterQty = item.quantity;
       } else {
-        afterQty = barcodeJob.item.quantity;
+        afterQty = item.quantity;
       }
-      barcodeJob.afterQty = afterQty;
-      if (!barcodeJob.adjusted) {
-        // Scan not adjusted — send scan record so web popup appears
-        barcodeJob.state = BARCODE_SEND_SCAN;
-      } else {
-        barcodeJob.state = BARCODE_FINALIZE;
+
+      if (!adjusted) {
+        sendScanToFirebase(barcode, !stockEnough, true, item.id);
       }
-      break;
+      oledShowAutoStockResult(
+        activeScanMode,
+        item.name,
+        item.quantity,
+        afterQty,
+        adjusted,
+        !stockEnough ? "Stok tidak cukup" : (adjusted ? "Transaksi tersimpan" : "Sync gagal")
+      );
+      return;
     }
 
-    case BARCODE_FINALIZE:
-      if (autoMode) {
-        if (!barcodeJob.adjusted && !barcodeJob.scanSent) {
-          // Need to send fallback scan — already handled by state transition
-        }
-        oledShowAutoStockResult(
-          barcodeJob.scanMode,
-          barcodeJob.item.found ? barcodeJob.item.name : "",
-          barcodeJob.item.found ? barcodeJob.item.quantity : 0,
-          barcodeJob.afterQty,
-          barcodeJob.adjusted,
-          !barcodeJob.adjusted && barcodeJob.item.found && barcodeJob.item.quantity + (barcodeJob.scanMode == "Auto IN" ? 1 : -1) < 0
-            ? "Stok tidak cukup"
-            : (barcodeJob.adjusted ? "Transaksi tersimpan" : "Sync gagal")
-        );
-      }
-      barcodeJob.state = BARCODE_IDLE;
-      break;
+    if (!item.lookupOk) {
+      oledShowBarcode(barcode, "", false);
+      return;
+    }
 
-    default:
-      barcodeJob.state = BARCODE_IDLE;
-      break;
+    bool sent = sendScanToFirebase(barcode);
+    if (sent && lastFirebaseScanId.length() > 0) {
+      pendingLookupScanId = lastFirebaseScanId;
+      pendingLookupBarcode = barcode;
+      pendingLookupDeadline = millis() + LOOKUP_TIMEOUT_MS;
+      lastLookupPoll = 0;
+      oledShowProductLookupSearching(barcode);
+    } else {
+      oledShowBarcode(barcode, "", sent);
+    }
+    return;
+  }
+
+  // POST ke /scans dulu agar website popup muncul cepat pada mode Manual.
+  bool sent = sendScanToFirebase(barcode);
+  if (!sent) {
+    oledShowBarcode(barcode, "", false);
+    return;
+  }
+
+  // Lookup inventory setelah scan terkirim (untuk OLED display)
+  InventoryItem item = lookupInventoryByBarcode(barcode);
+  if (item.found) {
+    pendingLookupScanId = "";
+    pendingLookupBarcode = "";
+    Serial.printf("Item: %s | Qty: %d | MinStock: %d\n",
+                  item.name.c_str(), item.quantity, item.minStock);
+    oledShowInventoryFound(item.name, item.quantity, item.minStock);
+  } else if (sent && lastFirebaseScanId.length() > 0) {
+    pendingLookupScanId = lastFirebaseScanId;
+    pendingLookupBarcode = barcode;
+    pendingLookupDeadline = millis() + LOOKUP_TIMEOUT_MS;
+    lastLookupPoll = 0;
+    oledShowProductLookupSearching(barcode);
+  } else {
+    oledShowBarcode(barcode, "", sent);
   }
 }
 
@@ -2906,9 +2828,6 @@ void loop() {
   handleInputStream(Serial, serialBuffer, serialLength, lastSerialCharTime);
 
   serviceHeartbeat(false);
-
-  // Proses barcode queue (satu HTTP call per loop agar button tetap responsif)
-  processBarcodeQueue();
 
   // Panggil handleButtons lagi setelah operasi blocking (HTTP, scan)
   // agar press yang terjadi saat loop sibuk tidak terlewat.
