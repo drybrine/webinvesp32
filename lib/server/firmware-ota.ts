@@ -106,9 +106,15 @@ function findManifestAsset(assets: Array<{name: string; browser_download_url: st
 }
 
 function findBinaryAsset(assets: Array<{name: string; browser_download_url: string}>) {
-  // Cari binary dengan pola firmware-v* agar asset spoof (.bin acak) tidak
-  // terbaca sebagai firmware yang sah.
-  return assets.find((asset) => /^firmware-v\d+\.\d+\.\d+.*\.bin$/.test(asset.name))
+  // Cari binary firmware: CI menamai file firmware_signed.bin, jadi cocokkan
+  // dengan pola umum .bin + indikasi firmware. Jika ada lebih dari satu,
+  // prefer yang mengandung "firmware" di namanya.
+  const bins = assets.filter((a) => a.name.endsWith(".bin") && a.name !== "manifest.json")
+  if (bins.length === 0) return undefined
+  if (bins.length === 1) return bins[0]
+  // Bila ada banyak .bin, pilih yang namanya mengandung "firmware" atau "signed"
+  const preferred = bins.find((a) => /firmware|signed/i.test(a.name))
+  return preferred || bins[0]
 }
 
 function isCompleteManifest(value: unknown): value is FirmwareManifest {

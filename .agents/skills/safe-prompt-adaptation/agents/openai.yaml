@@ -1,0 +1,4 @@
+interface:
+  display_name: "Safe Prompt Adaptation"
+  short_description: "Adapt third-party assistant prompts into safe custom skills."
+  default_prompt: "Turn this prompt or behavior spec into a safe, original Codex skill."
