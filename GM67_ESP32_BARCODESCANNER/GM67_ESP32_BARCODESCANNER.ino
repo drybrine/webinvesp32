@@ -54,7 +54,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.24"
+#define FIRMWARE_VERSION   "6.5.25"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -67,6 +67,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define BTN_DOWN_PIN        25
 #define BUTTON_DEBOUNCE_MS  50UL
 #define BUTTON_LONG_MS      800UL
+#define BUTTON_REPEAT_MS    250UL   // auto-repeat interval saat tahan tombol
 #define SCREEN_SAVER_TIMEOUT_MS 30000UL
 #define MAIN_MENU_COUNT      6
 #define MODE_MENU_COUNT      4
@@ -216,6 +217,7 @@ struct ButtonState {
   bool longFired;
   unsigned long lastChange;
   unsigned long pressedAt;
+  unsigned long lastRepeat;  // timestamp repeat terakhir untuk auto-repeat
 };
 
 UiScreen currentScreen = SCREEN_HOME;
@@ -2570,6 +2572,15 @@ ButtonEvent readButton(ButtonState &button, ButtonEvent shortEvent, ButtonEvent 
   if (button.stablePressed && !button.longFired && now - button.pressedAt >= BUTTON_LONG_MS) {
     button.longFired = true;
     return longEvent;
+  }
+  // Auto-repeat: ketika tombol tetap ditekan setelah long press, kirim
+  // repeat event setiap BUTTON_REPEAT_MS agar navigasi lebih smooth.
+  // Hanya untuk UP/DOWN (identifikasi via shortEvent) — OK tidak di-repeat.
+  if (button.stablePressed && button.longFired && (shortEvent == BTN_UP_SHORT || shortEvent == BTN_DOWN_SHORT)) {
+    if (now - button.lastRepeat >= BUTTON_REPEAT_MS) {
+      button.lastRepeat = now;
+      return shortEvent;
+    }
   }
   return BTN_NONE;
 }
