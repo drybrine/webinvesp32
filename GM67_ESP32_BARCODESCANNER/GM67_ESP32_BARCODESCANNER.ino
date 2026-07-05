@@ -54,7 +54,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.5.20"
+#define FIRMWARE_VERSION   "6.5.21"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -75,8 +75,8 @@ unsigned long lastBarcodeOnOled   = 0;
 #define SERIAL_IDLE_FLUSH_MS 50UL
 
 // --- WiFi connection state ----------------------------------------------------
-#define WIFI_CONNECT_TIMEOUT_MS 10000UL
-#define WIFI_RECONNECT_INTERVAL_MS 10000UL
+#define WIFI_CONNECT_TIMEOUT_MS  7000UL
+#define WIFI_RECONNECT_INTERVAL_MS 5000UL
 #define WIFI_PROGRESS_INTERVAL_MS 500UL
 
 // --- OTA (over-the-air firmware update) --------------------------------------
@@ -84,7 +84,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define OTA_IDLE_REQUIRED_MS    10000UL // require this long since last scan
 #define OTA_MAX_RETRIES         3       // attempts per commandId before giving up
 #define OTA_BOOT_VALIDATE_MS    20000UL // confirm heartbeat OK within this window post-update
-#define WDT_TIMEOUT_SEC         10      // hardware watchdog timeout (reboot if loop hangs)
+#define WDT_TIMEOUT_SEC         15      // hardware watchdog timeout (reboot if loop hangs)
 
 // ECDSA P-256 public key (PEM/SPKI) matching OTA_SIGNING_PRIVATE_KEY in CI.
 // The private key never leaves the GitHub secret; only this public half ships.
@@ -303,7 +303,7 @@ void          oledShowAutoStockResult(const String& mode, const String& name, in
 void          oledShowProductLookupSearching(const String& barcode);
 void          oledShowProductLookupFound(const String& name, const String& category);
 void          oledShowProductLookupNotFound(const String& barcode, const String& message);
-void          oledShowWiFiConnecting(const char* ssid);
+void          oledShowWiFiConnecting(const char* ssid, int remainingSec = -1);
 void          oledShowWiFiConnected(const char* ip);
 void          oledShowNoWiFi();
 void          oledShowAuthError();
@@ -986,14 +986,16 @@ void oledShowProductLookupNotFound(const String& barcode, const String& message)
   lastBarcodeOnOled = millis();
 }
 
-void oledShowWiFiConnecting(const char* ssid) {
+void oledShowWiFiConnecting(const char* ssid, int remainingSec) {
   if (!oledAvailable) return;
   oledBeginFrame();
   char name[24];
   fitText(ssid, name, sizeof(name), OLED_TEXT_CHARS);
   drawHeader("CONNECTING WIFI", name);
   drawLabelValue(OLED_BODY_Y, "Status", "Menghubungkan");
-  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Timeout", "10 detik");
+  char timeoutBuf[24];
+  snprintf(timeoutBuf, sizeof(timeoutBuf), "%d detik", remainingSec > 0 ? remainingSec : 0);
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Timeout", timeoutBuf);
   drawFooter("Non-blocking", "WiFi");
   display.display();
 }
@@ -1194,7 +1196,7 @@ bool connectToWiFi() {
   }
 
   Serial.printf("Connecting WiFi: %s\n", wifiConfig.ssid);
-  oledShowWiFiConnecting(wifiConfig.ssid);
+  oledShowWiFiConnecting(wifiConfig.ssid, WIFI_CONNECT_TIMEOUT_MS / 1000);
   WiFi.disconnect(false);
   WiFi.begin(wifiConfig.ssid, wifiConfig.password);
   wifiConnectState = WIFI_CONN_CONNECTING;
@@ -1246,6 +1248,8 @@ void serviceWiFiConnection() {
   if (wifiConnectState == WIFI_CONN_CONNECTING) {
     if (now - lastWiFiProgressAt >= WIFI_PROGRESS_INTERVAL_MS) {
       Serial.print(".");
+      int remaining = (int)((WIFI_CONNECT_TIMEOUT_MS - (now - wifiConnectStartedAt)) / 1000UL);
+      oledShowWiFiConnecting(wifiConfig.ssid, remaining);
       lastWiFiProgressAt = now;
     }
     if (now - wifiConnectStartedAt >= WIFI_CONNECT_TIMEOUT_MS) {
