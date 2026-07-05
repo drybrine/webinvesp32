@@ -1984,9 +1984,12 @@ void serviceHeartbeat(bool force) {
       lastHeartbeat = millis() > 4000 ? millis() - 4000 : 0; // retry in ~1 detik
     }
   } else {
-    // WiFi gagal total pada boot pasca-OTA: tetap hitung sebagai boot failure
-    // agar rollback terpicu setelah 3x (mencegah brick saat firmware baru merusak WiFi).
-    validateOtaBootSuccess(false);
+    // WiFi belum konek. Beri grace period OTA_BOOT_VALIDATE_MS agar WiFi
+    // punya waktu connect setelah reboot, baru hitung sebagai boot failure.
+    // Mencegah false-positive rollback saat WiFi lambat connect.
+    if (millis() > OTA_BOOT_VALIDATE_MS) {
+      validateOtaBootSuccess(false);
+    }
     lastHeartbeat = millis();
   }
 }
