@@ -2591,7 +2591,11 @@ void handleUiEvent(ButtonEvent event) {
   else if (event == BTN_DOWN_LONG) event = BTN_DOWN_SHORT;
 
   lastUiInteraction = millis();
-  if (currentScreen == SCREEN_SAVER) currentScreen = SCREEN_HOME;
+  if (currentScreen == SCREEN_SAVER) {
+    currentScreen = SCREEN_HOME;
+    lastOledRefresh = 0;
+    return;  // wake only, jangan proses event ke menu
+  }
 
   // Skip satu event setelah transisi screen untuk mencegah release event
   // dari press sebelumnya (mis. OK_SHORT) terproses di screen baru dan
