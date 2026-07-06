@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app"
-import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference, increment, get } from "firebase/database"
+import { getDatabase, ref, push, set, update, serverTimestamp, connectDatabaseEmulator, Database, DatabaseReference, increment, get, query, orderByChild, startAt } from "firebase/database"
 import { initializeFirebaseErrorHandling } from "./firebase-error-suppressor" // Use new enhanced error suppressor
 import type { Auth } from "firebase/auth"
 import type { InventoryItem, ScanRecord, DeviceStatus } from "@/hooks/use-firebase"
@@ -555,10 +555,24 @@ export const firebaseHelpers = {
 
   // One-time fetch of all transactions — uses get() not onValue().
   // Prediction needs the full history; do NOT subscribe to everything.
-  fetchAllTransactions: async () => {
+  // recentDays: limit fetch to recent N days (default 90 for prediction, null for all)
+  fetchAllTransactions: async (recentDays?: number | null) => {
     if (!database || !dbRefs || !dbRefs.transactions) throw new Error("Firebase not available")
-    const allQuery = ref(database, "transactions") // orderByChild("timestamp") — skip ordering, faster
-    const snapshot = await get(allQuery)
+    
+    if (recentDays === null) {
+      // Fetch all (for prediction accuracy)
+      const allQuery = ref(database, "transactions")
+      const snapshot = await get(allQuery)
+      const data = snapshot.val()
+      if (!data) return []
+      return Object.keys(data).map((key) => ({ ...data[key], id: key }))
+    }
+    
+    // Fetch only recent N days (default 90)
+    const days = recentDays || 90
+    const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000)
+    const recentQuery = query(ref(database, "transactions"), orderByChild("timestamp"), startAt(cutoff))
+    const snapshot = await get(recentQuery)
     const data = snapshot.val()
     if (!data) return []
     return Object.keys(data).map((key) => ({ ...data[key], id: key }))

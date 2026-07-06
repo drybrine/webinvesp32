@@ -32,7 +32,7 @@ type SearchaniseResponse = {
 const HONDA_BASE = "https://www.hondacengkareng.com"
 const HONDA_PARTS_CATEGORY = `${HONDA_BASE}/kategori-produk/suku-cadang-resmi-motor-honda/`
 const SEARCHANISE_API = "https://searchserverapi1.com/getresults"
-const SEARCHANISE_KEY = "0Z3C6c9F0z"
+const SEARCHANISE_KEY = process.env.SEARCHANISE_API_KEY || ""
 
 function decodeHtml(input: string) {
   return input
@@ -51,6 +51,7 @@ function stripTags(input: string) {
 
 async function fetchSearchanise(code: string): Promise<LookupProduct | null> {
   try {
+    if (!SEARCHANISE_KEY) return null  // key tidak dikonfigurasi
     const url = new URL(SEARCHANISE_API)
     url.searchParams.set("api_key", SEARCHANISE_KEY)
     url.searchParams.set("q", code)

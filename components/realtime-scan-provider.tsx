@@ -213,18 +213,6 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
       isScanFromInventoryMode
     )
     
-    console.log("[Scan Debug] evaluation:", {
-      id: latestScan.id,
-      barcode: latestScan.barcode,
-      shouldTriggerPopup,
-      isESP32Device,
-      writable,
-      processed: latestScan.processed,
-      lastProcessedScanId,
-      isScanFromInventoryMode,
-      inventoryLoading: false
-    })
-    
     if (!shouldTriggerPopup) {
       return
     }

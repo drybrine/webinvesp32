@@ -127,7 +127,6 @@ self.addEventListener('fetch', (event) => {
         } catch (error) {
           // If network fails, return cached response if available
           if (cachedResponse) {
-            console.log('Network failed, returning cached Firebase resource')
             return cachedResponse
           }
           throw error

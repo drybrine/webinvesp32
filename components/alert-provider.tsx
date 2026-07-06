@@ -91,7 +91,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
             minStock: Number(i.minStock) || 0,
           }))
 
-        const allTxData = await firebaseHelpers.fetchAllTransactions()
+        const allTxData = await firebaseHelpers.fetchAllTransactions(90)  // recent90 days only
         const txs = (allTxData as Array<Record<string, unknown>>).map(t => ({
           productBarcode: t.productBarcode,
           type: t.type,
