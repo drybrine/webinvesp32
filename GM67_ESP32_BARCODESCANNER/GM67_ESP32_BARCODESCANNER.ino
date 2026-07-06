@@ -54,7 +54,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.6.1"
+#define FIRMWARE_VERSION   "6.6.2"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -65,9 +65,9 @@ unsigned long lastBarcodeOnOled   = 0;
 #define BTN_UP_PIN          32
 #define BTN_OK_PIN          33
 #define BTN_DOWN_PIN        25
-#define BUTTON_DEBOUNCE_MS  50UL
+#define BUTTON_DEBOUNCE_MS  30UL    // debounce edge-triggered (cukup untuk physical bounce)
 #define BUTTON_LONG_MS      800UL
-#define BUTTON_REPEAT_MS    250UL   // auto-repeat interval saat tahan tombol
+#define BUTTON_REPEAT_MS    200UL   // auto-repeat interval saat tahan tombol (lebih responsif)
 #define SCREEN_SAVER_TIMEOUT_MS 30000UL
 
 // --- OTA (over-the-air firmware update) --------------------------------------
@@ -81,12 +81,6 @@ unsigned long lastBarcodeOnOled   = 0;
 #define CONFIRM_MENU_COUNT   2
 #define SERIAL_INPUT_MAX   512
 #define SERIAL_IDLE_FLUSH_MS 50UL
-
-// --- WiFi connection state ----------------------------------------------------
-#define BUTTON_DEBOUNCE_MS  50UL
-#define BUTTON_LONG_MS      800UL
-#define BUTTON_REPEAT_MS    250UL   // auto-repeat interval saat tahan tombol
-#define SCREEN_SAVER_TIMEOUT_MS 30000UL
 
 // ECDSA P-256 public key (PEM/SPKI) matching OTA_SIGNING_PRIVATE_KEY in CI.
 // The private key never leaves the GitHub secret; only this public half ships.
@@ -2533,35 +2527,50 @@ void initButtons() {
 }
 
 ButtonEvent readButton(ButtonState &button, ButtonEvent shortEvent, ButtonEvent longEvent) {
-  bool reading = digitalRead(button.pin) == LOW;
+  bool reading = digitalRead(button.pin) == LOW;  // LOW = pressed (INPUT_PULLUP)
   unsigned long now = millis();
-  if (reading != button.lastReading) {
-    button.lastReading = reading;
-    button.lastChange = now;
+
+  // Edge-triggered debounce: hanya proses perubahan state, bukan level
+  if (reading == button.lastReading) {
+    // Reading sama dengan sebelumnya - cek long press & repeat saja
+    if (button.stablePressed && !button.longFired && now - button.pressedAt >= BUTTON_LONG_MS) {
+      button.longFired = true;
+      return longEvent;
+    }
+    // Auto-repeat untuk UP/DOWN
+    if (button.stablePressed && button.longFired && (shortEvent == BTN_UP_SHORT || shortEvent == BTN_DOWN_SHORT)) {
+      if (now - button.lastRepeat >= BUTTON_REPEAT_MS) {
+        button.lastRepeat = now;
+        return shortEvent;
+      }
+    }
+    return BTN_NONE;
   }
-  if (now - button.lastChange < BUTTON_DEBOUNCE_MS) return BTN_NONE;
+
+  // Ada perubahan reading - tunggu debounce
+  button.lastReading = reading;
+  if (now - button.lastChange < BUTTON_DEBOUNCE_MS) {
+    return BTN_NONE;  // masih dalam debounce window
+  }
+
+  // Debounce selesai - proses edge
+  button.lastChange = now;
+
   if (reading != button.stablePressed) {
     button.stablePressed = reading;
     if (reading) {
+      // Rising edge (pressed)
       button.pressedAt = now;
       button.longFired = false;
-    } else if (!button.longFired) {
-      return shortEvent;
-    }
-  }
-  if (button.stablePressed && !button.longFired && now - button.pressedAt >= BUTTON_LONG_MS) {
-    button.longFired = true;
-    return longEvent;
-  }
-  // Auto-repeat: ketika tombol tetap ditekan setelah long press, kirim
-  // repeat event setiap BUTTON_REPEAT_MS agar navigasi lebih smooth.
-  // Hanya untuk UP/DOWN (identifikasi via shortEvent) — OK tidak di-repeat.
-  if (button.stablePressed && button.longFired && (shortEvent == BTN_UP_SHORT || shortEvent == BTN_DOWN_SHORT)) {
-    if (now - button.lastRepeat >= BUTTON_REPEAT_MS) {
       button.lastRepeat = now;
-      return shortEvent;
+    } else {
+      // Falling edge (released) - fire short press jika belum long press
+      if (!button.longFired) {
+        return shortEvent;
+      }
     }
   }
+
   return BTN_NONE;
 }
 
