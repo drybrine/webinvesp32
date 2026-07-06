@@ -60,7 +60,7 @@ export default function Navigation() {
 					</div>
 
 					{/* Desktop Navigation */}
-					<div className="hidden md:flex md:items-center md:gap-1.5 rounded-lg border border-border/70 bg-card/70 p-1 shadow-sm">
+					<div className="hidden md:flex md:items-center md:gap-1.5 rounded-lg bg-card/70 p-1">
 						{navigation.map((item) => {
 							const Icon = item.icon
 							const isActive = pathname === item.href

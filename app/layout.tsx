@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Plus_Jakarta_Sans } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/ui/toaster"
+import { AlertProvider } from "@/components/alert-provider"
 import ServiceWorkerRegistration from "@/components/service-worker-registration"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Analytics } from "@vercel/analytics/react"
@@ -89,7 +90,9 @@ export default function RootLayout({
         <FirebaseDeprecationSuppressor />
         <ServiceWorkerRegistration />
         <AuthProvider>
-          <AppShell>{children}</AppShell>
+          <AlertProvider>
+            <AppShell>{children}</AppShell>
+          </AlertProvider>
           <Toaster />
         </AuthProvider>
         <SpeedInsights />
