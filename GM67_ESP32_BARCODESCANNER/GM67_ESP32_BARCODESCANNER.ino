@@ -54,7 +54,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.6.0"
+#define FIRMWARE_VERSION   "6.6.1"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -69,16 +69,6 @@ unsigned long lastBarcodeOnOled   = 0;
 #define BUTTON_LONG_MS      800UL
 #define BUTTON_REPEAT_MS    250UL   // auto-repeat interval saat tahan tombol
 #define SCREEN_SAVER_TIMEOUT_MS 30000UL
-#define MAIN_MENU_COUNT      6
-#define MODE_MENU_COUNT      4
-#define CONFIRM_MENU_COUNT   2
-#define SERIAL_INPUT_MAX   512
-#define SERIAL_IDLE_FLUSH_MS 50UL
-
-// --- WiFi connection state ----------------------------------------------------
-#define WIFI_CONNECT_TIMEOUT_MS  7000UL
-#define WIFI_RECONNECT_INTERVAL_MS 5000UL
-#define WIFI_PROGRESS_INTERVAL_MS 500UL
 
 // --- OTA (over-the-air firmware update) --------------------------------------
 #define OTA_MIN_BATTERY_PCT     30      // do not flash below this charge
@@ -86,6 +76,17 @@ unsigned long lastBarcodeOnOled   = 0;
 #define OTA_MAX_RETRIES         3       // attempts per commandId before giving up
 #define OTA_BOOT_VALIDATE_MS    20000UL // confirm heartbeat OK within this window post-update
 #define WDT_TIMEOUT_SEC         15      // hardware watchdog timeout (reboot if loop hangs)
+#define MAIN_MENU_COUNT      6
+#define MODE_MENU_COUNT      4
+#define CONFIRM_MENU_COUNT   2
+#define SERIAL_INPUT_MAX   512
+#define SERIAL_IDLE_FLUSH_MS 50UL
+
+// --- WiFi connection state ----------------------------------------------------
+#define BUTTON_DEBOUNCE_MS  50UL
+#define BUTTON_LONG_MS      800UL
+#define BUTTON_REPEAT_MS    250UL   // auto-repeat interval saat tahan tombol
+#define SCREEN_SAVER_TIMEOUT_MS 30000UL
 
 // ECDSA P-256 public key (PEM/SPKI) matching OTA_SIGNING_PRIVATE_KEY in CI.
 // The private key never leaves the GitHub secret; only this public half ships.
@@ -178,15 +179,11 @@ String        activeScanMode = "Manual";       // dikontrol dari tombol alat: "M
 #define LOOKUP_POLL_INTERVAL_MS 1000UL
 #define LOOKUP_TIMEOUT_MS       10000UL
 
-enum WiFiConnectState {
-  WIFI_CONN_IDLE,
-  WIFI_CONN_CONNECTING
-};
-
-WiFiConnectState wifiConnectState = WIFI_CONN_IDLE;
-unsigned long wifiConnectStartedAt = 0;
-unsigned long lastWiFiProgressAt = 0;
-unsigned long nextWiFiReconnectAt = 0;
+// WiFi reconnect state - ESP32 auto-reconnect handles the actual reconnection
+// We just monitor state changes and update UI accordingly
+bool          wifiEverConnected = false;        // apakah pernah connect sejak boot
+unsigned long wifiDisconnectedAt = 0;           // kapan terakhir disconnect
+#define WIFI_SHOW_DISCONNECTED_AFTER_MS 3000UL  // tampilkan "Terputus" setelah 3 detik (hindari flicker saat reconnect otomatis)
 
 enum UiScreen {
   SCREEN_HOME,
@@ -257,10 +254,9 @@ void          checkDeviceLookupStatus();
 void          startScanModeStream();
 void          stopScanModeStream();
 void          handleScanModeStream();
-bool          connectToWiFi();
 void          serviceWiFiConnection();
 void          onWiFiConnected();
-void          onWiFiDisconnected(bool showNoWiFiScreen);
+void          onWiFiDisconnected();
 bool          sendScanToFirebase(const String& barcode, bool processed = false, bool itemFound = false, const String& itemId = "");
 bool          sendHeartbeatToFirebase();
 void          serviceHeartbeat(bool force);
@@ -1184,99 +1180,81 @@ bool parseWiFiQR(String qrData, String &ssid, String &password, String &security
   return true;
 }
 
-// Menghubungkan ESP32 ke jaringan WiFi yang tersimpan.
-// Jika berhasil, waktu NTP disetel dan status online/OLED diperbarui.
-bool connectToWiFi() {
-  if (!wifiConfig.isValid || strlen(wifiConfig.ssid) == 0) return false;
-  if (WiFi.status() == WL_CONNECTED) {
-    onWiFiConnected();
-    return true;
-  }
-
-  unsigned long now = millis();
-  if (wifiConnectState == WIFI_CONN_CONNECTING &&
-      now - wifiConnectStartedAt < WIFI_CONNECT_TIMEOUT_MS) {
-    return false;
-  }
-
-  Serial.printf("Connecting WiFi: %s\n", wifiConfig.ssid);
-  oledShowWiFiConnecting(wifiConfig.ssid, WIFI_CONNECT_TIMEOUT_MS / 1000);
-  WiFi.disconnect(false);
-  WiFi.begin(wifiConfig.ssid, wifiConfig.password);
-  wifiConnectState = WIFI_CONN_CONNECTING;
-  wifiConnectStartedAt = now;
-  lastWiFiProgressAt = now;
-  nextWiFiReconnectAt = now + WIFI_CONNECT_TIMEOUT_MS + WIFI_RECONNECT_INTERVAL_MS;
-  return false;
-}
-
+// Dipanggil saatESP32 berhasil connect ke WiFi (dari serviceWiFiConnection)
 void onWiFiConnected() {
+  if (isWiFiConnected) return;  // already connected, skip
+  
   char ip[16];
   formatIpAddress(WiFi.localIP(), ip, sizeof(ip));
-  bool wasDisconnected = !isWiFiConnected || wifiConnectState == WIFI_CONN_CONNECTING;
-  wifiConnectState = WIFI_CONN_IDLE;
-  nextWiFiReconnectAt = 0;
+  wifiEverConnected = true;
   isWiFiConnected = true;
   isOnline = true;
-  if (wasDisconnected) {
-    firebaseAuthPending = true;
-    lastHeartbeat = 0;
-    configTime(7 * 3600, 0, "pool.ntp.org");
-    Serial.printf("\nWiFi OK: %s\n", ip);
-    oledShowWiFiConnected(ip);
-  }
+  firebaseAuthPending = true;
+  lastHeartbeat = 0;
+  wifiDisconnectedAt = 0;
+  
+  configTime(7 * 3600, 0, "pool.ntp.org");
+  Serial.printf("\nWiFi OK: %s\n", ip);
+  oledShowWiFiConnected(ip);
 }
 
-void onWiFiDisconnected(bool showNoWiFiScreen) {
-  if (isWiFiConnected) {
-    Serial.println("WiFi putus, jadwalkan reconnect");
-  }
+// Dipanggil saatWiFi disconnect (dari serviceWiFiConnection)
+void onWiFiDisconnected() {
+  if (!isWiFiConnected) return;  // already disconnected, skip
+  
+  Serial.println("WiFi putus");
   isWiFiConnected = false;
   isOnline = false;
   firebaseAuthPending = false;
+  wifiDisconnectedAt = millis();
   stopScanModeStream();
-  if (showNoWiFiScreen) oledShowNoWiFi();
 }
 
+// Monitor WiFi state - ESP32 auto-reconnect handles actual reconnection
+// Kita cukup deteksi perubahan state dan update OLED/status
 void serviceWiFiConnection() {
+  // Belum ada WiFi config - jangan proses
+  if (!wifiConfig.isValid || strlen(wifiConfig.ssid) == 0) {
+    if (isWiFiConnected) onWiFiDisconnected();
+    return;
+  }
+
+  // Cek apakah ESP32 sudah reconnect otomatis
   if (WiFi.status() == WL_CONNECTED) {
-    onWiFiConnected();
-    if (firebaseAuthPending && isDeviceProvisioned()) {
-      firebaseAuthPending = false;
-      ensureFirebaseAuth();
+    if (!isWiFiConnected) {
+      // Baru saja reconnect (auto-reconnect dari ESP32 stack)
+      onWiFiConnected();
+    } else {
+      // Sudah connected, pastikan auth Firebase OK
+      if (firebaseAuthPending && isDeviceProvisioned()) {
+        firebaseAuthPending = false;
+        ensureFirebaseAuth();
+      }
     }
     return;
   }
 
-  unsigned long now = millis();
-  if (wifiConnectState == WIFI_CONN_CONNECTING) {
-    if (now - lastWiFiProgressAt >= WIFI_PROGRESS_INTERVAL_MS) {
-      Serial.print(".");
-      int remaining = (int)((WIFI_CONNECT_TIMEOUT_MS - (now - wifiConnectStartedAt)) / 1000UL);
-      oledShowWiFiConnecting(wifiConfig.ssid, remaining);
-      lastWiFiProgressAt = now;
-    }
-    if (now - wifiConnectStartedAt >= WIFI_CONNECT_TIMEOUT_MS) {
-      Serial.println("\nWiFi gagal");
-      wifiConnectState = WIFI_CONN_IDLE;
-      nextWiFiReconnectAt = now + WIFI_RECONNECT_INTERVAL_MS;
-      onWiFiDisconnected(true);
-    }
-    return;
-  }
-
+  // WiFi tidak connected
   if (isWiFiConnected) {
-    onWiFiDisconnected(false);
+    onWiFiDisconnected();
   }
-
-  if (wifiConfig.isValid && strlen(wifiConfig.ssid) > 0 &&
-      (nextWiFiReconnectAt == 0 || (long)(now - nextWiFiReconnectAt) >= 0)) {
-    connectToWiFi();
+  
+  // Update OLED: tampilkan status disconnect setelah beberapa detik
+  // (hindari flicker saat ESP32 sedang auto-reconnect)
+  if (wifiEverConnected && wifiDisconnectedAt > 0 && 
+      millis() - wifiDisconnectedAt > WIFI_SHOW_DISCONNECTED_AFTER_MS) {
+    // Hanya tampilkan sekali setelah grace period
+    static unsigned long lastDisconnectOled = 0;
+    if (lastDisconnectOled != wifiDisconnectedAt) {
+      lastDisconnectOled = wifiDisconnectedAt;
+      oledShowNoWiFi();
+      Serial.println("WiFi terputus, menunggu auto-reconnect...");
+    }
   }
 }
 
-// Mengecek koneksi WiFi setiap 10 detik dan mencoba reconnect jika terputus.
-// Saat koneksi putus, perangkat juga ditandai offline di Firebase bila memungkinkan.
+// Mengecek koneksi WiFi dan update status.
+// ESP32 auto-reconnect menangani reconnect otomatis.
 void checkWiFiConnection() {
   serviceWiFiConnection();
 }
@@ -2521,10 +2499,12 @@ void processBarcodeInput(String input) {
       wifiConfig.password[sizeof(wifiConfig.password) - 1] = '\0';
       wifiConfig.isValid = true;
       saveWiFiConfig();
-      wifiConnectState = WIFI_CONN_IDLE;
-      nextWiFiReconnectAt = 0;
+      // Mulai koneksi baru - ESP32 akan handle reconnect otomatis
       WiFi.disconnect(false);
-      connectToWiFi();
+      delay(100);
+      WiFi.begin(wifiConfig.ssid, wifiConfig.password);
+      oledShowWiFiConnecting(wifiConfig.ssid);
+      Serial.printf("WiFi config tersimpan: %s\n", wifiConfig.ssid);
     }
     return;
   }
@@ -2793,12 +2773,16 @@ void setup() {
   }
 
   // Fast WiFi init — persistent=false cegah tulis flash, lebih cepat boot
+  // Auto-reconnect diaktifkan: ESP32 akan reconnect otomatis jika terputus
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
   WiFi.mode(WIFI_STA);
 
-  if (wifiConfig.isValid) {
-    connectToWiFi();
+  if (wifiConfig.isValid && strlen(wifiConfig.ssid) > 0) {
+    Serial.printf("WiFi config: %s\n", wifiConfig.ssid);
+    WiFi.begin(wifiConfig.ssid, wifiConfig.password);
+    // Jangan blokir di sini - biarkan ESP32 connect di background
+    // serviceWiFiConnection() akan deteksi dan update status
   } else {
     Serial.println("Scan QR WiFi: WIFI:S:SSID;T:WPA;P:PASS;H:false;;");
     oledShowNoWiFi();
