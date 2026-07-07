@@ -96,7 +96,7 @@ export function useFirebaseInventory() {
               setError(null);
             } catch (err: any) {
               console.error("Error processing inventory snapshot:", err);
-              setError(err.message || "Failed to parse inventory data");
+              setError(err.message || "Gagal memproses data inventory");
             }
             setLoading(false);
           },
@@ -235,7 +235,7 @@ export function useFirebaseScans() {
               setError(null);
             } catch (err: any) {
               console.error("Error processing scans snapshot:", err);
-              setError(err.message || "Failed to parse scans data");
+              setError(err.message || "Gagal memproses data scan");
             }
             setLoading(false);
           },

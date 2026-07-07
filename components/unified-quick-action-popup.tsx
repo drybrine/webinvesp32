@@ -38,6 +38,7 @@ interface UnifiedQuickActionPopupProps {
   barcode: string | null
   scanId?: string
   deviceId?: string
+  scanMode?: string
   isOpen: boolean
   onClose: () => void
 }
@@ -66,7 +67,7 @@ type ProductLookupResponse = {
   catalog?: CatalogItem[]
 }
 
-export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onClose }: UnifiedQuickActionPopupProps) {
+export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, scanMode, isOpen, onClose }: UnifiedQuickActionPopupProps) {
   const { role } = useAuth()
   const writable = canWrite(role)
   const { items, addItem } = useFirebaseInventory()
@@ -331,6 +332,17 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, isOpen, onC
 
   const handleAddNewProduct = async () => {
     if (!newProduct.name.trim() || isLoading) return
+
+    // Mode Auto OUT: tidak boleh tambah barang baru
+    if (scanMode === "Auto OUT") {
+      toast({
+        title: "Tidak dapat menambahkan produk",
+        description: "Mode Auto OUT hanya untuk mengurangi stok barang yang sudah terdaftar. Gunakan mode Manual atau Auto IN untuk menambahkan produk baru.",
+        variant: "destructive",
+      })
+      onClose()
+      return
+    }
 
     setIsLoading(true)
     try {

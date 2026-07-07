@@ -137,8 +137,8 @@ export default function InventoryTable({
                 <SelectContent>
                   <SelectItem value="name-asc">Nama A-Z</SelectItem>
                   <SelectItem value="name-desc">Nama Z-A</SelectItem>
-                  <SelectItem value="quantity-asc">Stok Tertinggi</SelectItem>
-                  <SelectItem value="quantity-desc">Stok Terendah</SelectItem>
+                  <SelectItem value="quantity-asc">Stok Terendah</SelectItem>
+                  <SelectItem value="quantity-desc">Stok Tertinggi</SelectItem>
                 </SelectContent>
               </Select>
             </div>

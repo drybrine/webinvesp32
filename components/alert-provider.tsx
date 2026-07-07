@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { useToast } from "@/hooks/use-toast"
 import { useRealtimeDeviceStatus, type DeviceStatus } from "@/hooks/use-realtime-device-status"
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase"
@@ -15,6 +15,24 @@ interface StockRisk {
   avgDailyConsumption: number
 }
 
+// Raw prediction batch result shared across consumers
+export interface PredictionBatchItem {
+  itemId: string
+  predictedLowest: number
+  daysToStockout: number | null
+  avgDailyConsumption: number
+  slope: number
+  forecast: Array<{ timestamp: number; predictedQuantity: number; estimatedConsumption: number }>
+}
+
+interface PredictionContextValue {
+  risks: PredictionBatchItem[]
+  loading: boolean
+}
+
+const PredictionContext = createContext<PredictionContextValue>({ risks: [], loading: false })
+export const usePredictionContext = () => useContext(PredictionContext)
+
 export function AlertProvider({ children }: { children: React.ReactNode }) {
   const { role, getIdToken } = useAuth()
   const { toast } = useToast()
@@ -24,7 +42,8 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
   
   const [stockRisks, setStockRisks] = useState<StockRisk[]>([])
   const stockRisksRef = useRef<StockRisk[]>([])
-  const [stockRisksLoading, setStockRisksLoading] = useState(false)
+  const [predictionRisks, setPredictionRisks] = useState<PredictionBatchItem[]>([])
+  const [predictionLoading, setPredictionLoading] = useState(false)
 
   // Update ref ketika stockRisks berubah
   useEffect(() => {
@@ -67,17 +86,18 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
   // ============================================================
   useEffect(() => {
     if (inventoryLoading || transactionsLoading) {
-      setStockRisksLoading(true)
+      setPredictionLoading(true)
       return
     }
     if (inventory.length === 0) {
       setStockRisks([])
-      setStockRisksLoading(false)
+      setPredictionRisks([])
+      setPredictionLoading(false)
       return
     }
 
     const controller = new AbortController()
-    setStockRisksLoading(true)
+    setPredictionLoading(true)
 
     const fetchRisks = async () => {
       try {
@@ -119,7 +139,10 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json()
         if (data.error) throw new Error(data.error)
 
-        const risks = (data.risks || [])
+        const rawRisks = (data.risks || []) as PredictionBatchItem[]
+        setPredictionRisks(rawRisks)
+
+        const risks = rawRisks
           .map((r: { itemId: string; predictedLowest: number; daysToStockout: number | null; avgDailyConsumption: number; slope: number }) => {
             const inv = inventory.find(i => i.id === r.itemId)
             if (!inv) return null
@@ -138,9 +161,10 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
         if ((err as Error).name === "AbortError") return
         console.warn("[AlertProvider] batch predict failed:", err)
         setStockRisks([])
+        setPredictionRisks([])
       } finally {
         if (!controller.signal.aborted) {
-          setStockRisksLoading(false)
+          setPredictionLoading(false)
         }
       }
     }
@@ -217,5 +241,9 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.setItem(seenTsKey, String(maxTs))
   }, [transactions, transactionsLoading, toast])
 
-  return <>{children}</>
+  return (
+    <PredictionContext.Provider value={{ risks: predictionRisks, loading: predictionLoading }}>
+      {children}
+    </PredictionContext.Provider>
+  )
 }

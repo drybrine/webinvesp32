@@ -6,6 +6,7 @@ import { limitToLast, onValue, orderByChild, query, ref } from "firebase/databas
 import { database, firebaseHelpers, isFirebaseConfigured } from "@/lib/firebase"
 import { UnifiedQuickActionPopup } from "./unified-quick-action-popup"
 import { RealtimeScanContext, type RealtimeScanContextType } from "@/hooks/use-realtime-scan"
+import { useToast } from "@/hooks/use-toast"
 import { logger } from "@/lib/logger"
 import { useAuth } from "@/components/auth-provider"
 import { canWrite } from "@/types/security"
@@ -20,6 +21,7 @@ type IncomingScan = {
   deviceId?: string
   location?: string
   mode?: string
+  scanMode?: string
   type?: string
   processed?: boolean
   timestamp?: number | object
@@ -30,6 +32,7 @@ const scanTimestampMs = (timestamp: IncomingScan["timestamp"]) =>
 
 export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   const { role } = useAuth()
+  const { toast } = useToast()
   const writable = canWrite(role)
   const pathname = usePathname()
   const [isScanning, setIsScanning] = useState(false)
@@ -40,6 +43,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
   const [currentBarcode, setCurrentBarcode] = useState("")
   const [currentScanId, setCurrentScanId] = useState("")
   const [currentDeviceId, setCurrentDeviceId] = useState("")
+  const [currentScanMode, setCurrentScanMode] = useState("Manual")
   const [isMobile, setIsMobile] = useState(false)
   const [popupsGloballyDisabled, setPopupsGloballyDisabled] = useState(false)
   const [latestScan, setLatestScan] = useState<IncomingScan | null>(null)
@@ -204,13 +208,38 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
       latestScan.type === "inventory_scan" || 
       (!latestScan.mode && !latestScan.type)
     )
+
+    const scanMode = latestScan.scanMode || "Manual"
+    
+    // Auto OUT: jangan tampilkan popup, cukup toast notifikasi.
+    // Popup tambah barang hanya untuk mode Manual & Auto IN.
+    if (
+      isESP32Device &&
+      !latestScan.processed &&
+      latestScan.id !== lastProcessedScanId &&
+      isScanFromInventoryMode &&
+      scanMode === "Auto OUT"
+    ) {
+      setLastProcessedScanId(latestScan.id)
+      toast({
+        title: "Mode Auto OUT — tidak dapat menambah barang",
+        description: `Barcode ${latestScan.barcode} tidak dikenal. Mode Auto OUT hanya untuk mengurangi stok barang yang sudah terdaftar. Ubah mode ke Manual atau Auto IN untuk menambahkan produk baru.`,
+        variant: "destructive",
+        duration: 6000,
+      })
+      if (database && latestScan.id) {
+        firebaseHelpers.markScanProcessed(latestScan.id).catch(() => {})
+      }
+      return
+    }
     
     const shouldTriggerPopup = (
       isESP32Device && 
       writable &&
       !latestScan.processed && 
       latestScan.id !== lastProcessedScanId &&
-      isScanFromInventoryMode
+      isScanFromInventoryMode &&
+      scanMode !== "Auto OUT"
     )
     
     if (!shouldTriggerPopup) {
@@ -222,6 +251,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
     setCurrentBarcode(latestScan.barcode)
     setCurrentScanId(latestScan.id)
     setCurrentDeviceId(latestScan.deviceId || "")
+    setCurrentScanMode(latestScan.scanMode || "Manual")
     setScanCount(prev => prev + 1)
     setIsScanning(true)
 
@@ -288,6 +318,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
     setCurrentBarcode("")
     setCurrentScanId("")
     setCurrentDeviceId("")
+    setCurrentScanMode("Manual")
 
     if (typeof document !== "undefined") {
       document.body.classList.remove("dialog-open")
@@ -320,6 +351,7 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
         barcode={currentBarcode}
         scanId={currentScanId}
         deviceId={currentDeviceId}
+        scanMode={currentScanMode}
         isOpen={showPopup}
         onClose={handleClosePopup}
       />

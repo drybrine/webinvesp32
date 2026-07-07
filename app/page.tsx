@@ -6,8 +6,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
 import { AlertCircle, TrendingDown } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useFirebaseInventory, InventoryItem, useFirebaseTransactions } from "@/hooks/use-firebase"
+import { useFirebaseInventory, InventoryItem } from "@/hooks/use-firebase"
 import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
+import { usePredictionContext } from "@/components/alert-provider"
 import { firebaseHelpers, type AddInventoryInput } from "@/lib/firebase"
 import { downloadCsv } from "@/lib/csv"
 import StatsCards from "@/components/dashboard/stats-cards"
@@ -51,7 +52,7 @@ interface StockAdjustment {
 }
 
 export default function DashboardPage() {
-  const { role, getIdToken } = useAuth()
+  const { role } = useAuth()
   const writable = canWrite(role)
   const {
     items: inventory,
@@ -62,8 +63,6 @@ export default function DashboardPage() {
     deleteItem,
   } = useFirebaseInventory()
   const { loading: scansLoading, error: scansError } = { loading: false, error: null }
-  // 500 transaksi terbaru untuk UI cepat — prediksi batch pakai one-time fetch
-  const { transactions, loading: transactionsLoading } = useFirebaseTransactions(500)
 
   const {
     devices,
@@ -135,9 +134,9 @@ export default function DashboardPage() {
         case "name-desc":
           return b.name.localeCompare(a.name)
         case "quantity-asc":
-          return b.quantity - a.quantity
-        case "quantity-desc":
           return a.quantity - b.quantity
+        case "quantity-desc":
+          return b.quantity - a.quantity
         default:
           return 0
       }
@@ -179,106 +178,29 @@ export default function DashboardPage() {
     })
   }, [devices, devicesLoading, toast])
 
-  // Server-side batch prediction via /api/predict-batch
-  const [stockRisks, setStockRisks] = useState<Array<{
-    item: InventoryItem
-    prediction: { model: { slope: number; avgDailyConsumption: number }; forecast: Array<{ timestamp: number; predictedQuantity: number; estimatedConsumption: number }>; stockoutDate: Date | null }
-    predictedLowest: number
-    daysToStockout: number | null
-  }>>([])
-  const [stockRisksLoading, setStockRisksLoading] = useState(false)
+  // Gunakan shared prediction dari AlertProvider (dibanding fetch sendiri)
+  const { risks: rawPredictionRisks, loading: stockRisksLoading } = usePredictionContext()
 
-  useEffect(() => {
-    if (inventoryLoading || transactionsLoading) {
-      setStockRisksLoading(true)
-      return
-    }
-    if (inventory.length === 0) {
-      setStockRisks([])
-      setStockRisksLoading(false)
-      return
-    }
-
-    const controller = new AbortController()
-    setStockRisksLoading(true)
-
-    const fetchRisks = async () => {
-      try {
-        const items = inventory
-          .filter(i => !i.deleted && i.barcode)
-          .map(i => ({
-            id: i.id,
-            barcode: i.barcode,
-            name: i.name,
-            quantity: Number(i.quantity) || 0,
-            minStock: Number(i.minStock) || 0,
-          }))
-
-        // One-time fetch of ALL transactions for accurate prediction
-        // (realtime subscription only gets latest 500)
-        const allTxData = await firebaseHelpers.fetchAllTransactions()
-        const txs = (allTxData as Array<Record<string, unknown>>).map(t => ({
-          productBarcode: t.productBarcode,
-          type: t.type,
-          quantity: Number(t.quantity) || 0,
-          timestamp: Number(t.timestamp) || Date.now(),
-        }))
-
-        const token = await getIdToken()
-        const res = await fetch("/api/predict", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            mode: "batch",
-            items,
-            transactions: txs,
-            horizonDays: 14,
-            trainRatio: 0.85,
-            topN: 3,
-            recentDays: 90,
-          }),
-          signal: controller.signal,
-        })
-
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        if (data.error) throw new Error(data.error)
-
-        const risks = (data.risks || [])
-          .map((r: { itemId: string; predictedLowest: number; daysToStockout: number | null; avgDailyConsumption: number; slope: number; forecast: Array<{ timestamp: number; predictedQuantity: number; estimatedConsumption: number }> }) => {
-            const inv = inventory.find(i => i.id === r.itemId)
-            if (!inv) return null
-            return {
-              item: inv,
-              prediction: {
-                model: { slope: r.slope, avgDailyConsumption: r.avgDailyConsumption },
-                forecast: r.forecast,
-                stockoutDate: r.daysToStockout !== null
-                  ? new Date(Date.now() + r.daysToStockout * 24 * 60 * 60 * 1000)
-                  : null,
-              },
-              predictedLowest: r.predictedLowest,
-              daysToStockout: r.daysToStockout,
-            }
-          })
-          .filter((r: typeof risks[number] | null): r is NonNullable<typeof r> => r !== null)
-
-        setStockRisks(risks)
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return
-        // Silently fall back to empty (server error or unavailable)
-        console.warn("[stockRisks] batch predict failed:", err)
-        setStockRisks([])
-      } finally {
-        if (!controller.signal.aborted) {
-          setStockRisksLoading(false)
+  const stockRisks = useMemo(() => {
+    return rawPredictionRisks
+      .map((r) => {
+        const inv = inventory.find(i => i.id === r.itemId)
+        if (!inv) return null
+        return {
+          item: inv,
+          prediction: {
+            model: { slope: r.slope, avgDailyConsumption: r.avgDailyConsumption },
+            forecast: r.forecast,
+            stockoutDate: r.daysToStockout !== null
+              ? new Date(Date.now() + r.daysToStockout * 24 * 60 * 60 * 1000)
+              : null,
+          },
+          predictedLowest: r.predictedLowest,
+          daysToStockout: r.daysToStockout,
         }
-      }
-    }
-
-    fetchRisks()
-    return () => controller.abort()
-  }, [getIdToken, inventory, transactions, inventoryLoading, transactionsLoading])
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
+  }, [rawPredictionRisks, inventory])
 
   // Keyboard shortcuts: / to focus search, N to add item
   useEffect(() => {
@@ -517,7 +439,7 @@ export default function DashboardPage() {
               </Button>
             </div>
 
-            {transactionsLoading || stockRisksLoading ? (
+            {stockRisksLoading ? (
               <div className="text-sm text-muted-foreground py-3">
                 Memuat ringkasan prediksi...
               </div>

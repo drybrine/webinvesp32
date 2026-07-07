@@ -197,7 +197,7 @@ const initializeFirebase = () => {
     }
     
   } catch (dbError) {
-    console.warn("⚠️ Firebase database service not available:", dbError)
+    console.warn("⚠️ Layanan database Firebase tidak tersedia:", dbError)
     database = null
     auth = null
     dbRefs = null; // Reset dbRefs on error
@@ -313,8 +313,8 @@ export const firebaseHelpers = {
   // Add new inventory item
   addInventoryItem: async (item: AddInventoryInput, source: "Dashboard" | "Scanner" = "Dashboard") => {
     if (!database || !dbRefs || !dbRefs.inventory) {
-      console.error("Firebase not available or inventory ref not initialized for addInventoryItem");
-      throw new Error("Firebase not available - using local storage or operation failed");
+      console.error("Firebase tidak tersedia untuk addInventoryItem");
+      throw new Error("Firebase tidak tersedia — operasi gagal");
     }
 
     try {
@@ -362,8 +362,8 @@ export const firebaseHelpers = {
     operationId = createOperationId(),
   ) => {
     if (!database) {
-      console.error("Firebase database not available for updateInventoryItem");
-      throw new Error("Firebase not available - operation failed");
+      console.error("Firebase tidak tersedia untuk updateInventoryItem");
+      throw new Error("Firebase tidak tersedia — operasi gagal");
     }
     try {
       const actor = await getMutationActor()
@@ -395,8 +395,8 @@ export const firebaseHelpers = {
       throw new Error("Invalid stock adjustment delta");
     }
     if (!database || !dbRefs) {
-      console.error("Firebase not available for adjustStock");
-      throw new Error("Firebase not available - operation failed");
+      console.error("Firebase tidak tersedia untuk adjustStock");
+      throw new Error("Firebase tidak tersedia — operasi gagal");
     }
     try {
       const actor = await getMutationActor()
@@ -431,8 +431,8 @@ export const firebaseHelpers = {
   // Add scan record (matching ESP32 .ino structure exactly)
   addScanRecord: async (scanData: AddScanInput) => {
     if (!database || !dbRefs || !dbRefs.scans) {
-      console.error("Firebase not available or scans ref not initialized for addScanRecord");
-      throw new Error("Firebase not available - using local storage or operation failed");
+      console.error("Firebase tidak tersedia untuk addScanRecord");
+      throw new Error("Firebase tidak tersedia — operasi gagal");
     }
 
     try {
@@ -461,7 +461,7 @@ export const firebaseHelpers = {
   },
 
   markScanProcessed: async (scanId: string, processedData: Record<string, unknown> = {}) => {
-    if (!database) throw new Error("Firebase not available - operation failed")
+    if (!database) throw new Error("Firebase tidak tersedia — operasi gagal")
     const actor = await getMutationActor()
     await update(ref(database, `scans/${scanId}`), {
       ...processedData,
@@ -500,8 +500,8 @@ export const firebaseHelpers = {
   // Update device status
   updateDeviceStatus: async (deviceId: string, status: UpdateDeviceInput) => {
     if (!database) { // dbRefs.devices might not be directly needed
-      console.error("Firebase database not available for updateDeviceStatus");
-      throw new Error("Firebase not available - using local storage or operation failed");
+      console.error("Firebase tidak tersedia untuk updateDeviceStatus");
+      throw new Error("Firebase tidak tersedia — operasi gagal");
     }
 
     try {
@@ -521,7 +521,7 @@ export const firebaseHelpers = {
   // Legacy command helper. Current firmware controls scan mode from physical buttons
   // and reports the active mode via /devices/{deviceId}/scanMode.
   updateDeviceScanMode: async (deviceId: string, mode: string) => {
-    if (!database) { console.error("Firebase not available"); return }
+    if (!database) { console.error("Firebase tidak tersedia"); return }
     try {
       const modeRef = ref(database, `deviceCommands/${deviceId}/scanMode`);
       await set(modeRef, {
@@ -536,8 +536,8 @@ export const firebaseHelpers = {
   // Add analytics data
   addAnalytics: async (type: string, data: Record<string, unknown>) => {
     if (!database || !dbRefs || !dbRefs.analytics) {
-      console.error("Firebase not available or analytics ref not initialized for addAnalytics");
-      throw new Error("Firebase not available - using local storage or operation failed");
+      console.error("Firebase tidak tersedia untuk addAnalytics");
+      throw new Error("Firebase tidak tersedia — operasi gagal");
     }
 
     try {
@@ -557,7 +557,7 @@ export const firebaseHelpers = {
   // Prediction needs the full history; do NOT subscribe to everything.
   // recentDays: limit fetch to recent N days (default 90 for prediction, null for all)
   fetchAllTransactions: async (recentDays?: number | null) => {
-    if (!database || !dbRefs || !dbRefs.transactions) throw new Error("Firebase not available")
+    if (!database || !dbRefs || !dbRefs.transactions) throw new Error("Firebase tidak tersedia — operasi gagal")
     
     if (recentDays === null) {
       // Fetch all (for prediction accuracy)
@@ -580,8 +580,8 @@ export const firebaseHelpers = {
 
   addTransaction: async (transactionData: AddTransactionInput) => {
     if (!database || !dbRefs || !dbRefs.transactions) {
-      console.error("Firebase not available or transactions ref not initialized for addTransaction");
-      throw new Error("Firebase not available - operation failed");
+      console.error("Firebase tidak tersedia untuk addTransaction");
+      throw new Error("Firebase tidak tersedia — operasi gagal");
     }
     try {
       const actor = await getMutationActor()

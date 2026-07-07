@@ -293,7 +293,7 @@ export default function TransaksiPage() {
         transaction.productName || '', transaction.productBarcode || '', (transaction.quantity || 0).toString(),
         transaction.reason || '', transaction.operator || '', transaction.notes || ''
       ])
-      const fileName = `transaksi_${new Date().toISOString().split('T')[0]}.csv`
+      const fileName = `riwayat_${new Date().toISOString().split('T')[0]}.csv`
       downloadCsv(fileName, [headers, ...csvData])
       toast({ title: "Export Berhasil", description: `${filteredTransactions.length} transaksi diekspor.` })
     } catch (error) {
@@ -307,7 +307,7 @@ export default function TransaksiPage() {
         {/* Header */}
         <div className="animate-fade-in-up space-y-1">
           <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Riwayat</p>
-          <h1 className="heading-1">Transaksi</h1>
+          <h1 className="heading-1">Riwayat</h1>
           <p className="text-body max-w-2xl pt-1">Ledger bersifat permanen; koreksi dicatat sebagai transaksi pembalik baru.</p>
         </div>
 
@@ -451,7 +451,7 @@ export default function TransaksiPage() {
         {/* Transactions Table */}
         <Card className="animate-fade-in-up">
           <CardHeader>
-            <CardTitle>Riwayat Transaksi ({filteredTransactions.length})</CardTitle>
+            <CardTitle>Riwayat ({filteredTransactions.length})</CardTitle>
             <CardDescription>Daftar transaksi yang telah dilakukan</CardDescription>
           </CardHeader>
           <CardContent className="p-0">

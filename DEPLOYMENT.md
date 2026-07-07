@@ -134,10 +134,9 @@ Vercel Functions menangani operasi admin; Firebase RTDB tetap dideploy terpisah:
 npm run bootstrap:admin -- --email=admin@example.com --password='minimum-12-char' --name='Administrator'
 ```
 
-5. Deploy `firebase-rules-migration.json` lebih dulu. File ini mempertahankan akses legacy sementara firmware dimigrasikan.
-6. Login sebagai admin, daftarkan scanner di `/admin/devices`, lalu scan PDF417 kredensial satu kali dengan firmware 6.5.16. Verifikasi inventory lookup, heartbeat, scan, dan audit administrasi backend.
-7. Buat GitHub environment `firebase-production` dengan approval, Workload Identity secrets, serta `FIREBASE_PROJECT_ID` untuk deploy rules.
-8. Setelah backup RTDB dan verifikasi firmware, jalankan workflow `Deploy Strict Firebase Rules` (`firebase.strict.json`).
+5. Login sebagai admin, daftarkan scanner di `/admin/devices`, lalu scan PDF417 kredensial satu kali dengan firmware 6.5.16. Verifikasi inventory lookup, heartbeat, scan, dan audit administrasi backend.
+6. Buat GitHub environment `firebase-production` dengan approval, Workload Identity secrets, serta `FIREBASE_PROJECT_ID` untuk deploy rules.
+7. Setelah backup RTDB dan verifikasi firmware, jalankan workflow `Deploy Strict Firebase Rules` (`firebase.strict.json`).
 
 Strict rules menolak anonymous access, hard-delete inventory, perubahan ledger lama, dan seluruh client write ke `/auditLogs`. Pada Firebase Spark tidak ada blocking/database-trigger Functions: aplikasi tidak menyediakan UI signup dan rules menolak akun tanpa profil + role valid, sedangkan audit server-generated mencakup operasi administrasi melalui Vercel Functions. Path OTA `/deviceCommands` + `/deviceOtaStatus` hanya ada di `firebase-rules-strict.json` — harus jadi ruleset aktif agar polling OTA tidak kena 403.
 

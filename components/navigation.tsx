@@ -12,7 +12,7 @@ import { BrandMark } from "@/components/brand-logo"
 
 const baseNavigation = [
 	{ name: "Dashboard", href: "/", icon: BarChart3, key: "1" },
-	{ name: "Transaksi", href: "/transaksi", icon: Receipt, key: "2" },
+	{ name: "Riwayat", href: "/riwayat", icon: Receipt, key: "2" },
 	{ name: "Prediksi", href: "/prediksi", icon: TrendingUp, key: "3" },
 ]
 
