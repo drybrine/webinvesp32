@@ -54,7 +54,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.7.0"
+#define FIRMWARE_VERSION   "6.7.1"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -76,7 +76,8 @@ unsigned long lastBarcodeOnOled   = 0;
 #define OTA_MAX_RETRIES         3       // attempts per commandId before giving up
 #define OTA_BOOT_VALIDATE_MS    20000UL // confirm heartbeat OK within this window post-update
 #define WDT_TIMEOUT_SEC         15      // hardware watchdog timeout (reboot if loop hangs)
-#define MAIN_MENU_COUNT      6
+#define MAIN_MENU_COUNT      7
+#define LED_MENU_COUNT       4
 #define MODE_MENU_COUNT      4
 #define CONFIRM_MENU_COUNT   2
 #define SERIAL_INPUT_MAX   512
@@ -88,6 +89,15 @@ unsigned long lastBarcodeOnOled   = 0;
 // Command bytes dari manual GM67 (Appendix 6)
 static const uint8_t GM67_SLEEP_CMD[]   = {0x04, 0xEB, 0x04, 0x00, 0xFF, 0x0D};
 static const uint8_t GM67_WAKEUP_CMD[]  = {0x04, 0xE9, 0x04, 0x00, 0xFF, 0x0F}; // SCAN_ENABLE
+
+// GM67 LED Commands (Collimation = red pointer, Lighting = white LED)
+// 0 = Always off, 1 = Only when read, 2 = Always on
+static const uint8_t GM67_COLLIM_OFF[]    = {0x08, 0xC6, 0x04, 0x08, 0x00, 0xF2, 0x03, 0x02, 0xFE, 0x2F};
+static const uint8_t GM67_COLLIM_READ[]   = {0x08, 0xC6, 0x04, 0x08, 0x00, 0xF2, 0x03, 0x00, 0xFE, 0x31};
+static const uint8_t GM67_COLLIM_ON[]     = {0x08, 0xC6, 0x04, 0x08, 0x00, 0xF2, 0x03, 0x01, 0xFE, 0x30};
+static const uint8_t GM67_LIGHT_OFF[]     = {0x08, 0xC6, 0x04, 0x08, 0x00, 0xF2, 0x02, 0x02, 0xFE, 0x30};
+static const uint8_t GM67_LIGHT_READ[]    = {0x08, 0xC6, 0x04, 0x08, 0x00, 0xF2, 0x02, 0x00, 0xFE, 0x32};
+static const uint8_t GM67_LIGHT_ON[]      = {0x08, 0xC6, 0x04, 0x08, 0x00, 0xF2, 0x02, 0x01, 0xFE, 0x31};
 // -----------------------------------------------------------------------------
 
 // ECDSA P-256 public key (PEM/SPKI) matching OTA_SIGNING_PRIVATE_KEY in CI.
@@ -203,6 +213,7 @@ enum UiScreen {
   SCREEN_BATTERY,
   SCREEN_WIFI,
   SCREEN_STATUS,
+  SCREEN_LED_MENU,
   SCREEN_BATTERY_CAL_CONFIRM,
   SCREEN_RESTART_CONFIRM
 };
@@ -230,6 +241,10 @@ struct ButtonState {
 UiScreen currentScreen = SCREEN_HOME;
 uint8_t mainMenuIndex = 0;
 uint8_t modeMenuIndex = 0;
+uint8_t ledMenuIndex = 0;
+// LED settings: 0=Off, 1=Only when read, 2=Always on
+uint8_t gm67CollimMode = 1;  // default: only when read
+uint8_t gm67LightMode  = 1;  // default: only when read
 uint8_t batteryCalMenuIndex = 0;
 uint8_t restartMenuIndex = 0;
 unsigned long lastUiInteraction = 0;
@@ -784,7 +799,7 @@ void drawMenuList(const char* title, const char* const* items, uint8_t count, ui
 }
 
 void oledShowMainMenu() {
-  static const char* const items[] = {"Mode Scanner", "Status Device", "Battery", "WiFi Info", "Restart", "Tampilan Awal"};
+  static const char* const items[] = {"Mode Scanner", "Status Device", "Battery", "WiFi Info", "LED Scanner", "Restart", "Tampilan Awal"};
   drawMenuList("MENU", items, MAIN_MENU_COUNT, mainMenuIndex);
 }
 
@@ -847,6 +862,35 @@ void oledShowRestartConfirm() {
   drawMenuList("RESTART?", items, 2, restartMenuIndex);
 }
 
+// Kirim command LED ke GM67 via Serial2
+void applyGm67LedSetting(uint8_t collimMode, uint8_t lightMode) {
+  // Collimation (red pointer)
+  switch (collimMode) {
+    case 0: Serial2.write(GM67_COLLIM_OFF, sizeof(GM67_COLLIM_OFF)); break;
+    case 2: Serial2.write(GM67_COLLIM_ON, sizeof(GM67_COLLIM_ON)); break;
+    default: Serial2.write(GM67_COLLIM_READ, sizeof(GM67_COLLIM_READ)); break;
+  }
+  delay(50);
+  // Lighting (white LED)
+  switch (lightMode) {
+    case 0: Serial2.write(GM67_LIGHT_OFF, sizeof(GM67_LIGHT_OFF)); break;
+    case 2: Serial2.write(GM67_LIGHT_ON, sizeof(GM67_LIGHT_ON)); break;
+    default: Serial2.write(GM67_LIGHT_READ, sizeof(GM67_LIGHT_READ)); break;
+  }
+  Serial.printf("GM67 LED: collim=%d light=%d\n", collimMode, lightMode);
+}
+
+void oledShowLedMenu() {
+  if (!oledAvailable) return;
+  oledBeginFrame();
+  drawHeader("LED SCANNER", "PENGATURAN");
+  static const char* const labels[] = {"Off", "Saat Scan", "Selalu"};
+  drawLabelValue(OLED_BODY_Y, "Pointer", labels[gm67CollimMode]);
+  drawLabelValue(OLED_BODY_Y + OLED_ROW_H, "Lighting", labels[gm67LightMode]);
+  drawFooter("UP/DOWN: Pilih", "OK: Ganti");
+  display.display();
+}
+
 void oledShowBatteryCalConfirm() {
   static const char* const items[] = {"Tidak", "Ya, kalibrasi"};
   drawMenuList("KALIBRASI BATERAI?", items, CONFIRM_MENU_COUNT, batteryCalMenuIndex);
@@ -889,6 +933,7 @@ void renderCurrentScreen() {
     case SCREEN_BATTERY: oledShowBatteryMenu(); break;
     case SCREEN_WIFI: oledShowWiFiMenu(); break;
     case SCREEN_STATUS: oledShowDeviceStatusMenu(); break;
+    case SCREEN_LED_MENU: oledShowLedMenu(); break;
     case SCREEN_BATTERY_CAL_CONFIRM: oledShowBatteryCalConfirm(); break;
     case SCREEN_RESTART_CONFIRM: oledShowRestartConfirm(); break;
     case SCREEN_HOME:
@@ -2663,8 +2708,32 @@ void handleUiEvent(ButtonEvent event) {
         } else if (mainMenuIndex == 1) currentScreen = SCREEN_STATUS;
         else if (mainMenuIndex == 2) currentScreen = SCREEN_BATTERY;
         else if (mainMenuIndex == 3) currentScreen = SCREEN_WIFI;
-        else if (mainMenuIndex == 4) currentScreen = SCREEN_RESTART_CONFIRM;
+        else if (mainMenuIndex == 4) {
+          ledMenuIndex = 0;
+          currentScreen = SCREEN_LED_MENU;
+        }
+        else if (mainMenuIndex == 5) currentScreen = SCREEN_RESTART_CONFIRM;
         else currentScreen = SCREEN_HOME;
+      }
+      break;
+    case SCREEN_LED_MENU:
+      if (event == BTN_UP_SHORT) ledMenuIndex = (ledMenuIndex + LED_MENU_COUNT - 1) % LED_MENU_COUNT;
+      else if (event == BTN_DOWN_SHORT) ledMenuIndex = (ledMenuIndex + 1) % LED_MENU_COUNT;
+      else if (event == BTN_OK_SHORT) {
+        if (ledMenuIndex == 0) {
+          // Toggle collimation mode: 0→1→2→0
+          gm67CollimMode = (gm67CollimMode + 1) % 3;
+          applyGm67LedSetting(gm67CollimMode, gm67LightMode);
+        } else if (ledMenuIndex == 1) {
+          // Toggle lighting mode: 0→1→2→0
+          gm67LightMode = (gm67LightMode + 1) % 3;
+          applyGm67LedSetting(gm67CollimMode, gm67LightMode);
+        } else {
+          // Kembali
+          currentScreen = SCREEN_MAIN_MENU;
+        }
+      } else if (event == BTN_UP_LONG || event == BTN_DOWN_LONG) {
+        currentScreen = SCREEN_MAIN_MENU;
       }
       break;
     case SCREEN_MODE_MENU:
