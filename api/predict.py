@@ -485,28 +485,15 @@ def estimate_stockout_date(model, current_quantity, base_timestamp):
     if current_quantity <= 0:
         return base_date.strftime('%Y-%m-%d')
 
+    # Gunakan konsumsi rata-rata harian untuk estimasi yang konsisten
+    daily_consumption = model['avgDailyConsumption']
+    if daily_consumption <= 0:
+        return None
+
     quantity = float(current_quantity)
-    previous_consumption = model.get('lastConsumption', model['avgDailyConsumption'])
-
-    for day in range(1, 3651):
-        consumption = predict_next_consumption(model, previous_consumption)
-        if consumption <= 0:
-            # AR(1) clamp ke 0: jika rata-rata konsumsi historis juga <= 0, stok
-            # tidak akan pernah habis -> tidak terprediksi. Jika rata-rata > 0
-            # tapi prediksi hari ini 0, lanjut iterasi (bisa naik lagi besok).
-            if model['avgDailyConsumption'] <= 0:
-                return None
-            # Hindari loop 3650 hari sia-sia jika konsumsi stagnan di 0: jika
-            # 30 hari berturut-turut prediksi 0, anggap tidak terprediksi.
-            if day >= 30 and previous_consumption <= 0:
-                return None
-
-        quantity = max(0.0, quantity - consumption)
-        previous_consumption = consumption
-        if quantity <= 0:
-            return (base_date + timedelta(days=day)).strftime('%Y-%m-%d')
-
-    return None
+    days_to_stockout = quantity / daily_consumption
+    stockout_date = base_date + timedelta(days=round(days_to_stockout))
+    return stockout_date.strftime('%Y-%m-%d')
 
 
 def current_day_timestamp():
@@ -531,19 +518,20 @@ def predict_stock(series, horizon_days=14, train_ratio=0.85, now_timestamp=None)
     last_ts = series[-1]['timestamp']
     today_ts = current_day_timestamp() if now_timestamp is None else int((now_timestamp // MS_PER_DAY) * MS_PER_DAY)
     forecast_base_ts = max(last_ts, today_ts)
-    current_qty = float(last_qty)
-    previous_consumption = model.get('lastConsumption', model['avgDailyConsumption'])
-    forecast = []
 
+    # Gunakan konsumsi rata-rata harian untuk forecast linear yang hanya turun
+    # (monoton decreasing) karena stok selalu berkurang akibat konsumsi.
+    daily_consumption = model['avgDailyConsumption']
+    current_qty = float(last_qty)
+
+    forecast = []
     for day in range(1, horizon_days + 1):
         ts = forecast_base_ts + day * MS_PER_DAY
-        predicted_consumption = predict_next_consumption(model, previous_consumption)
-        current_qty = max(0.0, current_qty - predicted_consumption)
-        previous_consumption = predicted_consumption
+        current_qty = max(0.0, current_qty - daily_consumption)
         forecast.append({
             'timestamp': int(ts),
             'predictedQuantity': round(current_qty, 1),
-            'estimatedConsumption': round(predicted_consumption, 1),
+            'estimatedConsumption': round(daily_consumption, 1),
         })
 
     anomalies = detect_anomalies(series)

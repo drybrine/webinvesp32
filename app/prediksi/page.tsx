@@ -101,7 +101,7 @@ function getSummaryStatus(predictedLowest: number, minStock: number): SummarySta
 function getSummaryBadge(status: SummaryStatus): { label: string; variant: "destructive" | "secondary" | "outline" } {
   switch (status) {
     case "habis":
-      return { label: "Habis", variant: "destructive" }
+      return { label: "Berisiko Habis", variant: "destructive" }
     case "rendah":
       return { label: "Rendah", variant: "secondary" }
     case "insufficient":
@@ -601,7 +601,7 @@ export default function PrediksiPage() {
                   <TableHead className="text-right">Stok Terendah Forecast</TableHead>
                   <TableHead className="text-right">Perkiraan Habis</TableHead>
                   <TableHead className="text-right">Akurasi</TableHead>
-                  <TableHead className="text-right">Status</TableHead>
+                  <TableHead className="text-right">Status Prediksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

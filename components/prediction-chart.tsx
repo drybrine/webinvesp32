@@ -25,7 +25,7 @@ function formatValue(value: number | null): string {
 
 function buildStatus(value: number | null, minStock: number): { label: string; color: string } {
   if (value === null) return { label: "-", color: "hsl(150 8% 50%)" }
-  if (value <= 0) return { label: "Habis", color: "hsl(0 72% 51%)" }
+  if (value <= 0) return { label: "Berisiko Habis", color: "hsl(0 72% 51%)" }
   if (value < minStock) return { label: "Di bawah minimum", color: "hsl(38 78% 50%)" }
   return { label: "Aman", color: "hsl(152 38% 38%)" }
 }

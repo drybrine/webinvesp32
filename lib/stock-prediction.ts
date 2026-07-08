@@ -273,29 +273,23 @@ export function estimateStockoutDate(
   currentQty?: number,
   baseTimestamp = Date.now(),
 ): Date | null {
-  let quantity = currentQty ?? 0
+  const quantity = currentQty ?? 0
   if (quantity <= 0) return new Date(baseTimestamp)
 
-  let previousConsumption = model.lastConsumption ?? model.avgDailyConsumption
-  for (let day = 1; day <= 3650; day++) {
-    const consumption = predictNextConsumption(model, previousConsumption)
-    if (consumption <= 0) {
-      if (model.avgDailyConsumption <= 0) return null
-      // AR(1) clamp ke 0: jika stagnan 30 hari berturut-turut, anggap tidak
-      // terprediksi agar tidak loop 3650 hari sia-sia.
-      if (day >= 30 && previousConsumption <= 0) return null
-    }
+  // Gunakan konsumsi rata-rata harian untuk estimasi yang konsisten
+  const dailyConsumption = model.avgDailyConsumption
+  if (dailyConsumption <= 0) return null
 
-    quantity = Math.max(0, quantity - consumption)
-    previousConsumption = consumption
-    if (quantity <= 0) return new Date(baseTimestamp + day * MS_PER_DAY)
-  }
-
-  return null
+  const daysToStockout = quantity / dailyConsumption
+  return new Date(baseTimestamp + Math.round(daysToStockout) * MS_PER_DAY)
 }
 
 /**
  * Pipeline lengkap: fit Linear Regression konsumsi, evaluate, forecast stok iteratif.
+ *
+ * Forecast menggunakan garis linear yang hanya turun (monoton decreasing) karena
+ * stok selalu berkurang akibat konsumsi harian rata-rata. Garis forecast tidak
+ * naik-turun mengikuti variasi konsumsi AR(1).
  */
 export function predictStock(
   data: StockDataPoint[],
@@ -312,15 +306,15 @@ export function predictStock(
   const lastTimestamp = sorted[sorted.length - 1].timestamp
   const lastQuantity = sorted[sorted.length - 1].quantity
   const forecastBaseTimestamp = Math.max(lastTimestamp, dayTimestamp(currentTimestamp))
+
+  // Gunakan konsumsi rata-rata harian untuk forecast linear yang hanya turun
+  const dailyConsumption = model.avgDailyConsumption
   let currentQuantity = lastQuantity
-  let previousConsumption = model.lastConsumption ?? model.avgDailyConsumption
 
   const forecast: PredictionResult["forecast"] = []
   for (let day = stepDays; day <= horizonDays; day += stepDays) {
     const timestamp = forecastBaseTimestamp + day * MS_PER_DAY
-    const dailyConsumption = predictNextConsumption(model, previousConsumption)
     currentQuantity = Math.max(0, currentQuantity - dailyConsumption * stepDays)
-    previousConsumption = dailyConsumption
 
     forecast.push({
       timestamp,
