@@ -82,6 +82,14 @@ unsigned long lastBarcodeOnOled   = 0;
 #define SERIAL_INPUT_MAX   512
 #define SERIAL_IDLE_FLUSH_MS 50UL
 
+// --- GM67 Scanner Auto-Sleep (hemat baterai) ----------------------------------
+#define SCANNER_SLEEP_TIMEOUT_MS  60000UL  // auto-sleep setelah 60 detik idle
+#define SCANNER_WAKEUP_SETTLE_MS  100UL    // waktu tunggu setelah wakeup sebelum scan
+// Command bytes dari manual GM67 (Appendix 6)
+static const uint8_t GM67_SLEEP_CMD[]   = {0x04, 0xEB, 0x04, 0x00, 0xFF, 0x0D};
+static const uint8_t GM67_WAKEUP_CMD[]  = {0x04, 0xE9, 0x04, 0x00, 0xFF, 0x0F}; // SCAN_ENABLE
+// -----------------------------------------------------------------------------
+
 // ECDSA P-256 public key (PEM/SPKI) matching OTA_SIGNING_PRIVATE_KEY in CI.
 // The private key never leaves the GitHub secret; only this public half ships.
 // Replace this placeholder with the real public key before deploying OTA.
@@ -152,6 +160,8 @@ bool          isWiFiConnected = false;
 unsigned long lastScanTime    = 0;
 unsigned long lastHeartbeat   = 0;
 unsigned long scanCount       = 0;
+bool          scannerSleeping = false;        // apakah GM67 sedang sleep
+unsigned long lastScannerActivity = 0;        // waktu aktivitas terakhir scanner
 unsigned long bootTime        = 0;
 unsigned long lastWiFiCheck   = 0;
 bool          isOnline        = false;
@@ -178,6 +188,12 @@ String        activeScanMode = "Manual";       // dikontrol dari tombol alat: "M
 bool          wifiEverConnected = false;        // apakah pernah connect sejak boot
 unsigned long wifiDisconnectedAt = 0;           // kapan terakhir disconnect
 #define WIFI_SHOW_DISCONNECTED_AFTER_MS 3000UL  // tampilkan "Terputus" setelah 3 detik (hindari flicker saat reconnect otomatis)
+
+// WiFi reconnect backoff - cegah loop reconnect saat sinyal buruk
+unsigned long wifiReconnectAt     = 0;           // kapan boleh reconnect berikutnya
+uint8_t       wifiReconnectFails  = 0;           // jumlah gagal berturut-turut
+#define WIFI_RECONNECT_BASE_MS    5000UL         // jeda awal 5 detik
+#define WIFI_RECONNECT_MAX_MS     120000UL       // jeda maksimal 2 menit
 
 enum UiScreen {
   SCREEN_HOME,
@@ -1204,8 +1220,8 @@ void onWiFiDisconnected() {
   stopScanModeStream();
 }
 
-// Monitor WiFi state - ESP32 auto-reconnect handles actual reconnection
-// Kita cukup deteksi perubahan state dan update OLED/status
+// Monitor WiFi state - dengan exponential backoff untuk reconnect
+// Mencegah loop reconnect saat sinyal WiFi buruk/lemot
 void serviceWiFiConnection() {
   // Belum ada WiFi config - jangan proses
   if (!wifiConfig.isValid || strlen(wifiConfig.ssid) == 0) {
@@ -1218,6 +1234,8 @@ void serviceWiFiConnection() {
     if (!isWiFiConnected) {
       // Baru saja reconnect (auto-reconnect dari ESP32 stack)
       onWiFiConnected();
+      wifiReconnectFails = 0;  // reset backoff counter
+      wifiReconnectAt = 0;
     } else {
       // Sudah connected, pastikan auth Firebase OK
       if (firebaseAuthPending && isDeviceProvisioned()) {
@@ -1244,6 +1262,27 @@ void serviceWiFiConnection() {
       oledShowNoWiFi();
       Serial.println("WiFi terputus, menunggu auto-reconnect...");
     }
+  }
+
+  // Exponential backoff: jangan reconnect terus-menerus saat sinyal buruk
+  // ESP32 auto-reconnect di-disable sementara, kita kontrol manual
+  if (wifiReconnectAt > 0 && millis() < wifiReconnectAt) {
+    return;  // masih dalam masa tunggu backoff
+  }
+
+  // Saatnya coba reconnect
+  if (wifiReconnectAt > 0 || wifiReconnectFails > 0) {
+    unsigned long backoff = min<unsigned long>(
+      WIFI_RECONNECT_BASE_MS * (1UL << min<uint8_t>(wifiReconnectFails, 5)),
+      WIFI_RECONNECT_MAX_MS
+    );
+    wifiReconnectAt = millis() + backoff;
+    wifiReconnectFails++;
+    
+    WiFi.disconnect(false);
+    delay(50);
+    WiFi.begin(wifiConfig.ssid, wifiConfig.password);
+    Serial.printf("WiFi reconnect attempt #%d (backoff %lu ms)\n", wifiReconnectFails, backoff);
   }
 }
 
@@ -2493,10 +2532,12 @@ void processBarcodeInput(String input) {
       wifiConfig.password[sizeof(wifiConfig.password) - 1] = '\0';
       wifiConfig.isValid = true;
       saveWiFiConfig();
-      // Mulai koneksi baru - ESP32 akan handle reconnect otomatis
+      // Mulai koneksi baru dengan backoff reset
       WiFi.disconnect(false);
       delay(100);
       WiFi.begin(wifiConfig.ssid, wifiConfig.password);
+      wifiReconnectFails = 0;
+      wifiReconnectAt = millis() + WIFI_RECONNECT_BASE_MS;
       oledShowWiFiConnecting(wifiConfig.ssid);
       Serial.printf("WiFi config tersimpan: %s\n", wifiConfig.ssid);
     }
@@ -2506,6 +2547,7 @@ void processBarcodeInput(String input) {
   Serial.print("Input: ");
   Serial.println(input);
   lastScanTime = millis();
+  lastScannerActivity = millis();  // reset idle timer untuk auto-sleep
   scanCount++;
   processInventoryBarcode(input);
   serviceHeartbeat(false);
@@ -2673,6 +2715,8 @@ void handleUiEvent(ButtonEvent event) {
 void handleButtons() {
   if (digitalRead(BTN_UP_PIN) == LOW || digitalRead(BTN_OK_PIN) == LOW || digitalRead(BTN_DOWN_PIN) == LOW) {
     lastUiInteraction = millis();
+    lastScannerActivity = millis();  // reset idle timer saat tombol ditekan
+    if (scannerSleeping) scannerWakeup();  // bangunkan scanner
     if (currentScreen == SCREEN_SAVER) currentScreen = SCREEN_HOME;
   }
 
@@ -2734,6 +2778,35 @@ void reserveRuntimeStrings() {
 
 
 // =============================================================================
+//  GM67 SCANNER AUTO-SLEEP
+// =============================================================================
+// Mengirim SLEEP command ke GM67 via Serial2 untuk hemat baterai.
+void scannerSleep() {
+  if (scannerSleeping) return;
+  Serial2.write(GM67_SLEEP_CMD, sizeof(GM67_SLEEP_CMD));
+  scannerSleeping = true;
+  Serial.println("GM67: sleep");
+}
+
+// Mengirim WAKEUP command ke GM67 via Serial2.
+void scannerWakeup() {
+  if (!scannerSleeping) return;
+  Serial2.write(GM67_WAKEUP_CMD, sizeof(GM67_WAKEUP_CMD));
+  delay(SCANNER_WAKEUP_SETTLE_MS);
+  scannerSleeping = false;
+  Serial.println("GM67: wakeup");
+}
+
+// Cek apakah scanner perlu di-sleep karena idle terlalu lama.
+void serviceScannerSleep() {
+  if (scannerSleeping) return;
+  if (lastScannerActivity == 0) return;  // belum pernah aktivitas
+  if (millis() - lastScannerActivity > SCANNER_SLEEP_TIMEOUT_MS) {
+    scannerSleep();
+  }
+}
+
+// =============================================================================
 //  SETUP & LOOP
 // =============================================================================
 // Fungsi setup Arduino yang berjalan sekali saat perangkat boot.
@@ -2782,14 +2855,16 @@ void setup() {
   }
 
   // Fast WiFi init — persistent=false cegah tulis flash, lebih cepat boot
-  // Auto-reconnect diaktifkan: ESP32 akan reconnect otomatis jika terputus
+  // Auto-reconnect DIMATIKAan: kita handle reconnect manual dengan backoff
+  // untuk mencegah loop reconnect saat sinyal WiFi buruk
   WiFi.persistent(false);
-  WiFi.setAutoReconnect(true);
+  WiFi.setAutoReconnect(false);
   WiFi.mode(WIFI_STA);
 
   if (wifiConfig.isValid && strlen(wifiConfig.ssid) > 0) {
     Serial.printf("WiFi config: %s\n", wifiConfig.ssid);
     WiFi.begin(wifiConfig.ssid, wifiConfig.password);
+    wifiReconnectAt = millis() + WIFI_RECONNECT_BASE_MS;  // jadwalkan reconnect jika gagal
     // Jangan blokir di sini - biarkan ESP32 connect di background
     // serviceWiFiConnection() akan deteksi dan update status
   } else {
@@ -2799,6 +2874,7 @@ void setup() {
 
   lastHeartbeat   = millis();
   lastOledRefresh = millis();
+  lastScannerActivity = millis();  // mulai hitung idle untuk auto-sleep
   initBatteryADC();   // calibrate ADC using eFuse Vref
   sampleBattery();    // initial battery reading before first heartbeat
   Serial.println("Ready - Mode: INVENTORY");
@@ -2813,6 +2889,12 @@ void loop() {
   static char serial2Buffer[SERIAL_INPUT_MAX + 1] = {0};
   static size_t serial2Length = 0;
   static unsigned long lastSerial2CharTime = 0;
+
+  // Wakeup scanner jika ada data masuk dari GM67
+  if (Serial2.available() && scannerSleeping) {
+    scannerWakeup();
+    lastScannerActivity = millis();
+  }
   handleInputStream(Serial2, serial2Buffer, serial2Length, lastSerial2CharTime);
 
   static char serialBuffer[SERIAL_INPUT_MAX + 1] = {0};
@@ -2820,6 +2902,7 @@ void loop() {
   static unsigned long lastSerialCharTime = 0;
   handleInputStream(Serial, serialBuffer, serialLength, lastSerialCharTime);
 
+  serviceScannerSleep();  // cek apakah scanner perlu di-sleep
   serviceHeartbeat(false);
 
   // Panggil handleButtons lagi setelah operasi blocking (HTTP, scan)

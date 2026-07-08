@@ -7,7 +7,7 @@
   },
   "scripts": {
     "check-env": "node scripts/check-env.js",
-    "dev": "npm run check-env && next dev",
+    "dev": "npm run check-env && next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
