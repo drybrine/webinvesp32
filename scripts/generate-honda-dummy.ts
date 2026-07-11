@@ -21,7 +21,7 @@
 import { writeFileSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import {
-  buildDailySeriesFromTransactions,
+  buildConsumptionFromTransactions,
   predictStock,
 } from "../lib/stock-prediction"
 
@@ -201,14 +201,14 @@ function testPrediction(part: SparePart, txs: Transaction[]) {
     type: tx.type,
   }))
 
-  const series = buildDailySeriesFromTransactions(txInput, finalStock)
+  const series = buildConsumptionFromTransactions(txInput)
   if (series.length < 2) {
-    console.log(`  ⚠ Data series kurang untuk ${part.name}`)
+    console.log(`  ⚠ Data konsumsi kurang untuk ${part.name}`)
     return
   }
 
   try {
-    const prediction = predictStock(series, { horizonDays: 14, trainRatio: 0.8 })
+    const prediction = predictStock(series, finalStock, { horizonDays: 14, trainRatio: 0.8 })
     const lowest = Math.min(...prediction.forecast.map(f => f.predictedQuantity))
     const lastHistoryTs = series[series.length - 1].timestamp
     const stockoutDay = prediction.stockoutDate
@@ -296,10 +296,10 @@ if (testOnly) {
     const finalStock = part.initialStock + stock
 
     const txInput = partTxs.map(tx => ({ timestamp: tx.timestamp, quantity: tx.quantity, type: tx.type }))
-    const series = buildDailySeriesFromTransactions(txInput, finalStock)
-    if (series.length >= 2) {
+    const consumptionData = buildConsumptionFromTransactions(txInput)
+    if (consumptionData.length >= 2) {
       try {
-        const p = predictStock(series, { horizonDays: 14, trainRatio: 0.8 })
+        const p = predictStock(consumptionData, finalStock, { horizonDays: 14, trainRatio: 0.8 })
         accuracies.push(p.metrics.r2)
       } catch {/* skip */}
     }

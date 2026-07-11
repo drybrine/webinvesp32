@@ -1,15 +1,12 @@
 /**
  * Model prediksi stok barang - Simple Linear Regression.
  *
- * Sesuai teori regresi linear sederhana: Y = a + bX.
- * Di sini:
- *   X = konsumsi hari sebelumnya
- *   Y = konsumsi hari ini
+ * Pendekatan berbasis konsumsi: agregasi transaksi "out" harian,
+ * regresi OLS pada kumulatif konsumsi terhadap waktu (ΣC(t) = a + b*t),
+ * dan forecast stok iteratif dari stok saat ini dikurangi avgDailyConsumption.
  *
- * Forecast stok tidak langsung memanjangkan garis stok. Model memprediksi
- * konsumsi per hari, lalu stok dikurangi secara iteratif. Hasilnya tetap
- * Linear Regression biasa satu variabel, tetapi kurva stok forecast bisa
- * melengkung halus karena konsumsi hari berikutnya diprediksi berantai.
+ * Tidak lagi merekonstruksi histori stok dari currentQuantity yang
+ * mungkin rusak/outdated di node inventory Firebase.
  */
 
 export interface StockDataPoint {
@@ -19,24 +16,33 @@ export interface StockDataPoint {
   quantity: number
 }
 
+export interface DailyConsumptionPoint {
+  /** epoch millis (start of day) */
+  timestamp: number
+  /** total konsumsi (out) pada hari tsb */
+  consumption: number
+}
+
 export interface RegressionModel {
   /** estimasi perubahan stok per hari, negatif bila stok menurun */
   slope: number
-  /** intercept regresi konsumsi harian */
+  /** intercept regresi kumulatif konsumsi */
   intercept: number
-  /** timestamp acuan (hari ke-0) */
+  /** timestamp acuan (hari ke-0 dari data pertama) */
   baseTimestamp: number
   /** jumlah titik data konsumsi untuk training */
   n: number
-  /** rata-rata konsumsi harian historis */
+  /** rata-rata konsumsi harian historis (slope regresi kumulatif) */
   avgDailyConsumption: number
+  /** total konsumsi historis */
+  totalConsumption: number
   /** konsumsi per day-of-week [0=Sun..6=Sat], untuk kompatibilitas UI lama */
   dowConsumption: number[]
-  /** slope regresi konsumsi: konsumsi hari ini terhadap konsumsi kemarin */
+  /** @deprecated — tidak digunakan di model konsumsi */
   consumptionSlope?: number
-  /** intercept regresi konsumsi harian */
+  /** @deprecated — tidak digunakan di model konsumsi */
   consumptionIntercept?: number
-  /** konsumsi terakhir untuk forecast iteratif */
+  /** @deprecated — tidak digunakan di model konsumsi */
   lastConsumption?: number
 }
 
@@ -58,13 +64,7 @@ export interface PredictionResult {
   stockoutDate: Date | null
 }
 
-interface ConsumptionDataPoint {
-  timestamp: number
-  consumption: number
-}
-
 const MS_PER_DAY = 24 * 60 * 60 * 1000
-const CONSUMPTION_EMA_ALPHA = 0.05
 
 function dayTimestamp(timestamp = Date.now()): number {
   return Math.floor(timestamp / MS_PER_DAY) * MS_PER_DAY
@@ -97,42 +97,6 @@ function linearRegression(x: number[], y: number[]): { intercept: number; slope:
   return { intercept, slope }
 }
 
-function buildConsumptionSeries(data: StockDataPoint[]): ConsumptionDataPoint[] {
-  const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp)
-  const series: ConsumptionDataPoint[] = []
-
-  for (let i = 1; i < sorted.length; i++) {
-    const gapDays = (sorted[i].timestamp - sorted[i - 1].timestamp) / MS_PER_DAY
-    if (gapDays <= 0) continue
-
-    const stockDelta = sorted[i - 1].quantity - sorted[i].quantity
-    const consumption = Math.max(0, stockDelta / gapDays)
-    series.push({ timestamp: sorted[i].timestamp, consumption })
-  }
-
-  return series
-}
-
-function smoothConsumptionSeries(series: ConsumptionDataPoint[]): ConsumptionDataPoint[] {
-  if (series.length === 0) return []
-
-  let smoothed = series[0].consumption
-  return series.map((point, index) => {
-    if (index === 0) {
-      return { timestamp: point.timestamp, consumption: smoothed }
-    }
-
-    smoothed = CONSUMPTION_EMA_ALPHA * point.consumption + (1 - CONSUMPTION_EMA_ALPHA) * smoothed
-    return { timestamp: point.timestamp, consumption: smoothed }
-  })
-}
-
-function predictNextConsumption(model: RegressionModel, previousConsumption: number): number {
-  const intercept = model.consumptionIntercept ?? model.intercept
-  const slope = model.consumptionSlope ?? 0
-  return Math.max(0, intercept + slope * previousConsumption)
-}
-
 function calculateMetrics(actual: number[], predicted: number[]): EvaluationMetrics {
   if (actual.length === 0 || predicted.length === 0) {
     return { mae: 0, rmse: 0, r2: 0 }
@@ -157,117 +121,125 @@ function calculateMetrics(actual: number[], predicted: number[]): EvaluationMetr
   return { mae, rmse, r2 }
 }
 
-function evaluateStockForecast(
-  model: RegressionModel,
-  historyBeforeTest: StockDataPoint[],
-  testData: StockDataPoint[],
-): EvaluationMetrics {
-  if (historyBeforeTest.length === 0 || testData.length === 0) {
-    return { mae: 0, rmse: 0, r2: 0 }
+/**
+ * Agregasi transaksi "out" menjadi konsumsi harian.
+ * Tidak merekonstruksi stok — hanya menghitung total barang keluar per hari.
+ */
+export function buildConsumptionFromTransactions(
+  transactions: Array<{ timestamp: number; quantity: number; type?: "in" | "out" | "adjustment" }>,
+): DailyConsumptionPoint[] {
+  const dailyConsumption = new Map<number, number>()
+  for (const tx of transactions) {
+    if (tx.type !== "out") continue
+    const dayKey = Math.floor(tx.timestamp / MS_PER_DAY) * MS_PER_DAY
+    dailyConsumption.set(dayKey, (dailyConsumption.get(dayKey) ?? 0) + Math.abs(tx.quantity))
   }
-
-  const test = [...testData].sort((a, b) => a.timestamp - b.timestamp)
-  let previousTimestamp = historyBeforeTest[historyBeforeTest.length - 1].timestamp
-  let predictedQuantity = historyBeforeTest[historyBeforeTest.length - 1].quantity
-
-  const actual: number[] = []
-  const predicted: number[] = []
-
-  for (const point of test) {
-    const gapDays = Math.max(1, Math.round((point.timestamp - previousTimestamp) / MS_PER_DAY))
-
-    for (let step = 1; step <= gapDays; step++) {
-      predictedQuantity = Math.max(0, predictedQuantity - model.avgDailyConsumption)
-    }
-
-    actual.push(point.quantity)
-    predicted.push(predictedQuantity)
-    previousTimestamp = point.timestamp
-  }
-
-  return calculateMetrics(actual, predicted)
+  const days = [...dailyConsumption.keys()].sort((a, b) => a - b)
+  return days.map((day) => ({ timestamp: day, consumption: dailyConsumption.get(day)! }))
 }
 
 /**
- * Fit Simple Linear Regression pada konsumsi harian: konsumsi_hari_ini = a + b*konsumsi_kemarin.
+ * Konversi data konsumsi harian ke perkiraan level stok untuk keperluan chart.
+ * Bekerja mundur dari currentStock: stok[t] = stok[t+1] + konsumsi[t].
+ * Titik paling akhir = currentStock.
  */
-export function fitLinearRegression(data: StockDataPoint[]): RegressionModel {
+export function consumptionToStockLevels(
+  data: DailyConsumptionPoint[],
+  currentStock: number,
+): StockDataPoint[] {
+  if (data.length === 0) return []
+  const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp)
+  let stock = currentStock
+  const result: StockDataPoint[] = []
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    result.unshift({ timestamp: sorted[i].timestamp, quantity: stock })
+    stock += sorted[i].consumption
+  }
+  return result
+}
+
+/**
+ * Bangun deret kumulatif konsumsi dari data harian untuk regresi OLS.
+ * ΣC(t) = a + b*t, dengan t = indeks hari relatif terhadap data pertama.
+ */
+function buildCumulativeSeries(data: DailyConsumptionPoint[]): { days: number[]; cumulative: number[] } {
+  const baseTs = data[0].timestamp
+  let total = 0
+  const days: number[] = []
+  const cumulative: number[] = []
+  for (const point of data) {
+    const dayIndex = Math.round((point.timestamp - baseTs) / MS_PER_DAY)
+    total += point.consumption
+    days.push(dayIndex)
+    cumulative.push(total)
+  }
+  return { days, cumulative }
+}
+
+/**
+ * Fit Simple Linear Regression pada kumulatif konsumsi terhadap waktu.
+ * slope = avgDailyConsumption (laju konsumsi per hari).
+ */
+export function fitLinearRegression(data: DailyConsumptionPoint[]): RegressionModel {
   if (data.length < 2) {
     throw new Error("Minimal 2 titik data diperlukan untuk regresi linear")
   }
 
   const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp)
   const baseTimestamp = sorted[0].timestamp
-  const rawConsumptionSeries = buildConsumptionSeries(sorted)
-  const consumptionSeries = smoothConsumptionSeries(rawConsumptionSeries)
-  const x: number[] = []
-  const y: number[] = []
-  for (let i = 1; i < consumptionSeries.length; i++) {
-    x.push(consumptionSeries[i - 1].consumption)
-    y.push(consumptionSeries[i].consumption)
-  }
-  const fallbackConsumption = rawConsumptionSeries.at(-1)?.consumption ?? 0
-  const { intercept, slope: consumptionSlope } =
-    y.length > 0 ? linearRegression(x, y) : { intercept: fallbackConsumption, slope: 0 }
+  const { days, cumulative } = buildCumulativeSeries(sorted)
+  const { slope, intercept } = linearRegression(days, cumulative)
+  const avgDailyConsumption = slope
 
-  const avgDailyConsumption = mean(rawConsumptionSeries.map((point) => point.consumption))
-  const dowDeltas: number[][] = [[], [], [], [], [], [], []]
-  for (const point of rawConsumptionSeries) {
-    dowDeltas[new Date(point.timestamp).getDay()].push(point.consumption)
+  const dowTotals: number[][] = [[], [], [], [], [], [], []]
+  for (const point of sorted) {
+    dowTotals[new Date(point.timestamp).getDay()].push(point.consumption)
   }
-  const dowConsumption = dowDeltas.map((items) => (items.length > 0 ? mean(items) : avgDailyConsumption))
+  const dowConsumption = dowTotals.map((items) => (items.length > 0 ? mean(items) : avgDailyConsumption))
 
   return {
     slope: -avgDailyConsumption,
     intercept,
     baseTimestamp,
-    n: Math.max(1, consumptionSeries.length),
+    n: sorted.length,
     avgDailyConsumption,
+    totalConsumption: cumulative[cumulative.length - 1] ?? 0,
     dowConsumption,
-    consumptionSlope,
-    consumptionIntercept: intercept,
-    lastConsumption: consumptionSeries.at(-1)?.consumption ?? fallbackConsumption,
   }
 }
 
 /**
- * Prediksi konsumsi harian berikutnya.
+ * Prediksi konsumsi hari berikutnya (sama dengan rata-rata harian).
  */
 export function predict(model: RegressionModel): number {
-  return predictNextConsumption(model, model.lastConsumption ?? model.avgDailyConsumption)
+  return model.avgDailyConsumption
 }
 
 /**
- * Hitung metrik evaluasi pada data konsumsi yang dibentuk dari stok historis.
+ * Evaluasi model: bandingkan konsumsi aktual harian di testData
+ * terhadap prediksi laju konstan (avgDailyConsumption).
  */
-export function evaluate(model: RegressionModel, testData: StockDataPoint[]): EvaluationMetrics {
-  const consumptionSeries = smoothConsumptionSeries(buildConsumptionSeries(testData))
-  if (consumptionSeries.length === 0) return { mae: 0, rmse: 0, r2: 0 }
-
-  const actual: number[] = []
-  const predicted: number[] = []
-  for (let i = 1; i < consumptionSeries.length; i++) {
-    actual.push(consumptionSeries[i].consumption)
-    predicted.push(predictNextConsumption(model, consumptionSeries[i - 1].consumption))
-  }
-
-  return calculateMetrics(actual, predicted)
+export function evaluate(model: RegressionModel, testData: DailyConsumptionPoint[]): EvaluationMetrics {
+  if (testData.length === 0) return { mae: 0, rmse: 0, r2: 0 }
+  const actualDaily = testData.map((p) => p.consumption)
+  const predictedDaily = testData.map(() => model.avgDailyConsumption)
+  return calculateMetrics(actualDaily, predictedDaily)
 }
 
 /**
- * Bagi data menjadi train/test berdasarkan rasio.
+ * Bagi data konsumsi harian menjadi train/test berdasarkan rasio.
  * Split kronologis (untuk time-series).
  */
 export function trainTestSplit(
-  data: StockDataPoint[],
+  data: DailyConsumptionPoint[],
   trainRatio = 0.85,
-): { train: StockDataPoint[]; test: StockDataPoint[] } {
+): { train: DailyConsumptionPoint[]; test: DailyConsumptionPoint[] } {
   const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp)
   const cut = Math.min(sorted.length, Math.max(2, Math.floor(sorted.length * trainRatio)))
   return { train: sorted.slice(0, cut), test: sorted.slice(cut) }
 }
 
-/** Perkirakan tanggal stok habis dari timestamp histori terakhir. */
+/** Perkirakan tanggal stok habis dari stok saat ini. */
 export function estimateStockoutDate(
   model: RegressionModel,
   currentQty?: number,
@@ -276,7 +248,6 @@ export function estimateStockoutDate(
   const quantity = currentQty ?? 0
   if (quantity <= 0) return new Date(baseTimestamp)
 
-  // Gunakan konsumsi rata-rata harian untuk estimasi yang konsisten
   const dailyConsumption = model.avgDailyConsumption
   if (dailyConsumption <= 0) return null
 
@@ -285,40 +256,37 @@ export function estimateStockoutDate(
 }
 
 /**
- * Pipeline lengkap: fit Linear Regression konsumsi, evaluate, forecast stok iteratif.
+ * Pipeline lengkap: fit Linear Regression pada konsumsi kumulatif,
+ * evaluate, forecast stok iteratif dari currentStock.
  *
- * Forecast menggunakan garis linear yang hanya turun (monoton decreasing) karena
- * stok selalu berkurang akibat konsumsi harian rata-rata. Garis forecast tidak
- * naik-turun mengikuti variasi konsumsi AR(1).
+ * Forecast linear menurun: stok dikurangi avgDailyConsumption per hari.
  */
 export function predictStock(
-  data: StockDataPoint[],
-  options: { horizonDays?: number; stepDays?: number; trainRatio?: number; currentTimestamp?: number } = {},
+  data: DailyConsumptionPoint[],
+  currentStock: number,
+  options: { horizonDays?: number; trainRatio?: number; currentTimestamp?: number } = {},
 ): PredictionResult {
-  const { horizonDays = 14, stepDays = 1, trainRatio = 0.85, currentTimestamp = Date.now() } = options
+  const { horizonDays = 14, trainRatio = 0.85, currentTimestamp = Date.now() } = options
 
   const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp)
   const { train, test } = trainTestSplit(sorted, trainRatio)
   const model = fitLinearRegression(train)
-  // Metrik pada test set (held-out) untuk hindari data leakage.
   const metrics = evaluate(model, test.length >= 2 ? test : sorted)
 
-  const lastTimestamp = sorted[sorted.length - 1].timestamp
-  const lastQuantity = sorted[sorted.length - 1].quantity
+  const lastTimestamp = sorted.length > 0 ? sorted[sorted.length - 1].timestamp : dayTimestamp(currentTimestamp)
   const forecastBaseTimestamp = Math.max(lastTimestamp, dayTimestamp(currentTimestamp))
 
-  // Gunakan konsumsi rata-rata harian untuk forecast linear yang hanya turun
   const dailyConsumption = model.avgDailyConsumption
-  let currentQuantity = lastQuantity
+  let forecastQty = currentStock
 
   const forecast: PredictionResult["forecast"] = []
-  for (let day = stepDays; day <= horizonDays; day += stepDays) {
+  for (let day = 1; day <= horizonDays; day++) {
     const timestamp = forecastBaseTimestamp + day * MS_PER_DAY
-    currentQuantity = Math.max(0, currentQuantity - dailyConsumption * stepDays)
+    forecastQty = Math.max(0, forecastQty - dailyConsumption)
 
     forecast.push({
       timestamp,
-      predictedQuantity: Math.round(currentQuantity * 10) / 10,
+      predictedQuantity: Math.round(forecastQty * 10) / 10,
       estimatedConsumption: Math.round(dailyConsumption * 10) / 10,
     })
   }
@@ -327,15 +295,15 @@ export function predictStock(
     model,
     metrics,
     forecast,
-    stockoutDate: estimateStockoutDate(model, lastQuantity, forecastBaseTimestamp),
+    stockoutDate: estimateStockoutDate(model, currentStock, forecastBaseTimestamp),
   }
 }
 
 /**
- * Bangun time-series stok harian dari daftar transaksi (in/out/adjustment).
+ * @deprecated Gunakan buildConsumptionFromTransactions() untuk model konsumsi.
+ * Dipertahankan untuk backward-compat dengan script generator/test.
  *
- * @param transactions daftar transaksi
- * @param currentQuantity level stok saat ini (snapshot terakhir)
+ * Bangun time-series stok harian dari daftar transaksi (in/out/adjustment).
  */
 export function buildDailySeriesFromTransactions(
   transactions: Array<{ timestamp: number; quantity: number; type?: "in" | "out" | "adjustment" }>,

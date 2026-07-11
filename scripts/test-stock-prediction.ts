@@ -15,8 +15,9 @@
 import { readFileSync, existsSync } from "node:fs"
 import { resolve } from "node:path"
 import {
-  buildDailySeriesFromTransactions,
+  buildConsumptionFromTransactions,
   predictStock,
+  type DailyConsumptionPoint,
   type StockDataPoint,
 } from "../lib/stock-prediction"
 
@@ -34,7 +35,7 @@ function printDivider(title: string): void {
 }
 
 /** Dataset dummy: stok menurun dengan noise realistis */
-function buildDummyDataset(): { name: string; history: StockDataPoint[] } {
+function buildDummyDataset(): { name: string; history: DailyConsumptionPoint[] } {
   const now = Date.now()
   const history: StockDataPoint[] = []
   const startQty = 100
@@ -47,11 +48,19 @@ function buildDummyDataset(): { name: string; history: StockDataPoint[] } {
     history.push({ timestamp: ts, quantity: qty })
   }
 
-  return { name: "76 Apel (dummy)", history }
+  const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp)
+  const consumptionData: DailyConsumptionPoint[] = []
+  for (let i = 1; i < sorted.length; i++) {
+    const dayKey = Math.floor(sorted[i].timestamp / MS_PER_DAY) * MS_PER_DAY
+    const delta = sorted[i - 1].quantity - sorted[i].quantity
+    consumptionData.push({ timestamp: dayKey, consumption: Math.max(0, delta) })
+  }
+
+  return { name: "76 Apel (dummy)", history: consumptionData }
 }
 
 /** Coba baca dari export Firebase bila path diberikan lewat --export. */
-function tryLoadFromExport(path: string): Array<{ name: string; history: StockDataPoint[] }> | null {
+function tryLoadFromExport(path: string): Array<{ name: string; history: DailyConsumptionPoint[] }> | null {
   if (!existsSync(path)) {
     console.warn(`[warn] file tidak ditemukan: ${path}`)
     return null
@@ -72,32 +81,37 @@ function tryLoadFromExport(path: string): Array<{ name: string; history: StockDa
     txByBarcode.get(key)!.push({ timestamp: ts, quantity: qty, type: tx.type })
   }
 
-  const datasets: Array<{ name: string; history: StockDataPoint[] }> = []
+  const datasets: Array<{ name: string; history: DailyConsumptionPoint[] }> = []
   for (const item of Object.values(inventory) as any[]) {
     const txs = txByBarcode.get(item.barcode) ?? []
     if (txs.length < 2) continue
-    const series = buildDailySeriesFromTransactions(txs, Number(item.quantity) || 0)
-    if (series.length >= 2) {
-      datasets.push({ name: `${item.name} (${item.barcode})`, history: series })
+    const consumptionData = buildConsumptionFromTransactions(txs)
+    if (consumptionData.length >= 2) {
+      datasets.push({ name: `${item.name} (${item.barcode})`, history: consumptionData })
     }
   }
 
   return datasets.length > 0 ? datasets : null
 }
 
-function runTest(dataset: { name: string; history: StockDataPoint[] }): void {
+function runTest(dataset: { name: string; history: DailyConsumptionPoint[] }): void {
   printDivider(`Item: ${dataset.name}`)
 
+  const totalConsumption = dataset.history.reduce((sum, p) => sum + p.consumption, 0)
   console.log(`Jumlah titik data : ${dataset.history.length}`)
   console.log(`Rentang           : ${fmtDate(dataset.history[0].timestamp)} → ${fmtDate(dataset.history.at(-1)!.timestamp)}`)
-  console.log(`Stok awal → akhir : ${dataset.history[0].quantity} → ${dataset.history.at(-1)!.quantity}`)
+  console.log(`Total konsumsi    : ${totalConsumption.toFixed(1)} unit`)
+  console.log(`Avg konsumsi      : ${(totalConsumption / dataset.history.length).toFixed(2)}/hari`)
 
-  const result = predictStock(dataset.history, { horizonDays: 14, trainRatio: 0.8 })
+  const syntheticStock = Math.round(totalConsumption * 0.2)
+  const result = predictStock(dataset.history, syntheticStock, { horizonDays: 14, trainRatio: 0.8 })
 
   console.log("\n  Parameter Model")
-  console.log(`    slope     : ${result.model.slope.toFixed(4)} unit/hari`)
-  console.log(`    intercept : ${result.model.intercept.toFixed(4)}`)
-  console.log(`    n_train   : ${result.model.n}`)
+  console.log(`    slope             : ${result.model.slope.toFixed(4)} unit/hari`)
+  console.log(`    intercept         : ${result.model.intercept.toFixed(4)}`)
+  console.log(`    avgDailyConsumption: ${result.model.avgDailyConsumption.toFixed(4)}`)
+  console.log(`    totalConsumption   : ${result.model.totalConsumption.toFixed(2)}`)
+  console.log(`    n_train            : ${result.model.n}`)
 
   console.log("\n  Metrik Evaluasi")
   console.log(`    MAE       : ${result.metrics.mae.toFixed(3)}`)
@@ -125,7 +139,7 @@ function main(): void {
 
   printDivider("Stock Prediction Model — Linear Regression")
 
-  let datasets: Array<{ name: string; history: StockDataPoint[] }> = []
+  let datasets: Array<{ name: string; history: DailyConsumptionPoint[] }> = []
 
   if (exportPath) {
     const loaded = tryLoadFromExport(resolve(exportPath))

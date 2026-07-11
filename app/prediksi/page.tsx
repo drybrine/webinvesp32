@@ -32,8 +32,10 @@ import { AlertTriangle, TrendingDown, TrendingUp, Activity, ArrowLeft } from "lu
 import { useFirebaseInventory, useFirebaseTransactions, type InventoryItem } from "@/hooks/use-firebase"
 import { firebaseHelpers } from "@/lib/firebase"
 import {
-  buildDailySeriesFromTransactions,
+  buildConsumptionFromTransactions,
+  consumptionToStockLevels,
   predictStock,
+  type DailyConsumptionPoint,
   type StockDataPoint,
   type PredictionResult,
 } from "@/lib/stock-prediction"
@@ -202,11 +204,12 @@ function buildClientBatchRisks(
   return items.flatMap((item) => {
     if (!item.barcode) return []
     const itemTx = txByBarcode.get(item.barcode) ?? []
-    const series = buildDailySeriesFromTransactions(itemTx, Number(item.quantity) || 0)
-    if (series.length < 2) return []
+    const currentStock = Number(item.quantity) || 0
+    const consumptionData = buildConsumptionFromTransactions(itemTx)
+    if (consumptionData.length < 2) return []
 
     try {
-      const result = predictStock(series, { horizonDays, trainRatio })
+      const result = predictStock(consumptionData, currentStock, { horizonDays, trainRatio })
       const predictedLowest = Math.min(
         ...result.forecast.map((point) => point.predictedQuantity),
       )
@@ -216,7 +219,7 @@ function buildClientBatchRisks(
         itemId: item.id,
         itemName: item.name,
         barcode: item.barcode,
-        currentQuantity: Number(item.quantity) || 0,
+        currentQuantity: currentStock,
         minStock: Number(item.minStock) || 0,
         avgDailyConsumption: result.model.avgDailyConsumption,
         predictedLowest,
@@ -259,7 +262,7 @@ export default function PrediksiPage() {
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [summaryAnalyzedCount, setSummaryAnalyzedCount] = useState(0)
 
-  const history: StockDataPoint[] = useMemo(() => {
+  const history: DailyConsumptionPoint[] = useMemo(() => {
     if (!selectedItem) return []
     const itemTx = transactions
       .filter((t) => t.productBarcode === selectedItem.barcode)
@@ -268,7 +271,7 @@ export default function PrediksiPage() {
         quantity: Number(t.quantity) || 0,
         type: t.type as "in" | "out" | "adjustment",
       }))
-    return buildDailySeriesFromTransactions(itemTx, Number(selectedItem.quantity) || 0)
+    return buildConsumptionFromTransactions(itemTx)
   }, [selectedItem, transactions])
 
   const [prediction, setPrediction] = useState<PredictionResult | null>(null)
@@ -325,6 +328,7 @@ export default function PrediksiPage() {
             baseTimestamp: Date.now(),
             n: data.model.n,
             avgDailyConsumption: data.model.avgDailyConsumption,
+            totalConsumption: data.model.totalConsumption ?? 0,
             dowConsumption: data.model.dowConsumption,
             consumptionSlope: data.model.consumptionSlope,
             consumptionIntercept: data.model.consumptionIntercept,
@@ -339,7 +343,7 @@ export default function PrediksiPage() {
         if ((err as Error).name === "AbortError") return
 
         try {
-          const fallback = predictStock(history, { horizonDays, trainRatio })
+          const fallback = predictStock(history, Number(selectedItem.quantity) || 0, { horizonDays, trainRatio })
           setPrediction(fallback)
           setPredictionSource("client")
           setPredictionError(null)
@@ -454,10 +458,11 @@ export default function PrediksiPage() {
 
   const chartData = useMemo(() => {
     if (!prediction || history.length === 0) return []
-    // Limit historical data to last 30 days for readability
     const HISTORY_DAYS = 30
     const cutoff = Date.now() - HISTORY_DAYS * MS_PER_DAY
-    const recentHistory = history.filter(h => h.timestamp >= cutoff)
+    const currentStock = Number(selectedItem?.quantity) || 0
+    const stockLevels = consumptionToStockLevels(history, currentStock)
+    const recentHistory = stockLevels.filter((h) => h.timestamp >= cutoff)
     const hist = recentHistory.map((h) => ({
       date: fmt(h.timestamp),
       timestamp: h.timestamp,
