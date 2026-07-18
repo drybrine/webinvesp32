@@ -48,19 +48,17 @@ Buka http://localhost:3000
 
 ### Prediksi Stok (Simple Linear Regression)
 - Halaman `/prediksi` — pilih item, atur horizon 1-90 hari
-- Model: regresi linear sederhana `Y = a + bX` (pure Python, no numpy)
-- Target model: `Y = konsumsi hari ini`, `X = konsumsi hari sebelumnya`
-- Pipeline: level stok → raw consumption → EMA(α=0.05) → OLS lag-1 consumption
-- Iterative forecast: prediksi konsumsi harian → kurangi stok saat ini
-- Train ratio 85/15 untuk split kronologis
-- Avg R² = 0.8962, 20/20 item R² positif (dataset dummy 20 suku cadang Honda, 365 hari)
+- Model: regresi linear sederhana OLS pada **kumulatif konsumsi** `ΣC(t) = a + b·t` (pure Python, no numpy)
+- `b = avgDailyConsumption` (laju konsumsi harian); forecast stok: `S_d = max(0, S0 − d·b)`
+- Pipeline: transaksi `out` → konsumsi harian + zero-fill kalender → OLS kumulatif → forecast stok
+- Train ratio 85/15 (split kronologis); metrik holdout MAE/RMSE/R² vs laju konstan (R² = kestabilan konsumsi, bukan akurasi stockout)
 - UI `/prediksi` menampilkan parameter model, grafik SVG historis + forecast, tabel forecast, dan testing model
 - Grafik prediksi detail: zona forecast, zona stok minimum, tooltip titik data, status aman/rendah/habis, ringkasan titik historis/forecast
 - Card `Perkiraan Habis` di `/prediksi` dihitung dari titik forecast pertama yang `predictedQuantity <= 0`, agar tanggalnya sama dengan grafik dan tabel forecast
 - Kartu ringkas di dashboard: top-3 barang paling berisiko stockout (server-side batch)
 - Notifikasi otomatis saat prediksi habis ≤ 7 hari
 - Badge sumber prediksi: "Linear Regression (server/client)"
-- Notebook seminar: replikasi model website dengan validasi MAE, RMSE, MAPE, dan R²
+- Notebook seminar: replikasi model website dengan validasi MAE, RMSE, dan R²
 
 ### Device Management (ESP32)
 - Setiap scanner memakai akun Firebase Auth unik yang dipetakan ke satu `deviceId`
@@ -193,36 +191,38 @@ GND           ←    GND                GND          ← GND
 ## Prediksi Stok
 
 ### Model
-Simple Linear Regression (OLS) dengan persamaan `Y = a + bX`. Model memprediksi konsumsi harian, bukan langsung level stok:
+Simple Linear Regression (OLS) pada **kumulatif konsumsi harian**:
 
-- `X` = konsumsi hari sebelumnya
-- `Y` = konsumsi hari ini
+- Fit: `ΣC(t) = a + b·t`
+- `b = avgDailyConsumption` (laju konsumsi per hari)
+- Forecast stok: `S_d = max(0, S0 − d·b)`
 
-Implementasi pure Python — tidak pakai numpy agar fit dalam Vercel 250MB serverless limit.
+Implementasi pure Python — tidak pakai numpy agar fit dalam Vercel 250MB serverless limit. Fallback TypeScript di `lib/stock-prediction.ts` memakai math yang sama.
 
 ### Pipeline
 ```
-1. Transaksi → daily stock series
-2. Level → raw consumption (clip restock ke 0)
-3. EMA smoothing (alpha=0.05) → smoothed consumption
-4. Linear Regression: `consumption_today = a + b * consumption_yesterday`
-5. Iterative forecast: predict consumption → kurangi dari current_stock
+1. Transaksi type=out → konsumsi harian
+2. Zero-fill gap kalender (hari tanpa out = 0) sampai hari ini
+3. Bangun deret kumulatif ΣC(t)
+4. OLS: ΣC(t) = a + b·t
+5. Forecast stok: S_d = max(0, S0 − d·b)
 ```
 
-### Kenapa EMA + Consumption?
-Training langsung pada level stok membuat forecast regresi linear menjadi garis lurus dan mudah terdistraksi event restock. Training pada konsumsi smoothed menjaga metodologi tetap Simple Linear Regression, tetapi forecast stok dihitung iteratif sehingga grafik tidak dipaksa menjadi garis lurus.
+### Kenapa kumulatif konsumsi?
+Training pada level stok rentan bias restock. Estimasi laju harian (`b`) dari kumulatif konsumsi cocok untuk early-warning stockout sparepart (demand intermittent). R² di UI mengukur kestabilan laju konsumsi holdout, bukan akurasi tanggal stockout.
 
 ### Grafik Website
-`components/prediction-chart.tsx` memakai SVG native, bukan Recharts. Grafik menampilkan 30 hari historis terakhir, forecast sesuai horizon, zona stok minimum, area forecast, tooltip hover/focus, status titik data, dan ringkasan jumlah titik historis/forecast.
+`components/prediction-chart.tsx` memakai SVG native, bukan Recharts. Grafik menampilkan 30 hari historis terakhir (rekonstruksi konsumsi-only), forecast sesuai horizon, zona stok minimum, area forecast, tooltip hover/focus, status titik data, dan ringkasan jumlah titik historis/forecast.
 
 **Important**: `useFirebaseTransactions()` now accepts `null` as limit to fetch ALL transactions (no `limitToLast`). For prediction accuracy, always pass `null` to get the full history rather than a subset.
 
-Card `Perkiraan Habis` pada `/prediksi` mengikuti forecast yang tampil di grafik/tabel: cari titik pertama pada `prediction.forecast` dengan `predictedQuantity <= 0`. API `stockoutDate` juga dihitung dari timestamp histori terakhir agar konsisten dengan forecast.
+Card `Perkiraan Habis` pada `/prediksi` mengikuti forecast yang tampil di grafik/tabel: cari titik pertama pada `prediction.forecast` dengan `predictedQuantity <= 0`. API `stockoutDate` dihitung dari `S0 / b` sejak base forecast.
 
-### Performa (dataset uji)
-- 20 suku cadang Honda AHASS, 365 hari, 6736 transaksi
-- Avg R² = 0.8962, R² > 0: 20/20 item
-- Test command: `npx tsx scripts/generate-honda-dummy.ts --test`
+### Evaluasi
+- Split kronologis default 85/15
+- Metrik: MAE, RMSE, R² pada konsumsi harian holdout vs laju konstan `b`
+- Jika `nTest < 2`, metrik ditandai tidak tersedia (tidak dihitung ulang di full data)
+- Test command: `npx tsx scripts/test-stock-prediction.ts`
 
 ### Endpoint
 ```
@@ -230,7 +230,7 @@ POST /api/predict
 Authorization: Bearer <Firebase ID token>
 Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
 Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
-Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, source }
+Response: { forecast, metrics: {mae, rmse, r2, available, nTrain, nTest}, stockoutDate, source }
 ```
 
 Source response: `lr-consumption-py` atau `lr-consumption-batch`.

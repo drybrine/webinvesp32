@@ -303,31 +303,33 @@ API web sengaja terbatas: `/api/predict` adalah Vercel Python function di `api/p
 
 ### Model
 
-Pure Python (no numpy) — OLS regresi linear sederhana dengan persamaan `Y = a + bX`. Model memprediksi konsumsi harian, bukan langsung level stok:
+Pure Python (no numpy) — OLS regresi linear sederhana pada **kumulatif konsumsi harian**:
 
-- `X` = konsumsi hari sebelumnya
-- `Y` = konsumsi hari ini
+- Fit: `ΣC(t) = a + b·t`
+- `b = avgDailyConsumption` (laju konsumsi per hari)
+- Forecast stok: `S_d = max(0, S0 − d·b)`
 
 ### Pipeline
 
 ```
-1. Build daily stock series dari transaksi
-2. Konversi level → raw consumption (clip restock ke 0)
-3. EMA smoothing (alpha=0.05) → smoothed consumption
-4. OLS fit: `consumption_today = a + b * consumption_yesterday`
-5. Iterative forecast: predict consumption → kurangi dari current_stock
+1. Transaksi type=out → konsumsi harian
+2. Zero-fill gap kalender (hari tanpa out = 0) sampai hari ini
+3. Bangun deret kumulatif ΣC(t)
+4. OLS fit: ΣC(t) = a + b·t
+5. Forecast stok: kurangi b dari stok saat ini tiap hari
 ```
 
 ### Variabel Regresi
 
 | Variabel | Deskripsi |
 |---------|-----------|
-| `X` | Konsumsi hari sebelumnya |
-| `Y` | Konsumsi hari ini |
+| `t` | Indeks hari relatif (0, 1, 2, …) |
+| `ΣC(t)` | Kumulatif konsumsi sampai hari t |
+| `b` | Laju konsumsi harian (avgDailyConsumption) |
 
-### Kenapa EMA + Consumption (bukan level stok)?
+### Kenapa kumulatif konsumsi (bukan level stok / lag-1)?
 
-Training langsung pada **level stok** membuat forecast simple linear regression menjadi garis lurus dan rentan terdistraksi event restock. Training pada **konsumsi smoothed** menjaga metode tetap regresi linear sederhana, sementara stok diforecast iteratif sehingga grafik tidak dipaksa menjadi garis lurus.
+Training pada **level stok** rentan bias restock. Training lag-1 pada konsumsi smoothed cocok untuk deret rutin, tetapi sparepart intermittent lebih cocok diestimasi sebagai **laju harian** untuk early-warning stockout. OLS kumulatif memberikan estimasi `b` yang transparan dan forecast stok yang mudah diinterpretasi (`S0 / b` hari).
 
 ### Endpoint
 
@@ -335,18 +337,18 @@ Training langsung pada **level stok** membuat forecast simple linear regression 
 POST /api/predict
 Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
 Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
-Response: { forecast, metrics: {mae, rmse, r2}, stockoutDate, source }
+Response: { forecast, metrics: {mae, rmse, r2, available, nTrain, nTest}, stockoutDate, source }
 Source: `lr-consumption-py` atau `lr-consumption-batch`
 ```
 
-### Performa (dataset uji: 20 suku cadang Honda, 365 hari)
+### Evaluasi
 
-| Metric | Nilai |
+| Aspek | Nilai |
 |--------|-------|
-| Avg R² | 0.8962 |
-| Items R² > 0 | 20/20 (100%) |
-| Metode | Simple Linear Regression lag-1 consumption |
-| Train ratio | 85/15 |
+| Metode | OLS kumulatif konsumsi (`ΣC = a + bt`) |
+| Train ratio | 85/15 kronologis |
+| Metrik | MAE / RMSE / R² pada konsumsi holdout vs laju konstan `b` |
+| Catatan | R² = kestabilan laju; jika `nTest < 2` metrik tidak tersedia |
 
 ### Fallback
 

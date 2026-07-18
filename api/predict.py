@@ -1,12 +1,12 @@
 """
 Stock prediction API - Simple Linear Regression.
 
-Pendekatan berbasis konsumsi: agregasi transaksi "out" harian,
-regresi OLS pada kumulatif konsumsi terhadap waktu (ΣC(t) = a + b*t),
-dan forecast stok iteratif dari stok saat ini dikurangi avgDailyConsumption.
+Pendekatan berbasis konsumsi:
+  transaksi out → konsumsi harian (zero-fill kalender)
+  → OLS kumulatif ΣC(t) = a + b*t  (b = avgDailyConsumption)
+  → forecast stok: S_d = max(0, S0 - d*b)
 
-Tidak lagi merekonstruksi histori stok dari currentQuantity yang
-mungkin rusak/outdated di node inventory Firebase.
+Tidak merekonstruksi histori stok dari currentQuantity inventory.
 """
 
 from http.server import BaseHTTPRequestHandler
@@ -342,20 +342,44 @@ def calculate_metrics(actual, predicted):
     return {'mae': mae, 'rmse': rmse, 'r2': r2}
 
 
-def build_consumption_from_transactions(transactions):
-    """Agregasi transaksi 'out' menjadi konsumsi harian."""
+def build_consumption_from_transactions(transactions, end_timestamp=None):
+    """Agregasi transaksi 'out' menjadi konsumsi harian + zero-fill kalender.
+
+    Hanya type == 'out' (missing type diabaikan, sama dengan client TS).
+    Hari tanpa transaksi out diisi 0 dari hari event pertama sampai
+    max(hari event terakhir, end_timestamp) agar laju tidak overestimate
+    karena event-day-only.
+    """
     daily = {}
     for tx in transactions:
-        tx_type = tx.get('type', 'out')
-        if tx_type != 'out':
+        if not isinstance(tx, dict):
             continue
-        ts = int(tx.get('timestamp', 0))
-        qty = abs(int(tx.get('quantity', 0)))
+        if tx.get('type') != 'out':
+            continue
+        try:
+            ts = int(tx.get('timestamp', 0))
+            qty = abs(int(tx.get('quantity', 0)))
+        except (TypeError, ValueError):
+            continue
+        if ts <= 0 or qty < 0:
+            continue
         day_key = (ts // MS_PER_DAY) * MS_PER_DAY
         daily[day_key] = daily.get(day_key, 0) + qty
 
-    days = sorted(daily.keys())
-    return [{'timestamp': day, 'consumption': daily[day]} for day in days]
+    if not daily:
+        return []
+
+    start = min(daily.keys())
+    end = max(daily.keys())
+    if end_timestamp is not None:
+        end = max(end, int((int(end_timestamp) // MS_PER_DAY) * MS_PER_DAY))
+
+    filled = []
+    ts = start
+    while ts <= end:
+        filled.append({'timestamp': ts, 'consumption': daily.get(ts, 0)})
+        ts += MS_PER_DAY
+    return filled
 
 
 def build_cumulative_series(data):
@@ -378,11 +402,13 @@ def fit_consumption_regression(data):
     base_ts = data[0]['timestamp']
     days, cumulative = build_cumulative_series(data)
     intercept, slope = linear_regression(days, cumulative)
-    avg_daily = slope
+    avg_daily = max(0.0, slope)
 
+    # Monday=0 .. Sunday=6 (UTC) — sama dengan client fallback
+    from datetime import timezone
     dow_totals = [[] for _ in range(7)]
     for point in data:
-        dow = datetime.fromtimestamp(point['timestamp'] / 1000).weekday()
+        dow = datetime.fromtimestamp(point['timestamp'] / 1000, tz=timezone.utc).weekday()
         dow_totals[dow].append(point['consumption'])
     dow_consumption = [mean(items) if items else avg_daily for items in dow_totals]
 
@@ -399,12 +425,14 @@ def fit_consumption_regression(data):
 def evaluate_consumption(model, test_data):
     """Evaluasi: bandingkan konsumsi aktual vs laju konstan (avgDailyConsumption)."""
     if not test_data:
-        return {'mae': 0.0, 'rmse': 0.0, 'r2': 0.0}
+        return {'mae': None, 'rmse': None, 'r2': None, 'available': False}
 
     actual = [p['consumption'] for p in test_data]
     avg = model['avgDailyConsumption']
     predicted = [avg] * len(actual)
-    return calculate_metrics(actual, predicted)
+    metrics = calculate_metrics(actual, predicted)
+    metrics['available'] = True
+    return metrics
 
 
 def estimate_stockout_date(model, current_quantity, base_timestamp):
@@ -432,20 +460,44 @@ def train_test_split(data, train_ratio=0.85):
     return data[:cut], data[cut:]
 
 
+def fill_calendar_days(data, end_timestamp=None):
+    """Zero-fill gap hari antara first..max(last, end) pada deret konsumsi."""
+    if not data:
+        return []
+    daily = {}
+    for point in data:
+        ts = int(point['timestamp'])
+        day = (ts // MS_PER_DAY) * MS_PER_DAY
+        daily[day] = daily.get(day, 0) + float(point.get('consumption', 0))
+    start = min(daily.keys())
+    end = max(daily.keys())
+    if end_timestamp is not None:
+        end = max(end, int((int(end_timestamp) // MS_PER_DAY) * MS_PER_DAY))
+    filled = []
+    ts = start
+    while ts <= end:
+        filled.append({'timestamp': ts, 'consumption': daily.get(ts, 0.0)})
+        ts += MS_PER_DAY
+    return filled
+
+
 def predict_stock(consumption_data, current_stock, horizon_days=14, train_ratio=0.85,
                   now_timestamp=None):
     """Pipeline: fit regresi kumulatif, evaluate, forecast stok iteratif."""
-    data = sorted(consumption_data, key=lambda p: p['timestamp'])
+    today_ts = current_day_timestamp() if now_timestamp is None else int((now_timestamp // MS_PER_DAY) * MS_PER_DAY)
+    data = fill_calendar_days(sorted(consumption_data, key=lambda p: p['timestamp']), end_timestamp=today_ts)
     if len(data) < 2:
         return {'error': 'Not enough data'}
 
     train, test = train_test_split(data, train_ratio)
     model = fit_consumption_regression(train)
-    test_for_metrics = test if len(test) >= 2 else data
-    metrics = evaluate_consumption(model, test_for_metrics)
+    # Jujur: jangan evaluasi ulang di full data saat test < 2 (hindari metrik optimis).
+    if len(test) >= 2:
+        metrics = evaluate_consumption(model, test)
+    else:
+        metrics = {'mae': None, 'rmse': None, 'r2': None, 'available': False}
 
     last_ts = data[-1]['timestamp']
-    today_ts = current_day_timestamp() if now_timestamp is None else int((now_timestamp // MS_PER_DAY) * MS_PER_DAY)
     forecast_base_ts = max(last_ts, today_ts)
 
     daily_consumption = model['avgDailyConsumption']
@@ -460,6 +512,11 @@ def predict_stock(consumption_data, current_stock, horizon_days=14, train_ratio=
             'predictedQuantity': round(forecast_qty, 1),
             'estimatedConsumption': round(daily_consumption, 1),
         })
+
+    def round_or_none(value, digits):
+        if value is None:
+            return None
+        return round(value, digits)
 
     return {
         'source': 'lr-consumption-py',
@@ -476,11 +533,12 @@ def predict_stock(consumption_data, current_stock, horizon_days=14, train_ratio=
             'lastConsumption': 0,
         },
         'metrics': {
-            'mae': round(metrics['mae'], 3),
-            'rmse': round(metrics['rmse'], 3),
-            'r2': round(metrics['r2'], 3),
+            'mae': round_or_none(metrics.get('mae'), 3),
+            'rmse': round_or_none(metrics.get('rmse'), 3),
+            'r2': round_or_none(metrics.get('r2'), 3),
             'nTrain': len(train),
             'nTest': len(test),
+            'available': bool(metrics.get('available')),
         },
         'forecast': forecast,
         'stockoutDate': estimate_stockout_date(model, current_stock, forecast_base_ts),

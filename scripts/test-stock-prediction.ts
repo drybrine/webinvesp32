@@ -114,9 +114,14 @@ function runTest(dataset: { name: string; history: DailyConsumptionPoint[] }): v
   console.log(`    n_train            : ${result.model.n}`)
 
   console.log("\n  Metrik Evaluasi")
-  console.log(`    MAE       : ${result.metrics.mae.toFixed(3)}`)
-  console.log(`    RMSE      : ${result.metrics.rmse.toFixed(3)}`)
-  console.log(`    R²        : ${result.metrics.r2.toFixed(3)}`)
+  if (result.metrics.available === false || result.metrics.r2 == null) {
+    console.log(`    (tidak tersedia — nTest < 2)`)
+  } else {
+    console.log(`    MAE       : ${Number(result.metrics.mae).toFixed(3)}`)
+    console.log(`    RMSE      : ${Number(result.metrics.rmse).toFixed(3)}`)
+    console.log(`    R²        : ${Number(result.metrics.r2).toFixed(3)}`)
+  }
+  console.log(`    nTrain/nTest: ${result.metrics.nTrain ?? result.model.n}/${result.metrics.nTest ?? "?"}`)
 
   console.log("\n  Forecast 14 hari ke depan")
   for (const f of result.forecast) {

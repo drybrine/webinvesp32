@@ -334,7 +334,14 @@ export default function PrediksiPage() {
             consumptionIntercept: data.model.consumptionIntercept,
             lastConsumption: data.model.lastConsumption,
           },
-          metrics: { mae: data.metrics.mae, rmse: data.metrics.rmse, r2: data.metrics.r2 },
+          metrics: {
+            mae: data.metrics.mae ?? null,
+            rmse: data.metrics.rmse ?? null,
+            r2: data.metrics.r2 ?? null,
+            available: data.metrics.available ?? data.metrics.r2 != null,
+            nTrain: data.metrics.nTrain,
+            nTest: data.metrics.nTest,
+          },
           forecast: data.forecast,
           stockoutDate: data.stockoutDate ? new Date(data.stockoutDate) : null,
         })
@@ -605,7 +612,7 @@ export default function PrediksiPage() {
                   <TableHead className="text-right">Avg Konsumsi</TableHead>
                   <TableHead className="text-right">Stok Terendah Forecast</TableHead>
                   <TableHead className="text-right">Perkiraan Habis</TableHead>
-                  <TableHead className="text-right">Akurasi</TableHead>
+                  <TableHead className="text-right">R² (kestabilan)</TableHead>
                   <TableHead className="text-right">Status Prediksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -712,9 +719,17 @@ export default function PrediksiPage() {
               hint={prediction.model.slope < 0 ? "Stok menurun" : "Stok naik/stabil"}
             />
             <MetricCard
-              label="Akurasi (R²)"
-              value={prediction.metrics.r2.toFixed(3)}
-              hint={`MAE ${prediction.metrics.mae.toFixed(2)} · RMSE ${prediction.metrics.rmse.toFixed(2)}`}
+              label="R² (kestabilan konsumsi)"
+              value={
+                prediction.metrics.r2 == null || prediction.metrics.available === false
+                  ? "—"
+                  : prediction.metrics.r2.toFixed(3)
+              }
+              hint={
+                prediction.metrics.r2 == null || prediction.metrics.available === false
+                  ? "Metrik holdout tidak tersedia (test < 2)"
+                  : `MAE ${Number(prediction.metrics.mae).toFixed(2)} · RMSE ${Number(prediction.metrics.rmse).toFixed(2)}`
+              }
             />
             <MetricCard
               icon={<AlertTriangle className={`w-4 h-4 ${forecastStockout ? "text-amber-500" : "text-muted-foreground"}`} />}
@@ -796,15 +811,27 @@ export default function PrediksiPage() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-lg border border-primary/10 bg-primary/[0.03] p-3 text-center">
                   <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">R²</div>
-                  <div className="text-xl font-bold text-primary mt-1 tabular-nums">{prediction.metrics.r2.toFixed(3)}</div>
+                  <div className="text-xl font-bold text-primary mt-1 tabular-nums">
+                    {prediction.metrics.r2 == null || prediction.metrics.available === false
+                      ? "—"
+                      : prediction.metrics.r2.toFixed(3)}
+                  </div>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-3 text-center">
                   <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">MAE</div>
-                  <div className="text-lg font-bold text-foreground mt-1 tabular-nums">{prediction.metrics.mae.toFixed(3)}</div>
+                  <div className="text-lg font-bold text-foreground mt-1 tabular-nums">
+                    {prediction.metrics.mae == null || prediction.metrics.available === false
+                      ? "—"
+                      : prediction.metrics.mae.toFixed(3)}
+                  </div>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-3 text-center">
                   <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">RMSE</div>
-                  <div className="text-lg font-bold text-foreground mt-1 tabular-nums">{prediction.metrics.rmse.toFixed(3)}</div>
+                  <div className="text-lg font-bold text-foreground mt-1 tabular-nums">
+                    {prediction.metrics.rmse == null || prediction.metrics.available === false
+                      ? "—"
+                      : prediction.metrics.rmse.toFixed(3)}
+                  </div>
                 </div>
               </div>
               {/* Technical parameters — secondary */}
@@ -812,8 +839,8 @@ export default function PrediksiPage() {
                 <KV k="Slope" v={`${prediction.model.slope.toFixed(4)} /hari`} />
                 <KV k="Intercept" v={prediction.model.intercept.toFixed(4)} />
                 <KV k="Avg Konsumsi" v={`${prediction.model.avgDailyConsumption.toFixed(2)} /hari`} />
-                <KV k="n train" v={String(prediction.model.n)} />
-                <KV k="n test" v={String(Math.max(0, history.length - prediction.model.n))} />
+                <KV k="n train" v={String(prediction.metrics.nTrain ?? prediction.model.n)} />
+                <KV k="n test" v={String(prediction.metrics.nTest ?? Math.max(0, history.length - prediction.model.n))} />
                 <KV k="Horizon" v={`${horizonDays} hari`} />
               </div>
             </CardContent>

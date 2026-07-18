@@ -85,13 +85,13 @@ Legacy data migration: if the production database still has `price` on `/invento
 Primary prediction runs on **Python serverless** (`api/predict.py`) — pure Python Simple Linear Regression / OLS (no numpy, fits Vercel 250MB limit). Pipeline:
 
 ```
-transactions → daily stock series → raw consumption (clip restock ke 0)
-→ EMA smoothing (α=0.05)
-→ simple linear regression: Y = consumption_today, X = consumption_yesterday
-→ iterative forecast: predict consumption → subtract from current stock
+transactions (type=out) → daily consumption + zero-fill calendar gaps
+→ cumulative series ΣC(t)
+→ OLS: ΣC(t) = a + b*t   (b = avgDailyConsumption)
+→ forecast: S_d = max(0, S0 − d·b)
 ```
 
-Performance (dataset: 20 suku cadang Honda, 365 hari, 6736 tx): avg R²=0.8962, R² > 0: 20/20.
+Train/test split kronologis default 85/15. Metrik MAE/RMSE/R² membandingkan konsumsi harian holdout vs laju konstan `b`. Jika `nTest < 2`, metrik ditandai tidak tersedia (tidak dihitung ulang di full data). R² mengukur kestabilan laju konsumsi, bukan akurasi tanggal stockout.
 
 **Client-side fallback** in `lib/stock-prediction.ts` (TypeScript, same OLS math) — used if Python serverless fails or `/api/predict` is unavailable in local `next start`. Badge shows "Linear Regression (server)" or "Linear Regression (client)".
 
