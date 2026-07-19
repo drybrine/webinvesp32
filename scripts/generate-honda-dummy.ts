@@ -216,8 +216,12 @@ function testPrediction(part: SparePart, txs: Transaction[]) {
       : null
 
     const status = lowest < part.minStock ? "🔴 RISK" : lowest < part.minStock * 2 ? "🟡 WATCH" : "🟢 OK"
+    const r2Text =
+      prediction.metrics.r2 == null || prediction.metrics.available === false
+        ? "n/a"
+        : prediction.metrics.r2.toFixed(3)
     console.log(
-      `  ${status} ${part.name.padEnd(50)} stok=${finalStock.toString().padStart(3)} | konsumsi=${prediction.model.avgDailyConsumption.toFixed(2).padStart(5)}/hari | R²=${prediction.metrics.r2.toFixed(3)} | habis=${stockoutDay !== null ? 'hari ke-' + stockoutDay : '—'}`,
+      `  ${status} ${part.name.padEnd(50)} stok=${finalStock.toString().padStart(3)} | konsumsi=${prediction.model.avgDailyConsumption.toFixed(2).padStart(5)}/hari | R²=${r2Text} | habis=${stockoutDay !== null ? 'hari ke-' + stockoutDay : '—'}`,
     )
   } catch (e) {
     console.log(`  ⚠ Error untuk ${part.name}: ${(e as Error).message}`)
@@ -300,16 +304,19 @@ if (testOnly) {
     if (consumptionData.length >= 2) {
       try {
         const p = predictStock(consumptionData, finalStock, { horizonDays: 14, trainRatio: 0.8 })
-        accuracies.push(p.metrics.r2)
+        if (p.metrics.r2 != null && p.metrics.available !== false) {
+          accuracies.push(p.metrics.r2)
+        }
       } catch {/* skip */}
     }
   }
 
-  const avgR2 = accuracies.reduce((s, v) => s + v, 0) / accuracies.length
+  const avgR2 = accuracies.length === 0 ? 0 : accuracies.reduce((s, v) => s + v, 0) / accuracies.length
   const okCount = accuracies.filter(r => r > 0).length
   console.log(`  Total item: ${HONDA_PARTS.length}`)
+  console.log(`  Evaluated:  ${accuracies.length}`)
   console.log(`  Average R²: ${avgR2.toFixed(4)}`)
-  console.log(`  R² > 0:     ${okCount}/${HONDA_PARTS.length} (${((okCount / HONDA_PARTS.length) * 100).toFixed(0)}%)`)
+  console.log(`  R² > 0:     ${okCount}/${accuracies.length || HONDA_PARTS.length} (${accuracies.length ? ((okCount / accuracies.length) * 100).toFixed(0) : 0}%)`)
 }
 
 // =============================================================================

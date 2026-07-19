@@ -56,9 +56,9 @@ interface BatchPredictionRisk {
   avgDailyConsumption?: number
   predictedLowest?: number
   daysToStockout?: number | null
-  r2?: number
-  mae?: number
-  rmse?: number
+  r2?: number | null
+  mae?: number | null
+  rmse?: number | null
   slope?: number
   forecast?: Array<{ timestamp: number; predictedQuantity: number; estimatedConsumption: number }>
 }
@@ -169,9 +169,9 @@ function buildSummaryRows(items: InventoryItem[], risks: BatchPredictionRisk[]):
         daysToStockout === null || Number.isNaN(daysToStockout)
           ? null
           : new Date(Date.now() + daysToStockout * MS_PER_DAY),
-      r2: toNumber(risk.r2),
-      mae: toNumber(risk.mae),
-      rmse: toNumber(risk.rmse),
+      r2: risk.r2 == null || !Number.isFinite(Number(risk.r2)) ? null : Number(risk.r2),
+      mae: risk.mae == null || !Number.isFinite(Number(risk.mae)) ? null : Number(risk.mae),
+      rmse: risk.rmse == null || !Number.isFinite(Number(risk.rmse)) ? null : Number(risk.rmse),
       status: getSummaryStatus(predictedLowest, minStock),
     })
   }
