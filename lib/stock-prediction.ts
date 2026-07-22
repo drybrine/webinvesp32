@@ -6,7 +6,11 @@
  *   → OLS kumulatif ΣC(t) = a + b*t  (b = avgDailyConsumption)
  *   → forecast stok: S_d = max(0, S0 - d*b)
  *
- * Tidak merekonstruksi histori stok dari currentQuantity inventory.
+ * Evaluasi holdout (Opsi A):
+ *   - R² pada deret kumulatif ΣC vs a+b·t (kecocokan tren / prediksi stok)
+ *   - MAE/RMSE pada level stok holdout (S_train − d·b vs stok aktual)
+ *
+ * Tidak merekonstruksi histori stok dari currentQuantity inventory untuk fit model.
  */
 
 export interface StockDataPoint {
@@ -47,11 +51,19 @@ export interface RegressionModel {
 }
 
 export interface EvaluationMetrics {
-  /** Mean Absolute Error; null jika test set tidak cukup */
+  /**
+   * MAE level stok pada holdout (unit stok).
+   * Membandingkan stok aktual ter-rekonstruksi vs S_train − d·b.
+   * null jika test set tidak cukup.
+   */
   mae: number | null
-  /** Root Mean Squared Error; null jika test set tidak cukup */
+  /** RMSE level stok pada holdout (unit stok); null jika test < 2 */
   rmse: number | null
-  /** Coefficient of determination; null jika test set tidak cukup */
+  /**
+   * R² deret kumulatif ΣC pada holdout: aktual vs â + b̂·t.
+   * Mengukur kecocokan tren pengurangan stok / konsumsi kumulatif.
+   * null jika test set tidak cukup.
+   */
   r2: number | null
   /** false bila metrik tidak dihitung (test < 2) */
   available?: boolean
@@ -236,14 +248,56 @@ export function predict(model: RegressionModel): number {
 }
 
 /**
- * Evaluasi model: bandingkan konsumsi aktual harian di testData
- * terhadap prediksi laju konstan (avgDailyConsumption).
+ * Evaluasi holdout (Opsi A):
+ * - R² pada ΣC(t) vs a + b·t (kecocokan tren kumulatif / prediksi stok)
+ * - MAE/RMSE pada level stok holdout: aktual vs S_train − d·b
+ *
+ * currentStock = stok saat ini (akhir deret train+test).
  */
-export function evaluate(model: RegressionModel, testData: DailyConsumptionPoint[]): EvaluationMetrics {
-  if (testData.length === 0) return { mae: null, rmse: null, r2: null, available: false }
-  const actualDaily = testData.map((p) => p.consumption)
-  const predictedDaily = testData.map(() => model.avgDailyConsumption)
-  return calculateMetrics(actualDaily, predictedDaily)
+export function evaluate(
+  model: RegressionModel,
+  trainData: DailyConsumptionPoint[],
+  testData: DailyConsumptionPoint[],
+  currentStock: number,
+): EvaluationMetrics {
+  if (testData.length < 2 || trainData.length < 1) {
+    return { mae: null, rmse: null, r2: null, available: false }
+  }
+
+  const full = [...trainData, ...testData]
+  const stockLevels = consumptionToStockLevels(full, currentStock)
+  const trainLen = trainData.length
+  const stockAfterTrain = stockLevels[trainLen - 1]?.quantity ?? currentStock
+  const b = model.avgDailyConsumption
+
+  const actualStock: number[] = []
+  const predictedStock: number[] = []
+  for (let j = 0; j < testData.length; j++) {
+    actualStock.push(stockLevels[trainLen + j]?.quantity ?? 0)
+    predictedStock.push(Math.max(0, stockAfterTrain - (j + 1) * b))
+  }
+  const stockMetrics = calculateMetrics(actualStock, predictedStock)
+
+  // R² kumulatif pada holdout: ΣC dari awal train vs a + b·t
+  const baseTs = model.baseTimestamp
+  const cumTrain = trainData.reduce((sum, p) => sum + p.consumption, 0)
+  let running = 0
+  const actualCum: number[] = []
+  const predictedCum: number[] = []
+  for (const point of testData) {
+    running += point.consumption
+    const t = Math.round((point.timestamp - baseTs) / MS_PER_DAY)
+    actualCum.push(cumTrain + running)
+    predictedCum.push(model.intercept + b * t)
+  }
+  const cumMetrics = calculateMetrics(actualCum, predictedCum)
+
+  return {
+    mae: stockMetrics.mae,
+    rmse: stockMetrics.rmse,
+    r2: cumMetrics.r2,
+    available: true,
+  }
 }
 
 /**
@@ -259,7 +313,10 @@ export function trainTestSplit(
   return { train: sorted.slice(0, cut), test: sorted.slice(cut) }
 }
 
-/** Perkirakan tanggal stok habis dari stok saat ini. */
+/**
+ * Perkirakan tanggal stok habis dari stok saat ini.
+ * days = ceil(S0 / b) — sama dengan first forecast point predictedQuantity <= 0.
+ */
 export function estimateStockoutDate(
   model: RegressionModel,
   currentQty?: number,
@@ -271,8 +328,8 @@ export function estimateStockoutDate(
   const dailyConsumption = model.avgDailyConsumption
   if (dailyConsumption <= 0) return null
 
-  const daysToStockout = quantity / dailyConsumption
-  return new Date(baseTimestamp + Math.round(daysToStockout) * MS_PER_DAY)
+  const daysToStockout = Math.ceil(quantity / dailyConsumption)
+  return new Date(baseTimestamp + daysToStockout * MS_PER_DAY)
 }
 
 /**
@@ -307,10 +364,10 @@ export function predictStock(
 
   const { train, test } = trainTestSplit(sorted, trainRatio)
   const model = fitLinearRegression(train)
-  // Jujur: jangan evaluasi full data saat test < 2
+  // Holdout: R² kumulatif + MAE/RMSE stok; jangan evaluasi full data saat test < 2
   const metrics =
     test.length >= 2
-      ? { ...evaluate(model, test), nTrain: train.length, nTest: test.length }
+      ? { ...evaluate(model, train, test, currentStock), nTrain: train.length, nTest: test.length }
       : { mae: null, rmse: null, r2: null, available: false, nTrain: train.length, nTest: test.length }
 
   const lastTimestamp = sorted[sorted.length - 1].timestamp

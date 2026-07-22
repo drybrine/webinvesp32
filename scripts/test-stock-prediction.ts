@@ -7,7 +7,7 @@
  *
  * Output:
  *  - Parameter model (slope, intercept)
- *  - Metrik evaluasi (MAE, RMSE, R²)
+ *  - Metrik evaluasi holdout (R² tren kumulatif, MAE/RMSE stok)
  *  - Forecast 14 hari ke depan
  *  - Perkiraan tanggal stockout (jika ada)
  */
@@ -113,13 +113,13 @@ function runTest(dataset: { name: string; history: DailyConsumptionPoint[] }): v
   console.log(`    totalConsumption   : ${result.model.totalConsumption.toFixed(2)}`)
   console.log(`    n_train            : ${result.model.n}`)
 
-  console.log("\n  Metrik Evaluasi")
+  console.log("\n  Metrik Evaluasi (holdout)")
   if (result.metrics.available === false || result.metrics.r2 == null) {
     console.log(`    (tidak tersedia — nTest < 2)`)
   } else {
-    console.log(`    MAE       : ${Number(result.metrics.mae).toFixed(3)}`)
-    console.log(`    RMSE      : ${Number(result.metrics.rmse).toFixed(3)}`)
-    console.log(`    R²        : ${Number(result.metrics.r2).toFixed(3)}`)
+    console.log(`    R² tren  : ${Number(result.metrics.r2).toFixed(3)}  (ΣC vs a+b·t)`)
+    console.log(`    MAE stok : ${Number(result.metrics.mae).toFixed(3)}`)
+    console.log(`    RMSE stok: ${Number(result.metrics.rmse).toFixed(3)}`)
   }
   console.log(`    nTrain/nTest: ${result.metrics.nTrain ?? result.model.n}/${result.metrics.nTest ?? "?"}`)
 

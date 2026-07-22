@@ -553,24 +553,28 @@ export const firebaseHelpers = {
     }
   },
 
-  // One-time fetch of all transactions — uses get() not onValue().
-  // Prediction needs the full history; do NOT subscribe to everything.
-  // recentDays: limit fetch to recent N days (default 90 for prediction, null for all)
+  // One-time fetch of transactions — uses get() not onValue().
+  // Do NOT subscribe to the full /transactions tree on every page.
+  //
+  // recentDays:
+  //   null      → full history (wajib untuk /prediksi detail + ringkasan)
+  //   number    → last N days (dashboard risk: 90)
+  //   undefined → treated as 90 (legacy default; prefer explicit null | number)
+  //
+  // PENTING: omit arg ≠ full history. `/prediksi` harus pass `null`.
   fetchAllTransactions: async (recentDays?: number | null) => {
     if (!database || !dbRefs || !dbRefs.transactions) throw new Error("Firebase tidak tersedia — operasi gagal")
-    
+
     if (recentDays === null) {
-      // Fetch all (for prediction accuracy)
       const allQuery = ref(database, "transactions")
       const snapshot = await get(allQuery)
       const data = snapshot.val()
       if (!data) return []
       return Object.keys(data).map((key) => ({ ...data[key], id: key }))
     }
-    
-    // Fetch only recent N days (default 90)
-    const days = recentDays || 90
-    const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000)
+
+    const days = recentDays ?? 90
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
     const recentQuery = query(ref(database, "transactions"), orderByChild("timestamp"), startAt(cutoff))
     const snapshot = await get(recentQuery)
     const data = snapshot.val()

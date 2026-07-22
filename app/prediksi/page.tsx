@@ -289,8 +289,8 @@ export default function PrediksiPage() {
     const fetchFromAPI = async () => {
       setPredictionError(null)
       try {
-        // One-time fetch of all transactions for accurate prediction
-        const allTxData = await firebaseHelpers.fetchAllTransactions()
+        // Full history (null) — jangan omit arg (default 90 hari merusak b / R² tren)
+        const allTxData = await firebaseHelpers.fetchAllTransactions(null)
         const allTxs = allTxData as Array<Record<string, unknown>>
         const itemTx = allTxs
           .filter((t: Record<string, unknown>) => t.productBarcode === selectedItem.barcode)
@@ -386,7 +386,8 @@ export default function PrediksiPage() {
 
     const fetchSummary = async () => {
       try {
-        const allTxData = await firebaseHelpers.fetchAllTransactions()
+        // Full history (null) for ringkasan prediksi — default 90 hari merusak model
+        const allTxData = await firebaseHelpers.fetchAllTransactions(null)
         const txs = (allTxData as Array<Record<string, unknown>>).map((t) => ({
           productBarcode: t.productBarcode,
           timestamp: Number(t.timestamp) || Date.now(),
@@ -417,6 +418,7 @@ export default function PrediksiPage() {
               horizonDays,
               trainRatio,
               topN: chunk.length,
+              // Client already sends full history; keep server filter wide
               recentDays: 3650,
             }),
             signal: controller.signal,
@@ -436,7 +438,7 @@ export default function PrediksiPage() {
         if ((err as Error).name === "AbortError") return
 
         try {
-          const allTxData = await firebaseHelpers.fetchAllTransactions()
+          const allTxData = await firebaseHelpers.fetchAllTransactions(null)
           const txs = (allTxData as Array<Record<string, unknown>>).map((t) => ({
             productBarcode: t.productBarcode,
             timestamp: Number(t.timestamp) || Date.now(),
@@ -612,7 +614,7 @@ export default function PrediksiPage() {
                   <TableHead className="text-right">Avg Konsumsi</TableHead>
                   <TableHead className="text-right">Stok Terendah Forecast</TableHead>
                   <TableHead className="text-right">Perkiraan Habis</TableHead>
-                  <TableHead className="text-right">R² (kestabilan)</TableHead>
+                  <TableHead className="text-right">R² (tren stok)</TableHead>
                   <TableHead className="text-right">Status Prediksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -656,9 +658,9 @@ export default function PrediksiPage() {
                           "—"
                         ) : (
                           <div className="font-mono text-xs leading-relaxed">
-                            <div className="font-semibold">R² {row.r2.toFixed(3)}</div>
+                            <div className="font-semibold">R² tren {row.r2.toFixed(3)}</div>
                             <div className="text-muted-foreground">
-                              MAE {row.mae.toFixed(2)} · RMSE {row.rmse.toFixed(2)}
+                              MAE stok {row.mae.toFixed(2)} · RMSE {row.rmse.toFixed(2)}
                             </div>
                           </div>
                         )}
@@ -719,7 +721,7 @@ export default function PrediksiPage() {
               hint={prediction.model.slope < 0 ? "Stok menurun" : "Stok naik/stabil"}
             />
             <MetricCard
-              label="R² (kestabilan konsumsi)"
+              label="R² (tren kumulatif)"
               value={
                 prediction.metrics.r2 == null || prediction.metrics.available === false
                   ? "—"
@@ -728,7 +730,7 @@ export default function PrediksiPage() {
               hint={
                 prediction.metrics.r2 == null || prediction.metrics.available === false
                   ? "Metrik holdout tidak tersedia (test < 2)"
-                  : `MAE ${Number(prediction.metrics.mae).toFixed(2)} · RMSE ${Number(prediction.metrics.rmse).toFixed(2)}`
+                  : `MAE stok ${Number(prediction.metrics.mae).toFixed(2)} · RMSE stok ${Number(prediction.metrics.rmse).toFixed(2)}`
               }
             />
             <MetricCard
@@ -803,14 +805,14 @@ export default function PrediksiPage() {
             <CardHeader>
               <CardTitle className="text-base">Testing Model</CardTitle>
               <CardDescription>
-                Detail regresi linear konsumsi harian dan metrik evaluasi (train/test split kronologis)
+                Holdout kronologis 85/15: R² pada ΣC vs a+b·t (tren), MAE/RMSE pada level stok
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Key metrics — visually prominent */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-lg border border-primary/10 bg-primary/[0.03] p-3 text-center">
-                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">R²</div>
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">R² tren</div>
                   <div className="text-xl font-bold text-primary mt-1 tabular-nums">
                     {prediction.metrics.r2 == null || prediction.metrics.available === false
                       ? "—"
@@ -818,7 +820,7 @@ export default function PrediksiPage() {
                   </div>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-3 text-center">
-                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">MAE</div>
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">MAE stok</div>
                   <div className="text-lg font-bold text-foreground mt-1 tabular-nums">
                     {prediction.metrics.mae == null || prediction.metrics.available === false
                       ? "—"
@@ -826,7 +828,7 @@ export default function PrediksiPage() {
                   </div>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-3 text-center">
-                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">RMSE</div>
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">RMSE stok</div>
                   <div className="text-lg font-bold text-foreground mt-1 tabular-nums">
                     {prediction.metrics.rmse == null || prediction.metrics.available === false
                       ? "—"

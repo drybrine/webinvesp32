@@ -91,13 +91,15 @@ transactions (type=out) → daily consumption + zero-fill calendar gaps
 → forecast: S_d = max(0, S0 − d·b)
 ```
 
-Train/test split kronologis default 85/15. Metrik MAE/RMSE/R² membandingkan konsumsi harian holdout vs laju konstan `b`. Jika `nTest < 2`, metrik ditandai tidak tersedia (tidak dihitung ulang di full data). R² mengukur kestabilan laju konsumsi, bukan akurasi tanggal stockout.
+Train/test split kronologis default 85/15. Metrik holdout (Opsi A): R² membandingkan ΣC aktual vs a+b·t (kecocokan tren kumulatif / prediksi stok); MAE/RMSE membandingkan level stok holdout aktual vs S_train − d·b. Jika `nTest < 2`, metrik ditandai tidak tersedia (tidak dihitung ulang di full data). Semakin tinggi R² tren dan semakin rendah MAE stok, semakin baik model menjelaskan pengurangan stok.
 
 **Client-side fallback** in `lib/stock-prediction.ts` (TypeScript, same OLS math) — used if Python serverless fails or `/api/predict` is unavailable in local `next start`. Badge shows "Linear Regression (server)" or "Linear Regression (client)".
 
 The `/prediksi` page calls single-item prediction and displays only the regression/forecast outputs needed for the thesis: model parameters, chart, metrics, forecast table, and testing model details. The dashboard calls batch mode (`mode: 'batch'`) to get top-N risk items. Standalone test: `scripts/test-stock-prediction.ts`. Minimum 2 points to fit — callers must guard.
 
-**Important**: `useFirebaseTransactions()` now accepts `null` as limit to fetch ALL transactions (no `limitToLast`). For prediction accuracy, always pass `null` to get the full history rather than a subset.
+**Important**: `useFirebaseTransactions()` accepts `null` as limit to fetch ALL transactions (no `limitToLast`). For prediction accuracy, always pass `null` to get the full history rather than a subset.
+
+**Important**: `firebaseHelpers.fetchAllTransactions(recentDays?)` — pass `null` for full history on `/prediksi` (detail + ringkasan + client fallback). Omitting the arg defaults to **90 days** (legacy). Dashboard risk via `AlertProvider` should keep `fetchAllTransactions(90)`.
 
 The prediction chart is hand-built SVG with no chart library dependency. It shows the last 30 days of history, forecast area, minimum-stock zone, hover/focus tooltip, safe/low/stockout status, and summary counts. Keep this SVG approach unless production build testing proves a new chart library works with the custom splitChunks config.
 

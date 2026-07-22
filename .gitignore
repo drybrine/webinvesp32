@@ -113,3 +113,6 @@ docs/2026-06-30-doc-sync-design.md
 docs/superpowers/
 opencode.json
 skills-lock.json
+
+# Local RTDB backups from seed scripts
+backups/

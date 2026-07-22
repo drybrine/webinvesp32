@@ -6,7 +6,11 @@ Pendekatan berbasis konsumsi:
   → OLS kumulatif ΣC(t) = a + b*t  (b = avgDailyConsumption)
   → forecast stok: S_d = max(0, S0 - d*b)
 
-Tidak merekonstruksi histori stok dari currentQuantity inventory.
+Evaluasi holdout (Opsi A):
+  - R² pada deret kumulatif ΣC vs a+b·t (kecocokan tren / prediksi stok)
+  - MAE/RMSE pada level stok holdout (S_train − d·b vs stok aktual)
+
+Tidak merekonstruksi histori stok dari currentQuantity inventory untuk fit model.
 """
 
 from http.server import BaseHTTPRequestHandler
@@ -241,7 +245,8 @@ class handler(BaseHTTPRequestHandler):
                 if days_to_stockout is None:
                     avg_daily = result['model'].get('avgDailyConsumption', 0)
                     if avg_daily > 0 and current_qty > 0:
-                        days_to_stockout = round(current_qty / avg_daily)
+                        # ceil: match iterative forecast first day predictedQuantity <= 0
+                        days_to_stockout = math.ceil(current_qty / avg_daily)
 
                 risks.append({
                     'itemId': item.get('id'),
@@ -422,20 +427,61 @@ def fit_consumption_regression(data):
     }
 
 
-def evaluate_consumption(model, test_data):
-    """Evaluasi: bandingkan konsumsi aktual vs laju konstan (avgDailyConsumption)."""
-    if not test_data:
+def evaluate_consumption(model, train_data, test_data, current_stock):
+    """Evaluasi holdout (Opsi A):
+
+    - R² pada ΣC(t) vs a + b·t (kecocokan tren kumulatif / prediksi stok)
+    - MAE/RMSE pada level stok holdout: aktual vs S_train − d·b
+
+    current_stock = stok saat ini (akhir deret train+test).
+    """
+    if not test_data or len(test_data) < 2 or not train_data:
         return {'mae': None, 'rmse': None, 'r2': None, 'available': False}
 
-    actual = [p['consumption'] for p in test_data]
-    avg = model['avgDailyConsumption']
-    predicted = [avg] * len(actual)
-    metrics = calculate_metrics(actual, predicted)
-    metrics['available'] = True
-    return metrics
+    full = list(train_data) + list(test_data)
+    # Rekonstruksi stok mundur dari current_stock (titik akhir = current)
+    stock_levels = []
+    stock = float(current_stock)
+    for point in reversed(full):
+        stock_levels.append(stock)
+        stock += float(point.get('consumption', 0))
+    stock_levels.reverse()
+
+    train_len = len(train_data)
+    stock_after_train = float(stock_levels[train_len - 1])
+    b = float(model['avgDailyConsumption'])
+
+    actual_stock = []
+    predicted_stock = []
+    for j in range(len(test_data)):
+        actual_stock.append(float(stock_levels[train_len + j]))
+        predicted_stock.append(max(0.0, stock_after_train - (j + 1) * b))
+    stock_metrics = calculate_metrics(actual_stock, predicted_stock)
+
+    # R² kumulatif holdout: ΣC dari awal train vs a + b·t
+    base_ts = model['baseTimestamp']
+    cum_train = sum(float(p.get('consumption', 0)) for p in train_data)
+    running = 0.0
+    actual_cum = []
+    predicted_cum = []
+    intercept = float(model['intercept'])
+    for point in test_data:
+        running += float(point.get('consumption', 0))
+        t = int(round((point['timestamp'] - base_ts) / MS_PER_DAY))
+        actual_cum.append(cum_train + running)
+        predicted_cum.append(intercept + b * t)
+    cum_metrics = calculate_metrics(actual_cum, predicted_cum)
+
+    return {
+        'mae': stock_metrics['mae'],
+        'rmse': stock_metrics['rmse'],
+        'r2': cum_metrics['r2'],
+        'available': True,
+    }
 
 
 def estimate_stockout_date(model, current_quantity, base_timestamp):
+    """Tanggal habis = base + ceil(S0/b) hari — sama dgn first forecast point <= 0."""
     base_date = datetime.fromtimestamp(base_timestamp / 1000)
     if current_quantity <= 0:
         return base_date.strftime('%Y-%m-%d')
@@ -445,8 +491,8 @@ def estimate_stockout_date(model, current_quantity, base_timestamp):
         return None
 
     quantity = float(current_quantity)
-    days_to_stockout = quantity / daily_consumption
-    stockout_date = base_date + timedelta(days=round(days_to_stockout))
+    days_to_stockout = math.ceil(quantity / daily_consumption)
+    stockout_date = base_date + timedelta(days=days_to_stockout)
     return stockout_date.strftime('%Y-%m-%d')
 
 
@@ -491,9 +537,9 @@ def predict_stock(consumption_data, current_stock, horizon_days=14, train_ratio=
 
     train, test = train_test_split(data, train_ratio)
     model = fit_consumption_regression(train)
-    # Jujur: jangan evaluasi ulang di full data saat test < 2 (hindari metrik optimis).
+    # Holdout: R² kumulatif + MAE/RMSE stok; jangan evaluasi full data saat test < 2.
     if len(test) >= 2:
-        metrics = evaluate_consumption(model, test)
+        metrics = evaluate_consumption(model, train, test, current_stock)
     else:
         metrics = {'mae': None, 'rmse': None, 'r2': None, 'available': False}
 

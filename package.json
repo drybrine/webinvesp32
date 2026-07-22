@@ -15,6 +15,8 @@
     "test:rules": "firebase emulators:exec --only database --config firebase.strict.json --project demo-stokmanager-test \"node --test tests/database.rules.test.mjs\"",
     "test:rules:raw": "node --test tests/database.rules.test.mjs",
     "test:predict": "python3 -m unittest tests/test_predict_api.py",
+    "seed:honda": "tsx scripts/generate-honda-dummy.ts",
+    "seed:honda:firebase": "tsx scripts/generate-honda-dummy.ts --firebase --confirm",
     "migrate:strip-price": "node scripts/migrate-strip-price.mjs",
     "migrate:strip-price:apply": "node scripts/migrate-strip-price.mjs --apply",
     "bootstrap:admin": "node scripts/bootstrap-admin.mjs"
