@@ -565,21 +565,32 @@ export const firebaseHelpers = {
   fetchAllTransactions: async (recentDays?: number | null) => {
     if (!database || !dbRefs || !dbRefs.transactions) throw new Error("Firebase tidak tersedia — operasi gagal")
 
+    const toRows = (data: Record<string, unknown> | null) => {
+      if (!data) return [] as Array<Record<string, unknown> & { id: string }>
+      return Object.keys(data).map((key) => ({ ...(data[key] as Record<string, unknown>), id: key }))
+    }
+
     if (recentDays === null) {
-      const allQuery = ref(database, "transactions")
-      const snapshot = await get(allQuery)
-      const data = snapshot.val()
-      if (!data) return []
-      return Object.keys(data).map((key) => ({ ...data[key], id: key }))
+      const snapshot = await get(ref(database, "transactions"))
+      return toRows(snapshot.val())
     }
 
     const days = recentDays ?? 90
     const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
-    const recentQuery = query(ref(database, "transactions"), orderByChild("timestamp"), startAt(cutoff))
-    const snapshot = await get(recentQuery)
-    const data = snapshot.val()
-    if (!data) return []
-    return Object.keys(data).map((key) => ({ ...data[key], id: key }))
+
+    // Prefer indexed range query; fallback to full get + client filter if index/query fails.
+    try {
+      const recentQuery = query(ref(database, "transactions"), orderByChild("timestamp"), startAt(cutoff))
+      const snapshot = await get(recentQuery)
+      return toRows(snapshot.val())
+    } catch (err) {
+      console.warn("[fetchAllTransactions] range query failed, falling back to full get:", err)
+      const snapshot = await get(ref(database, "transactions"))
+      return toRows(snapshot.val()).filter((row) => {
+        const ts = typeof row.timestamp === "number" ? row.timestamp : Number(row.timestamp)
+        return Number.isFinite(ts) && ts >= cutoff
+      })
+    }
   },
 
   addTransaction: async (transactionData: AddTransactionInput) => {

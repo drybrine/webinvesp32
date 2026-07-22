@@ -209,28 +209,43 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
     }
 
     const fetchRisks = async () => {
-      try {
-        const items = activeItems.map((i) => ({
-          id: i.id,
-          barcode: i.barcode,
-          name: i.name,
-          quantity: Number(i.quantity) || 0,
-          minStock: Number(i.minStock) || 0,
-        }))
+      const items = activeItems.map((i) => ({
+        id: i.id,
+        barcode: i.barcode,
+        name: i.name,
+        quantity: Number(i.quantity) || 0,
+        minStock: Number(i.minStock) || 0,
+      }))
 
+      // 1) Ambil transaksi 90 hari (dengan fallback full-get di helper).
+      //    Jika gagal total, pakai snapshot realtime hook (limit 500) agar UI tidak kosong.
+      let txs: Array<{ productBarcode: unknown; timestamp: number; quantity: number; type?: string }> = []
+      try {
         const allTxData = await firebaseHelpers.fetchAllTransactions(PREDICTION_RECENT_DAYS)
-        const txs = (allTxData as Array<Record<string, unknown>>).map((t) => ({
+        txs = (allTxData as Array<Record<string, unknown>>).map((t) => ({
           productBarcode: t.productBarcode,
           type: t.type as string | undefined,
           quantity: Number(t.quantity) || 0,
           timestamp: toTimestamp(t.timestamp),
         }))
+      } catch (txErr) {
+        console.warn("[AlertProvider] fetchAllTransactions failed, using live hook txs:", txErr)
+        txs = transactions.map((t) => ({
+          productBarcode: t.productBarcode,
+          type: t.type,
+          quantity: Number(t.quantity) || 0,
+          timestamp: toTimestamp(t.timestamp),
+        }))
+      }
 
-        let rawRisks: PredictionBatchItem[] = []
-        try {
-          const token = await getIdToken()
-          if (!token) throw new Error("Token kosong")
+      // 2) Client-first: selalu hitung lokal dulu supaya kartu prediksi tidak blank
+      //    meski /api/predict (Python) error / belum deploy / 401.
+      let rawRisks = buildClientBatchRisks(activeItems, txs)
 
+      // 3) Coba server batch; hanya ganti UI jika server mengembalikan ≥1 risk.
+      try {
+        const token = await getIdToken()
+        if (token) {
           const res = await fetch("/api/predict", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -245,36 +260,38 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
             }),
             signal: controller.signal,
           })
-
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          const data = await res.json()
-          if (data.error) throw new Error(data.error)
-          rawRisks = (data.risks || []) as PredictionBatchItem[]
-        } catch (serverErr) {
-          if ((serverErr as Error).name === "AbortError") return
-          console.warn("[AlertProvider] batch predict server failed, using client fallback:", serverErr)
-          rawRisks = buildClientBatchRisks(activeItems, txs)
+          if (res.ok) {
+            const data = await res.json()
+            if (!data.error && Array.isArray(data.risks) && data.risks.length > 0) {
+              rawRisks = data.risks as PredictionBatchItem[]
+            }
+          } else {
+            console.warn("[AlertProvider] /api/predict batch HTTP", res.status, "— keep client risks")
+          }
         }
-
-        if (controller.signal.aborted) return
-        applyRisks(rawRisks)
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return
-        console.warn("[AlertProvider] batch predict failed:", err)
-        // Last resort: client-only from empty tx list still clears UI honestly
-        setStockRisks([])
-        setPredictionRisks([])
-      } finally {
-        if (!controller.signal.aborted) {
-          setPredictionLoading(false)
-        }
+      } catch (serverErr) {
+        if ((serverErr as Error).name === "AbortError") return
+        console.warn("[AlertProvider] server batch failed — keep client risks:", serverErr)
       }
+
+      if (controller.signal.aborted) return
+      applyRisks(rawRisks)
+      if (!controller.signal.aborted) setPredictionLoading(false)
     }
 
-    fetchRisks()
+    fetchRisks().catch((err) => {
+      if ((err as Error).name === "AbortError") return
+      console.warn("[AlertProvider] prediction pipeline failed:", err)
+      if (!controller.signal.aborted) {
+        setStockRisks([])
+        setPredictionRisks([])
+        setPredictionLoading(false)
+      }
+    })
     return () => controller.abort()
-    // Jangan depend ke array `transactions` realtime — tiap scan membatalkan request prediksi.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- inventorySignature covers stock changes
+    // inventorySignature: re-run when stock/barcode set changes.
+    // transactions used only as emergency fallback source (not a dep — avoid abort storms).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getIdToken, inventoryLoading, inventorySignature])
 
   // Toast stockout risk (session-deduped)
