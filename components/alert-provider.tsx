@@ -1,11 +1,15 @@
 "use client"
 
-import { createContext, useContext, useEffect, useRef, useState } from "react"
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { useToast } from "@/hooks/use-toast"
-import { useRealtimeDeviceStatus, type DeviceStatus } from "@/hooks/use-realtime-device-status"
+import { useRealtimeDeviceStatus } from "@/hooks/use-realtime-device-status"
 import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-firebase"
 import { useAuth } from "@/components/auth-provider"
 import { firebaseHelpers } from "@/lib/firebase"
+import {
+  buildConsumptionFromTransactions,
+  predictStock,
+} from "@/lib/stock-prediction"
 
 interface StockRisk {
   itemId: string
@@ -33,25 +37,110 @@ interface PredictionContextValue {
 const PredictionContext = createContext<PredictionContextValue>({ risks: [], loading: false })
 export const usePredictionContext = () => useContext(PredictionContext)
 
+const PREDICTION_HORIZON_DAYS = 14
+const PREDICTION_TRAIN_RATIO = 0.85
+const PREDICTION_TOP_N = 3
+const PREDICTION_RECENT_DAYS = 90
+
+function isScannerOperator(operator: unknown): boolean {
+  if (typeof operator !== "string") return false
+  const value = operator.trim().toLowerCase()
+  return value === "scanner" || value === "esp32 scanner" || value.includes("scanner")
+}
+
+function toTimestamp(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+function buildClientBatchRisks(
+  items: Array<{ id: string; barcode?: string; name: string; quantity: number; minStock?: number; deleted?: boolean }>,
+  transactions: Array<{ productBarcode: unknown; timestamp: number; quantity: number; type?: string }>,
+): PredictionBatchItem[] {
+  const txByBarcode = new Map<string, typeof transactions>()
+  for (const tx of transactions) {
+    if (typeof tx.productBarcode !== "string" || tx.productBarcode.length === 0) continue
+    const existing = txByBarcode.get(tx.productBarcode) ?? []
+    existing.push(tx)
+    txByBarcode.set(tx.productBarcode, existing)
+  }
+
+  const risks: PredictionBatchItem[] = []
+  for (const item of items) {
+    if (!item.barcode || item.deleted) continue
+    const itemTx = txByBarcode.get(item.barcode) ?? []
+    const currentStock = Number(item.quantity) || 0
+    const consumptionData = buildConsumptionFromTransactions(
+      itemTx.map((tx) => ({
+        timestamp: toTimestamp(tx.timestamp),
+        quantity: Number(tx.quantity) || 0,
+        type: tx.type as "in" | "out" | "adjustment" | undefined,
+      })),
+    )
+    if (consumptionData.length < 2) continue
+
+    try {
+      const result = predictStock(consumptionData, currentStock, {
+        horizonDays: PREDICTION_HORIZON_DAYS,
+        trainRatio: PREDICTION_TRAIN_RATIO,
+      })
+      const predictedLowest = Math.min(...result.forecast.map((point) => point.predictedQuantity))
+      const stockoutIndex = result.forecast.findIndex((point) => point.predictedQuantity <= 0)
+      let daysToStockout: number | null = stockoutIndex === -1 ? null : stockoutIndex + 1
+      // Mirror server: extrapolate beyond horizon when b > 0
+      if (daysToStockout === null) {
+        const avgDaily = result.model.avgDailyConsumption
+        if (avgDaily > 0 && currentStock > 0) {
+          daysToStockout = Math.ceil(currentStock / avgDaily)
+        }
+      }
+
+      risks.push({
+        itemId: item.id,
+        predictedLowest,
+        daysToStockout,
+        avgDailyConsumption: result.model.avgDailyConsumption,
+        slope: result.model.slope,
+        forecast: result.forecast,
+      })
+    } catch {
+      // skip item
+    }
+  }
+
+  risks.sort((a, b) => {
+    if (a.daysToStockout != null && b.daysToStockout != null) return a.daysToStockout - b.daysToStockout
+    if (a.daysToStockout != null) return -1
+    if (b.daysToStockout != null) return 1
+    return a.predictedLowest - b.predictedLowest
+  })
+
+  return risks.slice(0, PREDICTION_TOP_N)
+}
+
 export function AlertProvider({ children }: { children: React.ReactNode }) {
-  const { role, getIdToken } = useAuth()
+  const { getIdToken } = useAuth()
   const { toast } = useToast()
   const { devices, loading: devicesLoading } = useRealtimeDeviceStatus()
   const { items: inventory, loading: inventoryLoading } = useFirebaseInventory()
+  // Cukup 500 terbaru untuk toast scanner; prediksi batch pakai fetchAllTransactions(90)
   const { transactions, loading: transactionsLoading } = useFirebaseTransactions(500)
-  
+
   const [stockRisks, setStockRisks] = useState<StockRisk[]>([])
-  const stockRisksRef = useRef<StockRisk[]>([])
   const [predictionRisks, setPredictionRisks] = useState<PredictionBatchItem[]>([])
   const [predictionLoading, setPredictionLoading] = useState(false)
 
-  // Update ref ketika stockRisks berubah
-  useEffect(() => {
-    stockRisksRef.current = stockRisks
-  }, [stockRisks])
+  // Signature stok inventory — re-fetch prediksi hanya saat qty/minStock berubah, bukan tiap TX event
+  const inventorySignature = useMemo(() => {
+    return inventory
+      .filter((i) => !i.deleted && i.barcode)
+      .map((i) => `${i.id}:${i.quantity}:${i.minStock ?? 0}:${i.barcode}`)
+      .sort()
+      .join("|")
+  }, [inventory])
 
   // ============================================================
-  // 1. BATTERY LOW ALERT - Monitor device battery levels
+  // 1. BATTERY LOW ALERT
   // ============================================================
   useEffect(() => {
     if (devicesLoading || devices.length === 0) return
@@ -82,14 +171,16 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
   }, [devices, devicesLoading, toast])
 
   // ============================================================
-  // 2. STOCKOUT RISK ALERT - Monitor inventory prediction
+  // 2. STOCKOUT RISK + DASHBOARD PREDICTION SUMMARY
   // ============================================================
   useEffect(() => {
-    if (inventoryLoading || transactionsLoading) {
+    if (inventoryLoading) {
       setPredictionLoading(true)
       return
     }
-    if (inventory.length === 0) {
+
+    const activeItems = inventory.filter((i) => !i.deleted && i.barcode)
+    if (activeItems.length === 0) {
       setStockRisks([])
       setPredictionRisks([])
       setPredictionLoading(false)
@@ -99,67 +190,78 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
     const controller = new AbortController()
     setPredictionLoading(true)
 
+    const applyRisks = (rawRisks: PredictionBatchItem[]) => {
+      setPredictionRisks(rawRisks)
+      const risks = rawRisks
+        .map((r) => {
+          const inv = inventory.find((i) => i.id === r.itemId)
+          if (!inv) return null
+          return {
+            itemId: r.itemId,
+            itemName: inv.name,
+            currentQuantity: Number(inv.quantity) || 0,
+            daysToStockout: r.daysToStockout,
+            avgDailyConsumption: Number(r.avgDailyConsumption) || 0,
+          }
+        })
+        .filter((r): r is StockRisk => r !== null)
+      setStockRisks(risks)
+    }
+
     const fetchRisks = async () => {
       try {
-        const items = inventory
-          .filter(i => !i.deleted && i.barcode)
-          .map(i => ({
-            id: i.id,
-            barcode: i.barcode,
-            name: i.name,
-            quantity: Number(i.quantity) || 0,
-            minStock: Number(i.minStock) || 0,
-          }))
-
-        const allTxData = await firebaseHelpers.fetchAllTransactions(90)  // recent90 days only
-        const txs = (allTxData as Array<Record<string, unknown>>).map(t => ({
-          productBarcode: t.productBarcode,
-          type: t.type,
-          quantity: Number(t.quantity) || 0,
-          timestamp: Number(t.timestamp) || Date.now(),
+        const items = activeItems.map((i) => ({
+          id: i.id,
+          barcode: i.barcode,
+          name: i.name,
+          quantity: Number(i.quantity) || 0,
+          minStock: Number(i.minStock) || 0,
         }))
 
-        const token = await getIdToken()
-        const res = await fetch("/api/predict", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            mode: "batch",
-            items,
-            transactions: txs,
-            horizonDays: 14,
-            trainRatio: 0.85,
-            topN: 3,
-            recentDays: 90,
-          }),
-          signal: controller.signal,
-        })
+        const allTxData = await firebaseHelpers.fetchAllTransactions(PREDICTION_RECENT_DAYS)
+        const txs = (allTxData as Array<Record<string, unknown>>).map((t) => ({
+          productBarcode: t.productBarcode,
+          type: t.type as string | undefined,
+          quantity: Number(t.quantity) || 0,
+          timestamp: toTimestamp(t.timestamp),
+        }))
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        if (data.error) throw new Error(data.error)
+        let rawRisks: PredictionBatchItem[] = []
+        try {
+          const token = await getIdToken()
+          if (!token) throw new Error("Token kosong")
 
-        const rawRisks = (data.risks || []) as PredictionBatchItem[]
-        setPredictionRisks(rawRisks)
-
-        const risks = rawRisks
-          .map((r: { itemId: string; predictedLowest: number; daysToStockout: number | null; avgDailyConsumption: number; slope: number }) => {
-            const inv = inventory.find(i => i.id === r.itemId)
-            if (!inv) return null
-            return {
-              itemId: r.itemId,
-              itemName: inv.name,
-              currentQuantity: inv.quantity,
-              daysToStockout: r.daysToStockout,
-              avgDailyConsumption: r.avgDailyConsumption,
-            }
+          const res = await fetch("/api/predict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              mode: "batch",
+              items,
+              transactions: txs,
+              horizonDays: PREDICTION_HORIZON_DAYS,
+              trainRatio: PREDICTION_TRAIN_RATIO,
+              topN: PREDICTION_TOP_N,
+              recentDays: PREDICTION_RECENT_DAYS,
+            }),
+            signal: controller.signal,
           })
-          .filter((r: StockRisk | null): r is StockRisk => r !== null)
 
-        setStockRisks(risks)
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const data = await res.json()
+          if (data.error) throw new Error(data.error)
+          rawRisks = (data.risks || []) as PredictionBatchItem[]
+        } catch (serverErr) {
+          if ((serverErr as Error).name === "AbortError") return
+          console.warn("[AlertProvider] batch predict server failed, using client fallback:", serverErr)
+          rawRisks = buildClientBatchRisks(activeItems, txs)
+        }
+
+        if (controller.signal.aborted) return
+        applyRisks(rawRisks)
       } catch (err) {
         if ((err as Error).name === "AbortError") return
         console.warn("[AlertProvider] batch predict failed:", err)
+        // Last resort: client-only from empty tx list still clears UI honestly
         setStockRisks([])
         setPredictionRisks([])
       } finally {
@@ -171,11 +273,13 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
 
     fetchRisks()
     return () => controller.abort()
-  }, [getIdToken, inventory, transactions, inventoryLoading, transactionsLoading])
+    // Jangan depend ke array `transactions` realtime — tiap scan membatalkan request prediksi.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- inventorySignature covers stock changes
+  }, [getIdToken, inventoryLoading, inventorySignature])
 
-  // Trigger toast untuk stockout risk
+  // Toast stockout risk (session-deduped)
   useEffect(() => {
-    if (inventoryLoading || transactionsLoading) return
+    if (inventoryLoading || predictionLoading) return
     if (stockRisks.length === 0) return
 
     const urgent = stockRisks.filter(
@@ -201,43 +305,62 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
       })
       sessionStorage.setItem(notifiedKey, Array.from(notifiedIds).join(","))
     }
-  }, [stockRisks, inventoryLoading, transactionsLoading, toast])
+  }, [stockRisks, inventoryLoading, predictionLoading, toast])
 
   // ============================================================
-  // 3. AUTO SCANNER TRANSACTION ALERT - Monitor scanner activity
+  // 3. AUTO SCANNER TRANSACTION ALERT
   // ============================================================
+  const scannerBootstrapRef = useRef(false)
+
   useEffect(() => {
-    if (transactionsLoading || transactions.length === 0) return
+    if (transactionsLoading) return
+    if (typeof window === "undefined") return
 
     const today = new Date().toISOString().slice(0, 10)
     const seenTsKey = `scanner-tx-last-seen-${today}`
-    const lastSeen = parseInt(
-      (typeof window !== "undefined" ? sessionStorage.getItem(seenTsKey) : null) || "0",
-      10
-    )
 
-    const scannerTxs = transactions
-      .filter((tx) => tx.operator === "Scanner" && typeof tx.timestamp === "number" && tx.timestamp > lastSeen)
+    // Normalize timestamps (Firebase kadang string)
+    const normalized = transactions
+      .map((tx) => ({
+        ...tx,
+        timestamp: toTimestamp(tx.timestamp),
+        operator: tx.operator,
+      }))
+      .filter((tx) => tx.timestamp > 0)
+
+    const scannerAll = normalized
+      .filter((tx) => isScannerOperator(tx.operator))
       .sort((a, b) => a.timestamp - b.timestamp)
+
+    // Bootstrap sekali per session/hari: set watermark ke max existing tanpa spam toast historis
+    if (!scannerBootstrapRef.current) {
+      scannerBootstrapRef.current = true
+      const stored = parseInt(sessionStorage.getItem(seenTsKey) || "0", 10)
+      if (!stored && scannerAll.length > 0) {
+        const maxTs = scannerAll[scannerAll.length - 1].timestamp
+        sessionStorage.setItem(seenTsKey, String(maxTs))
+        return
+      }
+    }
+
+    const lastSeen = parseInt(sessionStorage.getItem(seenTsKey) || "0", 10)
+    const scannerTxs = scannerAll.filter((tx) => tx.timestamp > lastSeen)
 
     if (scannerTxs.length === 0) return
 
-    // Toast maksimal 3 transaksi terbaru per batch
-    scannerTxs.slice(-3).forEach((tx) => {
+    // Toast maksimal 5 transaksi terbaru per batch (limit toast hook = 5)
+    scannerTxs.slice(-5).forEach((tx) => {
       const isIn = tx.type === "in"
+      const qty = Number(tx.quantity) || 0
       toast({
-        title: isIn ? "Barang Masuk (Auto)" : "Barang Keluar (Auto)",
-        description: `${tx.productName} — ${isIn ? "+" : ""}${tx.quantity} stok via Scanner`,
+        title: isIn ? "Barang Masuk (Scanner)" : "Barang Keluar (Scanner)",
+        description: `${tx.productName || tx.productBarcode || "Item"} — ${isIn ? "+" : "−"}${qty} stok via ${tx.operator || "Scanner"}`,
         variant: "default",
         duration: 5000,
       })
     })
 
-    const maxTs = Math.max(
-      ...transactions
-        .filter((tx) => tx.operator === "Scanner" && typeof tx.timestamp === "number")
-        .map((tx) => tx.timestamp)
-    )
+    const maxTs = Math.max(...scannerTxs.map((tx) => tx.timestamp), lastSeen)
     sessionStorage.setItem(seenTsKey, String(maxTs))
   }, [transactions, transactionsLoading, toast])
 
