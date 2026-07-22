@@ -565,9 +565,14 @@ export const firebaseHelpers = {
   fetchAllTransactions: async (recentDays?: number | null) => {
     if (!database || !dbRefs || !dbRefs.transactions) throw new Error("Firebase tidak tersedia — operasi gagal")
 
-    const toRows = (data: Record<string, unknown> | null) => {
-      if (!data) return [] as Array<Record<string, unknown> & { id: string }>
-      return Object.keys(data).map((key) => ({ ...(data[key] as Record<string, unknown>), id: key }))
+    type TxRow = Record<string, unknown> & { id: string }
+    const toRows = (data: unknown): TxRow[] => {
+      if (!data || typeof data !== "object") return []
+      const obj = data as Record<string, unknown>
+      return Object.keys(obj).map((key) => ({
+        ...(typeof obj[key] === "object" && obj[key] !== null ? (obj[key] as Record<string, unknown>) : {}),
+        id: key,
+      }))
     }
 
     if (recentDays === null) {
@@ -587,7 +592,8 @@ export const firebaseHelpers = {
       console.warn("[fetchAllTransactions] range query failed, falling back to full get:", err)
       const snapshot = await get(ref(database, "transactions"))
       return toRows(snapshot.val()).filter((row) => {
-        const ts = typeof row.timestamp === "number" ? row.timestamp : Number(row.timestamp)
+        const raw = row["timestamp"]
+        const ts = typeof raw === "number" ? raw : Number(raw)
         return Number.isFinite(ts) && ts >= cutoff
       })
     }
