@@ -32,7 +32,6 @@ import {
   Edit,
   Trash2,
   Minus,
-  Filter,
   Download,
   Search,
 } from "lucide-react"

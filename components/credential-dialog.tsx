@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { AlertTriangle, Check, Copy } from "lucide-react"
 import { Button, Label, Modal } from "@heroui/react"
 import Pdf417Barcode from "@/components/pdf417-barcode"
@@ -52,24 +52,25 @@ export function CredentialDialog({ credential, onClose }: { credential: Credenti
   const open = !!credential
   const [mounted, setMounted] = useState(open)
   const [visible, setVisible] = useState(open)
-  const dataRef = useRef<Credential | null>(credential)
-
-  if (credential) dataRef.current = credential
+  const [frozen, setFrozen] = useState<Credential | null>(credential)
 
   useEffect(() => {
-    if (open) {
+    if (open && credential) {
+      setFrozen(credential)
       setMounted(true)
       const id = requestAnimationFrame(() => setVisible(true))
       return () => cancelAnimationFrame(id)
     }
+
     setVisible(false)
     const t = window.setTimeout(() => setMounted(false), EXIT_MS)
     return () => window.clearTimeout(t)
-  }, [open])
+  }, [open, credential])
 
-  if (!mounted || !dataRef.current) return null
+  if (!mounted) return null
 
-  const data = dataRef.current
+  const data = open ? credential : frozen
+  if (!data) return null
 
   return (
     <Modal.Backdrop

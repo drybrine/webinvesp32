@@ -110,15 +110,13 @@ function DialogContent({ className, children, ...props }: React.HTMLAttributes<H
   const { open, setOpen } = useDialogCtx()
   const [mounted, setMounted] = React.useState(open)
   const [visible, setVisible] = React.useState(open)
-  const contentRef = React.useRef(children)
-
-  // Keep last open content so close animation still has body/footer
-  if (open) {
-    contentRef.current = children
-  }
+  // Freeze last open children in state (not ref) so close animation keeps content
+  // and react-hooks/refs lint stays clean.
+  const [frozenChildren, setFrozenChildren] = React.useState(children)
 
   React.useEffect(() => {
     if (open) {
+      setFrozenChildren(children)
       setMounted(true)
       const id = requestAnimationFrame(() => setVisible(true))
       return () => cancelAnimationFrame(id)
@@ -127,11 +125,12 @@ function DialogContent({ className, children, ...props }: React.HTMLAttributes<H
     setVisible(false)
     const t = window.setTimeout(() => setMounted(false), EXIT_MS)
     return () => window.clearTimeout(t)
-  }, [open])
+  }, [open, children])
 
   if (!mounted) return null
 
-  const childArray = React.Children.toArray(contentRef.current)
+  const rendered = open ? children : frozenChildren
+  const childArray = React.Children.toArray(rendered)
   const footers = childArray.filter(isDialogFooter)
   const rest = childArray.filter((child) => !isDialogFooter(child))
 
