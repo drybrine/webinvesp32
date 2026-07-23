@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
+import { LoadingSpinner } from "@/components/loading-spinner"
 
 export default function AdminUsersPage() {
   const { toast } = useToast()
@@ -147,7 +148,11 @@ export default function AdminUsersPage() {
             <TableHeader><TableRow><TableHead>Pengguna</TableHead><TableHead>Peran</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={4} className="text-center py-10">Memuat...</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={4} className="py-10">
+                    <LoadingSpinner label="Memuat pengguna..." size="md" />
+                  </TableCell>
+                </TableRow>
               ) : users.map((user) => (
                 <TableRow key={user.uid}>
                   <TableCell><div className="font-medium">{user.displayName || user.email}</div><div className="text-xs text-muted-foreground">{user.email}</div></TableCell>

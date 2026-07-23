@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import { LoadingSpinner } from "@/components/loading-spinner"
 
 const PHASE_LABELS: Record<OtaPhase, string> = {
   pending: "Menunggu",
@@ -187,7 +188,9 @@ export function FirmwareOtaPanel({ registeredDevices }: { registeredDevices: Reg
             <Button variant="ghost" size="sm" onClick={() => void refresh()}><RefreshCw className="w-4 h-4" /></Button>
           </CardHeader>
           <CardContent className="space-y-2">
-            {loading ? <p className="text-sm text-muted-foreground">Memuat...</p> : builds.length === 0 ? (
+            {loading ? (
+              <LoadingSpinner label="Memuat status build..." size="sm" className="py-4" />
+            ) : builds.length === 0 ? (
               <p className="text-sm text-muted-foreground">Belum ada build.</p>
             ) : builds.slice(0, 6).map((b) => (
               <a key={b.id} href={b.htmlUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-md border p-2 text-sm hover:bg-default">
@@ -205,7 +208,9 @@ export function FirmwareOtaPanel({ registeredDevices }: { registeredDevices: Reg
           <CardDescription>Hanya release dengan binary bertanda tangan dan manifest valid yang ditampilkan.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {loading ? <p className="text-sm text-muted-foreground">Memuat...</p> : releases.length === 0 ? (
+          {loading ? (
+            <LoadingSpinner label="Memuat release firmware..." size="sm" className="py-4" />
+          ) : releases.length === 0 ? (
             <p className="text-sm text-muted-foreground">Belum ada release firmware yang valid.</p>
           ) : releases.map((release) => (
             <div key={release.releaseId} className="rounded-md border p-3">

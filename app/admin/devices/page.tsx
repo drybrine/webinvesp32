@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
+import { LoadingSpinner } from "@/components/loading-spinner"
 
 export default function AdminDevicesPage() {
   const { toast } = useToast()
@@ -146,7 +147,13 @@ export default function AdminDevicesPage() {
           <Table>
             <TableHeader><TableRow><TableHead>Scanner</TableHead><TableHead>Akun</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
             <TableBody>
-              {loading ? <TableRow><TableCell colSpan={4} className="text-center py-10">Memuat...</TableCell></TableRow> : devices.map((device) => (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-10">
+                    <LoadingSpinner label="Memuat scanner..." size="md" />
+                  </TableCell>
+                </TableRow>
+              ) : devices.map((device) => (
                 <TableRow key={device.uid}>
                   <TableCell><div className="font-medium">{device.label}</div><div className="font-mono text-xs">{device.deviceId}</div></TableCell>
                   <TableCell className="text-sm">{device.email}</TableCell>
