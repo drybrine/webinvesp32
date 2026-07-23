@@ -80,7 +80,7 @@ export default function InventoryTable({
     <>
       <LowStockAlert lowStockItems={lowStockItems} />
       <Card className="overflow-hidden border-border/80 bg-card/95 shadow-sm ring-1 ring-border/30">
-        <CardHeader className="border-b bg-muted/25">
+        <CardHeader className="border-b border-border bg-surface-secondary">
           <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
             <div>
               <CardTitle className="text-xl font-bold tracking-normal text-foreground">
@@ -243,7 +243,7 @@ function LowStockAlert({ lowStockItems }: { lowStockItems: InventoryItem[] }) {
 function EmptyState() {
   return (
     <div className="text-center py-12">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-default text-muted">
         <Package className="h-6 w-6" />
       </div>
       <p className="text-muted-foreground font-medium">Tidak ada item yang ditemukan</p>

@@ -190,7 +190,7 @@ export function FirmwareOtaPanel({ registeredDevices }: { registeredDevices: Reg
             {loading ? <p className="text-sm text-muted-foreground">Memuat...</p> : builds.length === 0 ? (
               <p className="text-sm text-muted-foreground">Belum ada build.</p>
             ) : builds.slice(0, 6).map((b) => (
-              <a key={b.id} href={b.htmlUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-md border p-2 text-sm hover:bg-muted/50">
+              <a key={b.id} href={b.htmlUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-md border p-2 text-sm hover:bg-default">
                 <span className="truncate mr-2">{b.name}</span>
                 {buildBadge(b)}
               </a>

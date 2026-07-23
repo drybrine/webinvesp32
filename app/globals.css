@@ -240,11 +240,25 @@
   }
 
   /*
-    Shadcn bg-muted* leftovers: map to surface, not text-gray.
-    (Tailwind --color-muted is text; these utilities override bg only.)
+    Shadcn bg-muted* leftovers: --color-muted is TEXT gray, so any
+    bg-muted / bg-muted/25 becomes a dark wash. Force surface bg.
   */
-  .bg-muted {
+  .bg-muted,
+  .bg-muted\/10,
+  .bg-muted\/20,
+  .bg-muted\/25,
+  .bg-muted\/30,
+  .bg-muted\/40,
+  .bg-muted\/45,
+  .bg-muted\/50,
+  .bg-muted\/60,
+  .bg-muted\/70,
+  .bg-muted\/80 {
     background-color: var(--surface-secondary) !important;
+  }
+
+  .bg-muted-foreground\/20 {
+    background-color: var(--default) !important;
   }
 
   .bg-background {

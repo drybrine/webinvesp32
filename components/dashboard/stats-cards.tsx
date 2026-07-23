@@ -61,7 +61,7 @@ export default function StatsCards({
           : "text-red-600"
   const batteryBadgeClass =
     lowestBatteryLevel === null
-      ? "border-border bg-muted/40 text-muted-foreground"
+      ? "border-border bg-surface-secondary text-muted"
       : lowestBatteryLevel >= 60
         ? "border-emerald-200 bg-emerald-50 text-emerald-700"
         : lowestBatteryLevel >= 20
@@ -97,7 +97,7 @@ export default function StatsCards({
           <div
             className={cn(
               "absolute inset-x-0 top-0 h-1",
-              lowStockItems.length > 0 ? "bg-amber-500" : "bg-muted-foreground/20"
+              lowStockItems.length > 0 ? "bg-amber-500" : "bg-default"
             )}
           />
           <div className="mb-3 flex items-center justify-between">
@@ -105,7 +105,7 @@ export default function StatsCards({
             <div
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-full",
-                lowStockItems.length > 0 ? "bg-amber-100" : "bg-muted"
+                lowStockItems.length > 0 ? "bg-amber-100" : "bg-default"
               )}
             >
               <AlertCircle
@@ -142,7 +142,7 @@ export default function StatsCards({
           <div
             className={cn(
               "absolute inset-x-0 top-0 h-1",
-              hasOnlineDevices ? "bg-emerald-500" : "bg-muted-foreground/20"
+              hasOnlineDevices ? "bg-emerald-500" : "bg-default"
             )}
           />
           <div className="mb-3 flex items-center justify-between">
@@ -150,7 +150,7 @@ export default function StatsCards({
             <div
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-full",
-                hasOnlineDevices ? "bg-emerald-100" : "bg-muted"
+                hasOnlineDevices ? "bg-emerald-100" : "bg-default"
               )}
             >
               <Smartphone

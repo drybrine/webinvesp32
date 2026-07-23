@@ -469,7 +469,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, scanMode, i
         </div>
 
         {/* Quick Amount Controls */}
-        <div className="space-y-2.5 bg-muted/30 p-3.5 rounded-xl border border-border/50">
+        <div className="space-y-2.5 rounded-xl border border-border/50 bg-surface-secondary p-3.5">
           <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             Jumlah Stock In / Out
           </Label>
@@ -608,7 +608,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, scanMode, i
 
       {/* Lookup Status Banner */}
       {lookupStatus !== "idle" && (
-        <div className="rounded-xl border border-border/80 bg-muted/30 px-3.5 py-2.5 text-xs text-muted-foreground flex items-center gap-2 animate-fade-in-up">
+        <div className="flex animate-fade-in-up items-center gap-2 rounded-xl border border-border/80 bg-surface-secondary px-3.5 py-2.5 text-xs text-muted">
           {lookupStatus === "loading" && (
             <>
               <InlineSpinner size="sm" className="text-primary" />
@@ -632,7 +632,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, scanMode, i
 
       {/* Catalog search/picker */}
       {lookupStatus === "not-found" && catalog.length > 0 && (
-        <div className="space-y-2.5 bg-muted/20 p-3.5 rounded-xl border border-border/50 animate-fade-in-up shadow-sm">
+        <div className="space-y-2.5 animate-fade-in-up rounded-xl border border-border/50 bg-surface-secondary p-3.5 shadow-sm">
           <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             Pilih dari Katalog Honda Cengkareng
           </Label>
@@ -694,7 +694,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, scanMode, i
               <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={barcode || ""}
-                className="h-10 pl-9 font-mono text-xs bg-muted/45 border-border/50 text-muted-foreground cursor-not-allowed select-all rounded-lg shadow-sm"
+                className="h-10 cursor-not-allowed select-all rounded-lg border-border/50 bg-default pl-9 font-mono text-xs text-muted shadow-sm"
                 disabled
                 readOnly
               />
@@ -894,7 +894,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, scanMode, i
         </div>
         
         {/* ESP32 Indicator */}
-        <div className="flex items-center justify-center gap-2 py-3.5 border-t border-border/40 shrink-0 bg-muted/20">
+        <div className="flex shrink-0 items-center justify-center gap-2 border-t border-border/40 bg-surface-secondary py-3.5">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>

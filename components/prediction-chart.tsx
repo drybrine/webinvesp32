@@ -541,21 +541,21 @@ export default function PredictionChart({ data, minStock }: Props) {
 
       {/* Meta Stats Panel */}
       <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-        <div className="rounded-md border bg-muted/20 px-3 py-2">
+        <div className="rounded-md border bg-surface-secondary px-3 py-2">
           <div className="text-muted-foreground">Titik historis</div>
           <div className="font-semibold text-foreground">{actualCount}</div>
         </div>
-        <div className="rounded-md border bg-muted/20 px-3 py-2">
+        <div className="rounded-md border bg-surface-secondary px-3 py-2">
           <div className="text-muted-foreground">Titik forecast</div>
           <div className="font-semibold text-foreground">{forecastCount}</div>
         </div>
-        <div className="rounded-md border bg-muted/20 px-3 py-2">
+        <div className="rounded-md border bg-surface-secondary px-3 py-2">
           <div className="text-muted-foreground">Rentang stok</div>
           <div className="font-semibold text-foreground">
             {formatValue(minVisibleValue)} - {formatValue(maxVisibleValue)}
           </div>
         </div>
-        <div className="rounded-md border bg-muted/20 px-3 py-2">
+        <div className="rounded-md border bg-surface-secondary px-3 py-2">
           <div className="text-muted-foreground">Batas minimum</div>
           <div className="font-semibold text-foreground">{formatValue(minStock)}</div>
         </div>

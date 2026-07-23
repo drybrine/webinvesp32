@@ -41,7 +41,7 @@ import { LoadingSpinner } from "@/components/loading-spinner"
 
 const BarcodeComponent = dynamic(() => import("@/components/pdf417-barcode"), {
   ssr: false,
-  loading: () => <div className="h-[60px] w-48 bg-muted rounded" />,
+  loading: () => <div className="h-[60px] w-48 rounded bg-default" />,
 })
 
 interface StockAdjustment {
