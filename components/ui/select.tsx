@@ -90,9 +90,9 @@ function Select({
         value={current ?? null}
         onChange={handleChange}
         fullWidth
-        variant="secondary"
+        variant="primary"
       >
-        <HeroSelect.Trigger className={cn("tracking-normal", triggerClassName)}>
+        <HeroSelect.Trigger className={cn("tracking-normal bg-surface", triggerClassName)}>
           <HeroSelect.Value />
           <HeroSelect.Indicator />
         </HeroSelect.Trigger>

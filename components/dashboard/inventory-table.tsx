@@ -79,9 +79,9 @@ export default function InventoryTable({
   return (
     <>
       <LowStockAlert lowStockItems={lowStockItems} />
-      <Card className="overflow-hidden border-border/80 bg-card/95 shadow-sm ring-1 ring-border/30">
-        <CardHeader className="border-b border-border bg-surface-secondary">
-          <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+      <Card className="overflow-hidden border border-border bg-surface shadow-sm">
+        <CardHeader className="gap-4 border-b border-border bg-surface pb-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-xl font-bold tracking-normal text-foreground">
                 {`Inventori (${filteredInventory.length})`}
@@ -105,14 +105,14 @@ export default function InventoryTable({
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
               <Input
                 placeholder="Cari item..."
                 value={searchTerm}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-10 tracking-normal"
+                className="bg-surface pl-10 tracking-normal"
                 title="Tekan / untuk fokus pencarian"
                 aria-label="Cari item inventori"
               />

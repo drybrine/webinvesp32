@@ -131,6 +131,27 @@
     gap: 0.5rem !important;
   }
 
+  /*
+    Inventory/filter chrome: keep fields white, not gray-on-gray.
+    secondary field variant uses --default (gray wash).
+  */
+  .card__header {
+    background-color: var(--surface) !important;
+  }
+
+  .input,
+  .select__trigger {
+    background-color: var(--surface) !important;
+    border-color: var(--border) !important;
+    border-width: 1px !important;
+    color: var(--foreground) !important;
+  }
+
+  .select__value[data-placeholder="true"],
+  .input::placeholder {
+    color: var(--muted) !important;
+  }
+
   img {
     max-width: 100%;
     height: auto;
