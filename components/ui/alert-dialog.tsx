@@ -4,6 +4,8 @@ import * as React from "react"
 import { Button, Modal } from "@heroui/react"
 import { cn } from "@/lib/utils"
 
+const EXIT_MS = 280
+
 type Ctx = { open: boolean; setOpen: (open: boolean) => void }
 const AlertDialogContext = React.createContext<Ctx | null>(null)
 
@@ -66,18 +68,15 @@ function AlertDialogOverlay() {
   return null
 }
 
-const EXIT_MS = 280
-
 function AlertDialogContent({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   const { open, setOpen } = useAlertDialogCtx()
   const [mounted, setMounted] = React.useState(open)
   const [visible, setVisible] = React.useState(open)
-  const contentRef = React.useRef(children)
-
-  if (open) contentRef.current = children
+  const [frozenChildren, setFrozenChildren] = React.useState(children)
 
   React.useEffect(() => {
     if (open) {
+      setFrozenChildren(children)
       setMounted(true)
       const id = requestAnimationFrame(() => setVisible(true))
       return () => cancelAnimationFrame(id)
@@ -85,7 +84,7 @@ function AlertDialogContent({ className, children, ...props }: React.HTMLAttribu
     setVisible(false)
     const t = window.setTimeout(() => setMounted(false), EXIT_MS)
     return () => window.clearTimeout(t)
-  }, [open])
+  }, [open, children])
 
   if (!mounted) return null
 
@@ -102,7 +101,7 @@ function AlertDialogContent({ className, children, ...props }: React.HTMLAttribu
           className={cn("dialog-panel-motion sm:max-w-md", className)}
           {...(props as Record<string, unknown>)}
         >
-          {contentRef.current}
+          {open ? children : frozenChildren}
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
