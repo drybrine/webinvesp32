@@ -404,11 +404,15 @@ export default function TransaksiPage() {
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
                 <Button variant="outline" size="sm" onClick={() => exportTransactionsToCSV(filteredTransactions)} disabled={filteredTransactions.length === 0}>
-                  <Download className="h-4 w-4 mr-2" />Export
+                  <Download className="h-4 w-4 shrink-0" />
+                  <span>Export</span>
                 </Button>
                 {writable && <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button size="sm"><Plus className="h-4 w-4 mr-2" />Tambah</Button>
+                    <Button size="sm">
+                      <Plus className="h-4 w-4 shrink-0" />
+                      <span>Tambah</span>
+                    </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-lg">
                     <DialogHeader>

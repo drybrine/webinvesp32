@@ -107,7 +107,7 @@ export default function AdminUsersPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10 space-y-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between animate-fade-in-up">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Admin</p>
+            <p className="text-sm font-medium uppercase tracking-wider text-muted">Admin</p>
             <h1 className="heading-1">Pengguna</h1>
             <p className="text-body max-w-2xl pt-1">Buat akun internal, atur peran, dan cabut akses.</p>
           </div>
@@ -139,9 +139,16 @@ export default function AdminUsersPage() {
       </div>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <div><CardTitle>Daftar Pengguna</CardTitle><CardDescription>Pendaftaran publik tidak tersedia.</CardDescription></div>
-          <Button variant="ghost" size="sm" onClick={() => void refresh()}><RefreshCw className="w-4 h-4" /></Button>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Daftar Pengguna</CardTitle>
+              <CardDescription>Pendaftaran publik tidak tersedia.</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" isIconOnly onClick={() => void refresh()} aria-label="Muat ulang">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -155,7 +162,10 @@ export default function AdminUsersPage() {
                 </TableRow>
               ) : users.map((user) => (
                 <TableRow key={user.uid}>
-                  <TableCell><div className="font-medium">{user.displayName || user.email}</div><div className="text-xs text-muted-foreground">{user.email}</div></TableCell>
+                   <TableCell>
+                     <div className="font-medium text-foreground">{user.displayName || user.email}</div>
+                     <div className="text-xs text-muted">{user.email}</div>
+                   </TableCell>
                   <TableCell>
                     <Select value={user.role} onValueChange={(role) => void changeRole(user, role as UserRole)}>
                       <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>

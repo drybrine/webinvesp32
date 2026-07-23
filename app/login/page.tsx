@@ -84,9 +84,9 @@ export default function LoginPage() {
                       onChange={(event) => setEmail(event.target.value)}
                       required
                       placeholder="admin@stokmanager.app"
-                      className="pl-11"
                       fullWidth
-                      variant="secondary"
+                      variant="primary"
+                      className="bg-surface pl-11 tracking-normal"
                     />
                   </div>
                 </div>
@@ -104,9 +104,9 @@ export default function LoginPage() {
                         onChange={(event) => setPassword(event.target.value)}
                         required
                         placeholder="••••••••"
-                        className="pl-11"
                         fullWidth
-                        variant="secondary"
+                        variant="primary"
+                        className="bg-surface pl-11 tracking-normal"
                       />
                     </div>
                   </div>

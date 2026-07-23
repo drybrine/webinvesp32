@@ -122,7 +122,7 @@ export default function AdminDevicesPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10 space-y-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between animate-fade-in-up">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Admin</p>
+            <p className="text-sm font-medium uppercase tracking-wider text-muted">Admin</p>
             <h1 className="heading-1">Scanner</h1>
             <p className="text-body max-w-2xl pt-1">Setiap scanner dipetakan ke satu akun Firebase Auth dan satu deviceId.</p>
           </div>
@@ -139,9 +139,16 @@ export default function AdminDevicesPage() {
         </Dialog>
       </div>
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <div><CardTitle>Perangkat</CardTitle><CardDescription>Rotasi menghasilkan kata sandi baru; firmware hanya menyimpan refresh token.</CardDescription></div>
-          <Button variant="ghost" size="sm" onClick={() => void refresh()}><RefreshCw className="w-4 h-4" /></Button>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Perangkat</CardTitle>
+              <CardDescription>Rotasi menghasilkan kata sandi baru; firmware hanya menyimpan refresh token.</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" isIconOnly onClick={() => void refresh()} aria-label="Muat ulang">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -164,7 +171,7 @@ export default function AdminDevicesPage() {
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => void rotate(device)} title="Rotasi kredensial"><KeyRound className="w-4 h-4" /></Button>
                     <Button variant="outline" size="sm" onClick={() => void toggleDisabled(device)}><Power className="w-4 h-4 mr-2" />{device.disabled ? "Aktifkan" : "Nonaktifkan"}</Button>
-                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void revoke(device)} title="Cabut permanen"><Trash2 className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="sm" className="text-danger" onClick={() => void revoke(device)} title="Cabut permanen"><Trash2 className="h-4 w-4" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -175,7 +182,7 @@ export default function AdminDevicesPage() {
 
       <div className="space-y-2">
         <h2 className="text-2xl font-bold">Firmware OTA</h2>
-        <p className="text-sm text-muted-foreground">Build firmware bertanda tangan dan kirim pembaruan jarak jauh ke scanner terpilih.</p>
+        <p className="text-sm text-muted">Build firmware bertanda tangan dan kirim pembaruan jarak jauh ke scanner terpilih.</p>
       </div>
       <FirmwareOtaPanel registeredDevices={devices} />
 

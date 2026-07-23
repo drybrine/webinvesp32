@@ -180,21 +180,25 @@ export function FirmwareOtaPanel({ registeredDevices }: { registeredDevices: Reg
         </Card>
 
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <div>
-              <CardTitle>Status Build</CardTitle>
-              <CardDescription>Riwayat workflow terbaru.</CardDescription>
+          <CardHeader>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Status Build</CardTitle>
+                <CardDescription>Riwayat workflow terbaru.</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" isIconOnly onClick={() => void refresh()} aria-label="Muat ulang">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => void refresh()}><RefreshCw className="w-4 h-4" /></Button>
           </CardHeader>
           <CardContent className="space-y-2">
             {loading ? (
               <LoadingSpinner label="Memuat status build..." size="sm" className="py-4" />
             ) : builds.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Belum ada build.</p>
+              <p className="text-sm text-muted">Belum ada build.</p>
             ) : builds.slice(0, 6).map((b) => (
               <a key={b.id} href={b.htmlUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-md border p-2 text-sm hover:bg-default">
-                <span className="truncate mr-2">{b.name}</span>
+                <span className="mr-2 truncate">{b.name}</span>
                 {buildBadge(b)}
               </a>
             ))}
@@ -204,31 +208,37 @@ export function FirmwareOtaPanel({ registeredDevices }: { registeredDevices: Reg
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Cpu className="w-5 h-5" />Release Tersedia</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Cpu className="h-5 w-5" />
+            <span>Release Tersedia</span>
+          </CardTitle>
           <CardDescription>Hanya release dengan binary bertanda tangan dan manifest valid yang ditampilkan.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {loading ? (
             <LoadingSpinner label="Memuat release firmware..." size="sm" className="py-4" />
           ) : releases.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Belum ada release firmware yang valid.</p>
+            <p className="text-sm text-muted">Belum ada release firmware yang valid.</p>
           ) : releases.map((release) => (
             <div key={release.releaseId} className="rounded-md border p-3">
               <div className="flex items-center justify-between">
                 <div className="font-medium">v{release.version}</div>
                 <Badge variant="outline">{(release.size / 1024).toFixed(0)} KB</Badge>
               </div>
-              {release.notes ? <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">{release.notes}</p> : null}
-              <p className="mt-1 font-mono text-[11px] text-muted-foreground break-all">sha256: {release.sha256}</p>
+              {release.notes ? <p className="mt-1 whitespace-pre-line text-sm text-muted">{release.notes}</p> : null}
+              <p className="mt-1 break-all font-mono text-[11px] text-muted">sha256: {release.sha256}</p>
             </div>
           ))}
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader>
           <div>
-            <CardTitle className="flex items-center gap-2"><Rocket className="w-5 h-5" />Rollout ke Scanner</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Rocket className="h-5 w-5" />
+              <span>Rollout ke Scanner</span>
+            </CardTitle>
             <CardDescription>Pilih scanner, lalu kirim perintah update. Scanner menarik update saat idle dan baterai ≥30%.</CardDescription>
           </div>
           <Button variant="ghost" size="sm" onClick={() => void refresh()}><RefreshCw className="w-4 h-4" /></Button>

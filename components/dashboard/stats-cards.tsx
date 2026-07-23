@@ -53,7 +53,7 @@ export default function StatsCards({
             : BatteryWarning
   const batteryColor =
     lowestBatteryLevel === null
-      ? "text-muted-foreground"
+      ? "text-muted"
       : lowestBatteryLevel >= 60
         ? "text-emerald-600"
         : lowestBatteryLevel >= 20
@@ -72,7 +72,7 @@ export default function StatsCards({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <StaggerItem>
-        <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] card-hover">
+        <div className="card-hover relative overflow-hidden rounded-2xl border border-border/60 bg-surface p-5 shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1 bg-emerald-500/80" />
           <div className="mb-3 flex items-center justify-between">
             <span className="text-label">Total Item</span>
@@ -81,14 +81,14 @@ export default function StatsCards({
             </div>
           </div>
           <div className="stat-value">{totalItems}</div>
-          <p className="mt-1 text-xs text-muted-foreground">Jenis barang unik</p>
+          <p className="mt-1 text-xs text-muted">Jenis barang unik</p>
         </div>
       </StaggerItem>
 
       <StaggerItem>
         <div
           className={cn(
-            "relative overflow-hidden rounded-2xl border bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] card-hover",
+            "card-hover relative overflow-hidden rounded-2xl border bg-surface p-5 shadow-sm",
             lowStockItems.length > 0
               ? "border-amber-200/80 bg-amber-50/20"
               : "border-border/60"
@@ -111,7 +111,7 @@ export default function StatsCards({
               <AlertCircle
                 className={cn(
                   "h-4 w-4",
-                  lowStockItems.length > 0 ? "text-amber-600" : "text-muted-foreground"
+                  lowStockItems.length > 0 ? "text-amber-600" : "text-muted"
                 )}
               />
             </div>
@@ -124,7 +124,7 @@ export default function StatsCards({
           >
             {lowStockItems.length}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-muted">
             {lowStockItems.length > 0
               ? `${criticalItems.length} habis · ${warningItems.length} rendah`
               : "Semua stok aman"}
@@ -135,7 +135,7 @@ export default function StatsCards({
       <StaggerItem className="sm:col-span-2 lg:col-span-1">
         <div
           className={cn(
-            "relative overflow-hidden rounded-2xl border bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] card-hover",
+            "card-hover relative overflow-hidden rounded-2xl border bg-surface p-5 shadow-sm",
             hasOnlineDevices ? "border-emerald-200/80 bg-emerald-50/20" : "border-border/60"
           )}
         >
@@ -156,7 +156,7 @@ export default function StatsCards({
               <Smartphone
                 className={cn(
                   "h-4 w-4",
-                  hasOnlineDevices ? "text-emerald-600" : "text-muted-foreground"
+                  hasOnlineDevices ? "text-emerald-600" : "text-muted"
                 )}
               />
             </div>
@@ -164,7 +164,7 @@ export default function StatsCards({
           <div className="flex flex-wrap items-center gap-3">
             <div className="stat-value">
               {onlineDevices}
-              <span className="text-base font-normal text-muted-foreground">
+              <span className="text-base font-normal text-muted">
                 /{totalDevices}
               </span>
             </div>
@@ -180,7 +180,7 @@ export default function StatsCards({
               </div>
             )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-muted">
             {hasOnlineDevices ? "Device online" : "Semua offline"}
           </p>
         </div>

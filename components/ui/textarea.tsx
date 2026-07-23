@@ -11,8 +11,8 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ classNa
     ref={ref as never}
     disabled={disabled}
     fullWidth
-    variant="secondary"
-    className={cn("min-h-[80px]", className)}
+    variant="primary"
+    className={cn("min-h-[80px] bg-surface tracking-normal", className)}
     {...(props as Record<string, unknown>)}
   />
 ))
