@@ -1,29 +1,44 @@
+"use client"
+
 import * as React from "react"
+import { Chip } from "@heroui/react"
 import { cn } from "@/lib/utils"
 
-type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "danger" | "accent"
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: BadgeVariant
 }
 
-const variantClass: Record<BadgeVariant, string> = {
-  default: "border-transparent bg-primary text-primary-foreground",
-  secondary: "border-transparent bg-secondary text-secondary-foreground",
-  destructive: "border-transparent bg-destructive text-destructive-foreground",
-  outline: "text-foreground border-border",
+function mapVariant(variant: BadgeVariant): {
+  color: "default" | "accent" | "success" | "warning" | "danger"
+  chipVariant: "primary" | "secondary" | "tertiary" | "soft"
+} {
+  switch (variant) {
+    case "destructive":
+    case "danger":
+      return { color: "danger", chipVariant: "soft" }
+    case "success":
+      return { color: "success", chipVariant: "soft" }
+    case "warning":
+      return { color: "warning", chipVariant: "soft" }
+    case "accent":
+      return { color: "accent", chipVariant: "soft" }
+    case "secondary":
+      return { color: "default", chipVariant: "soft" }
+    case "outline":
+      return { color: "default", chipVariant: "secondary" }
+    default:
+      return { color: "accent", chipVariant: "primary" }
+  }
 }
 
-function Badge({ className, variant = "default", ...props }: BadgeProps) {
+function Badge({ className, variant = "default", children, ...props }: BadgeProps) {
+  const { color, chipVariant } = mapVariant(variant)
   return (
-    <div
-      className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors",
-        variantClass[variant],
-        className,
-      )}
-      {...props}
-    />
+    <Chip color={color} variant={chipVariant} size="sm" className={cn(className)} {...(props as Record<string, unknown>)}>
+      {children}
+    </Chip>
   )
 }
 

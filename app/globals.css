@@ -1,30 +1,32 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
-/* Compat tokens — existing classNames (bg-card, text-muted-foreground, …) keep working */
+/* App accent: emerald (maps into HeroUI-friendly utilities still used in pages) */
 @theme {
-  --color-background: hsl(0 0% 99%);
-  --color-foreground: hsl(240 10% 3.9%);
-  --color-card: hsl(0 0% 100%);
-  --color-card-foreground: hsl(240 10% 3.9%);
-  --color-popover: hsl(0 0% 100%);
-  --color-popover-foreground: hsl(240 10% 3.9%);
-  --color-primary: hsl(160 84% 39%);
-  --color-primary-foreground: hsl(0 0% 100%);
-  --color-secondary: hsl(240 4.8% 95.9%);
-  --color-secondary-foreground: hsl(240 5.9% 10%);
-  --color-muted: hsl(240 4.8% 95.9%);
-  --color-muted-foreground: hsl(240 3.8% 46.1%);
-  --color-accent: hsl(240 4.8% 95.9%);
-  --color-accent-foreground: hsl(240 5.9% 10%);
-  --color-destructive: hsl(0 72% 51%);
-  --color-destructive-foreground: hsl(0 0% 100%);
-  --color-border: hsl(240 5.9% 90%);
-  --color-input: hsl(240 5.9% 90%);
-  --color-ring: hsl(160 84% 39%);
-  --radius-lg: 0.75rem;
-  --radius-md: calc(0.75rem - 2px);
-  --radius-sm: calc(0.75rem - 4px);
+  --color-background: var(--background, oklch(0.99 0 0));
+  --color-foreground: var(--foreground, oklch(0.2 0 0));
+  --color-card: var(--surface, oklch(1 0 0));
+  --color-card-foreground: var(--foreground, oklch(0.2 0 0));
+  --color-popover: var(--surface, oklch(1 0 0));
+  --color-popover-foreground: var(--foreground, oklch(0.2 0 0));
+  --color-primary: oklch(0.55 0.14 165);
+  --color-primary-foreground: oklch(0.99 0 0);
+  --color-secondary: var(--surface-secondary, oklch(0.96 0 0));
+  --color-secondary-foreground: var(--foreground, oklch(0.2 0 0));
+  --color-muted: var(--surface-secondary, oklch(0.96 0 0));
+  --color-muted-foreground: var(--muted, oklch(0.5 0 0));
+  --color-accent: oklch(0.55 0.14 165);
+  --color-accent-foreground: oklch(0.99 0 0);
+  --color-destructive: oklch(0.55 0.2 25);
+  --color-destructive-foreground: oklch(0.99 0 0);
+  --color-border: var(--border, oklch(0.9 0 0));
+  --color-input: var(--border, oklch(0.9 0 0));
+  --color-ring: oklch(0.55 0.14 165);
+  --color-surface: var(--surface, oklch(1 0 0));
+  --color-surface-secondary: var(--surface-secondary, oklch(0.96 0 0));
+  --radius-lg: 1rem;
+  --radius-md: 0.75rem;
+  --radius-sm: 0.5rem;
 }
 
 @layer base {
@@ -33,19 +35,11 @@
     -webkit-text-size-adjust: 100%;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
   }
 
   body {
     min-height: 100dvh;
     line-height: 1.5;
-    background: var(--color-background);
-    color: var(--color-foreground);
-    font-feature-settings: "rlig" 1, "calt" 1;
-  }
-
-  * {
-    border-color: var(--color-border);
   }
 
   img {
@@ -58,22 +52,19 @@
     height: 6px;
   }
 
-  ::-webkit-scrollbar-track {
-    background: transparent;
-    border-radius: 6px;
-  }
-
   ::-webkit-scrollbar-thumb {
-    background: var(--color-border);
+    background: color-mix(in oklab, var(--color-border) 80%, transparent);
     border-radius: 6px;
   }
+}
 
-  ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-muted-foreground);
-  }
-
-  ::-webkit-scrollbar-corner {
-    background: transparent;
+/* Tint HeroUI accent toward emerald brand */
+@layer theme {
+  :root,
+  .light,
+  .default {
+    --accent: oklch(0.55 0.14 165);
+    --accent-foreground: oklch(0.99 0 0);
   }
 }
 
@@ -81,59 +72,42 @@
   .animate-fade-in {
     animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-
   .animate-fade-in-up {
     animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-
   .animate-slide-up {
     animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-
   .animate-scale-in {
     animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-
-  .card {
-    @apply bg-card text-card-foreground rounded-2xl border shadow-sm;
-  }
-
   .card-hover {
-    @apply transition-all duration-300 hover:shadow-md hover:-translate-y-[2px] hover:border-primary/20;
+    @apply transition-all duration-300 hover:shadow-md hover:-translate-y-[2px];
   }
-
   .heading-1 {
-    @apply text-3xl sm:text-4xl font-semibold tracking-tight text-foreground;
+    @apply text-3xl sm:text-4xl font-semibold tracking-tight;
   }
-
   .heading-2 {
-    @apply text-xl sm:text-2xl font-semibold tracking-tight text-foreground;
+    @apply text-xl sm:text-2xl font-semibold tracking-tight;
   }
-
   .heading-3 {
-    @apply text-lg sm:text-xl font-semibold tracking-tight text-foreground;
+    @apply text-lg sm:text-xl font-semibold tracking-tight;
   }
-
   .text-body {
-    @apply text-sm text-muted-foreground leading-relaxed;
+    @apply text-sm text-muted leading-relaxed;
   }
-
   .text-label {
-    @apply text-xs font-semibold text-muted-foreground uppercase tracking-wider;
+    @apply text-xs font-semibold text-muted uppercase tracking-wider;
   }
-
   .stat-value {
-    @apply text-2xl sm:text-3xl font-semibold tracking-tight text-foreground;
+    @apply text-2xl sm:text-3xl font-semibold tracking-tight;
   }
-
   .stat-label {
-    @apply text-xs font-medium text-muted-foreground;
+    @apply text-xs font-medium text-muted;
   }
-
   .skip-link {
-    @apply fixed left-4 top-4 z-[100] -translate-y-16 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-lg transition-transform duration-200 focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+    @apply fixed left-4 top-4 z-[100] -translate-y-16 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground shadow-lg transition-transform duration-200 focus:translate-y-0;
   }
-
   .gradient-text {
     @apply bg-gradient-to-r from-emerald-700 to-teal-500 bg-clip-text text-transparent;
   }
@@ -165,36 +139,22 @@
   width: 100% !important;
 }
 
-@media (max-width: 768px) {
-  body.dialog-open {
-    overflow: hidden !important;
-    position: fixed !important;
-    width: 100% !important;
-    height: 100% !important;
-    touch-action: none !important;
-  }
-}
-
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes scaleIn {
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
 }
-
 @keyframes stagger-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -203,7 +163,6 @@
 .stagger-children > * {
   animation: stagger-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-
 .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
 .stagger-children > *:nth-child(2) { animation-delay: 60ms; }
 .stagger-children > *:nth-child(3) { animation-delay: 120ms; }
@@ -212,10 +171,6 @@
 .stagger-children > *:nth-child(6) { animation-delay: 300ms; }
 .stagger-children > *:nth-child(7) { animation-delay: 360ms; }
 .stagger-children > *:nth-child(8) { animation-delay: 420ms; }
-.stagger-children > *:nth-child(9) { animation-delay: 480ms; }
-.stagger-children > *:nth-child(10) { animation-delay: 540ms; }
-.stagger-children > *:nth-child(11) { animation-delay: 600ms; }
-.stagger-children > *:nth-child(12) { animation-delay: 660ms; }
 
 @media (prefers-reduced-motion: reduce) {
   .card-hover,

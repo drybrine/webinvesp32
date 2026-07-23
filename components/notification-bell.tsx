@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Bell, AlertTriangle, CheckCheck, Trash2, Info } from "lucide-react"
 import { useToastHistory, type ToastHistoryEntry } from "@/hooks/use-toast"
-import { Button } from "@/components/ui/button"
+import { Button } from "@heroui/react"
 import { cn } from "@/lib/utils"
 
 function formatTime(ts: number) {
@@ -89,8 +89,9 @@ export function NotificationBell() {
       <Button
         variant="ghost"
         size="sm"
-        onClick={handleToggle}
-        className="relative p-2 rounded-md hover:bg-accent"
+        isIconOnly
+        onPress={handleToggle}
+        className="relative"
         aria-label="Riwayat notifikasi"
         aria-expanded={open}
       >
@@ -125,8 +126,9 @@ export function NotificationBell() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={clearHistory}
-                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  isIconOnly
+                  onPress={clearHistory}
+                  className="h-7 text-xs text-muted"
                   aria-label="Hapus semua notifikasi"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -150,10 +152,10 @@ export function NotificationBell() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={markAllRead}
-                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onPress={markAllRead}
+                className="h-7 px-2 text-xs text-muted"
               >
-                <CheckCheck className="w-3.5 h-3.5 mr-1" />
+                <CheckCheck className="w-3.5 h-3.5" />
                 Tandai dibaca
               </Button>
             </div>

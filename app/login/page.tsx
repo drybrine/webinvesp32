@@ -4,11 +4,9 @@ import { FormEvent, useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { ArrowRight, LockKeyhole, Mail } from "lucide-react"
+import { Button, Card, Input, Label, Surface } from "@heroui/react"
 import { firebaseAuth } from "@/lib/firebase"
 import { BrandMark } from "@/components/brand-logo"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 
 export default function LoginPage() {
@@ -50,9 +48,9 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative min-h-[100dvh] flex items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_hsl(160_30%_97%)_0%,_hsl(0_0%_99%)_50%)]">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0)_0%,_rgba(255,255,255,0.8)_100%)]" />
-      <div className="absolute inset-0 opacity-[0.03] [background-image:radial-gradient(hsl(var(--foreground))_1px,_transparent_1px)] [background-size:20px_20px]" />
+    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,oklch(0.92_0.05_165)_0%,transparent_55%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.035] [background-image:radial-gradient(currentColor_1px,transparent_1px)] [background-size:20px_20px]" />
 
       <motion.div
         initial={{ opacity: 0, y: 16 }}
@@ -60,87 +58,88 @@ export default function LoginPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         className="relative z-10 w-full max-w-md px-4"
       >
-        <div className="rounded-[2rem] border border-border/60 bg-white/80 backdrop-blur-sm p-8 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)]">
-          <div className="mb-8 flex flex-col items-center text-center">
-            <div className="mb-5 inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-500 shadow-lg shadow-emerald-500/20">
+        <Card className="w-full p-2 shadow-lg">
+          <Card.Header className="items-center text-center gap-3 pt-6">
+            <div className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-500 shadow-lg shadow-emerald-500/20">
               <BrandMark className="h-9 w-9 text-white" />
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              StokManager
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <Card.Title className="text-2xl">StokManager</Card.Title>
+            <Card.Description>
               {resetMode ? "Kirim tautan reset kata sandi" : "Sistem manajemen inventory real-time"}
-            </p>
-          </div>
+            </Card.Description>
+          </Card.Header>
 
-          <form onSubmit={submit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium">Email</Label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                  placeholder="admin@stokmanager.app"
-                  className="h-12 rounded-xl pl-11"
-                />
-              </div>
-            </div>
-
-            {!resetMode && (
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium">Kata sandi</Label>
-                <div className="relative">
-                  <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    required
-                    placeholder="••••••••"
-                    className="h-12 rounded-xl pl-11"
-                  />
+          <Card.Content className="px-6 pb-2">
+            <Surface variant="default" className="rounded-2xl p-4">
+              <form onSubmit={submit} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
+                    <Input
+                      id="email"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      required
+                      placeholder="admin@stokmanager.app"
+                      className="pl-11"
+                      fullWidth
+                      variant="secondary"
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
 
-            <Button
-              type="submit"
-              disabled={loading}
-              className="h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-700 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:opacity-60"
-            >
-              {loading ? (
-                "Memproses..."
-              ) : (
-                <>
-                  {resetMode ? "Kirim Reset" : "Masuk"}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </>
-              )}
-            </Button>
+                {!resetMode && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="password">Kata sandi</Label>
+                    <div className="relative">
+                      <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
+                      <Input
+                        id="password"
+                        type="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        required
+                        placeholder="••••••••"
+                        className="pl-11"
+                        fullWidth
+                        variant="secondary"
+                      />
+                    </div>
+                  </div>
+                )}
 
-            <button
-              type="button"
-              onClick={() => setResetMode((value) => !value)}
-              disabled={loading}
-              className="block w-full text-center text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
-            >
-              {resetMode ? "Kembali ke login" : "Lupa kata sandi?"}
-            </button>
-          </form>
+                <Button type="submit" isPending={loading} fullWidth className="mt-1">
+                  {({ isPending }) => (
+                    <>
+                      {isPending ? "Memproses..." : resetMode ? "Kirim Reset" : "Masuk"}
+                      {!isPending && <ArrowRight className="h-4 w-4" />}
+                    </>
+                  )}
+                </Button>
 
-          <div className="mt-8 border-t border-border/60 pt-5 text-center">
-            <p className="text-xs text-muted-foreground">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  isDisabled={loading}
+                  onPress={() => setResetMode((value) => !value)}
+                  fullWidth
+                >
+                  {resetMode ? "Kembali ke login" : "Lupa kata sandi?"}
+                </Button>
+              </form>
+            </Surface>
+          </Card.Content>
+
+          <Card.Footer className="justify-center border-t border-border/60 pt-4 pb-6">
+            <p className="text-center text-xs text-muted">
               Pendaftaran publik dinonaktifkan. Hubungi administrator untuk akun baru.
             </p>
-          </div>
-        </div>
+          </Card.Footer>
+        </Card>
       </motion.div>
     </main>
   )

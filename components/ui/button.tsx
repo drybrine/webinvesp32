@@ -1,67 +1,103 @@
 "use client"
 
 import * as React from "react"
+import { Button as HeroButton } from "@heroui/react"
 import { cn } from "@/lib/utils"
 
-type ShadcnVariant = "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
-type ShadcnSize = "default" | "sm" | "lg" | "icon"
+type AppVariant = "default" | "destructive" | "outline" | "secondary" | "ghost" | "link" | "primary" | "tertiary" | "danger"
+type AppSize = "default" | "sm" | "lg" | "icon" | "md"
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ShadcnVariant
-  size?: ShadcnSize
+const variantMap: Record<string, "primary" | "secondary" | "tertiary" | "outline" | "ghost" | "danger" | "danger-soft"> = {
+  default: "primary",
+  primary: "primary",
+  destructive: "danger",
+  danger: "danger",
+  outline: "outline",
+  secondary: "secondary",
+  ghost: "ghost",
+  tertiary: "tertiary",
+  link: "ghost",
+}
+
+export interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "color"> {
+  variant?: AppVariant
+  size?: AppSize
   asChild?: boolean
-}
-
-const variantClass: Record<ShadcnVariant, string> = {
-  default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
-  destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm",
-  outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-  secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-  ghost: "hover:bg-accent hover:text-accent-foreground",
-  link: "text-primary underline-offset-4 hover:underline",
-}
-
-const sizeClass: Record<ShadcnSize, string> = {
-  default: "h-10 px-4 py-2",
-  sm: "h-9 rounded-md px-3",
-  lg: "h-11 rounded-md px-8",
-  icon: "h-10 w-10",
+  isPending?: boolean
+  isIconOnly?: boolean
+  fullWidth?: boolean
+  onPress?: () => void
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "default", size = "default", asChild = false, children, ...props }, ref) => {
-    const classes = cn(
-      "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-200 active:translate-y-px active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
-      variantClass[variant],
-      sizeClass[size],
+  (
+    {
       className,
-    )
+      variant = "default",
+      size = "default",
+      asChild = false,
+      disabled,
+      isPending,
+      isIconOnly,
+      fullWidth,
+      children,
+      onClick,
+      onPress,
+      type = "button",
+      ...props
+    },
+    ref,
+  ) => {
+    const heroVariant = variantMap[variant] ?? "primary"
+    const iconOnly = isIconOnly || size === "icon"
+    const heroSize = size === "icon" || size === "default" ? "md" : size === "md" ? "md" : size
 
     if (asChild && React.isValidElement(children)) {
-      const child = children as React.ReactElement<{ className?: string }>
+      const child = children as React.ReactElement<{ className?: string; onClick?: React.MouseEventHandler }>
       return React.cloneElement(child, {
-        className: cn(classes, child.props.className),
+        className: cn(
+          "inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium transition-colors",
+          heroVariant === "primary" && "bg-accent text-accent-foreground hover:opacity-90",
+          heroVariant === "outline" && "border border-border bg-transparent hover:bg-default",
+          heroVariant === "ghost" && "hover:bg-default",
+          heroVariant === "danger" && "bg-danger text-danger-foreground",
+          className,
+          child.props.className,
+        ),
+        onClick: (e: React.MouseEvent) => {
+          child.props.onClick?.(e)
+          onClick?.(e as React.MouseEvent<HTMLButtonElement>)
+          onPress?.()
+        },
       })
     }
 
     return (
-      <button ref={ref} className={classes} {...props}>
+      <HeroButton
+        ref={ref as never}
+        variant={heroVariant}
+        size={heroSize as "sm" | "md" | "lg"}
+        isIconOnly={iconOnly}
+        isDisabled={disabled}
+        isPending={isPending}
+        fullWidth={fullWidth}
+        type={type}
+        className={cn(variant === "link" && "underline-offset-4 hover:underline bg-transparent shadow-none", className)}
+        onPress={() => {
+          onPress?.()
+          if (onClick) onClick({} as React.MouseEvent<HTMLButtonElement>)
+        }}
+        {...(props as Record<string, unknown>)}
+      >
         {children}
-      </button>
+      </HeroButton>
     )
   },
 )
 Button.displayName = "Button"
 
-export function buttonVariants(opts?: { variant?: ShadcnVariant; size?: ShadcnSize; className?: string }) {
-  const variant = opts?.variant ?? "default"
-  const size = opts?.size ?? "default"
-  return cn(
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium",
-    variantClass[variant],
-    sizeClass[size],
-    opts?.className,
-  )
+export function buttonVariants(opts?: { variant?: AppVariant; className?: string }) {
+  return cn("inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium", opts?.className)
 }
 
 export { Button }

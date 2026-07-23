@@ -1,44 +1,37 @@
 'use client'
 
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileQuestion, Home, ArrowLeft } from 'lucide-react'
+import { Button, Card } from '@heroui/react'
 
 export default function NotFound() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto w-14 h-14 bg-muted rounded-full flex items-center justify-center mb-4">
-            <FileQuestion className="w-7 h-7 text-muted-foreground" />
+        <Card.Header className="items-center text-center gap-3">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-default">
+            <FileQuestion className="h-7 w-7 text-muted" />
           </div>
-          <CardTitle className="text-xl text-foreground">
-            Halaman Tidak Ditemukan
-          </CardTitle>
-          <CardDescription>
+          <Card.Title>Halaman Tidak Ditemukan</Card.Title>
+          <Card.Description>
             Maaf, halaman yang Anda cari tidak dapat ditemukan. Periksa kembali URL atau navigasi ke halaman lain.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col gap-2">
-            <Link href="/" passHref>
-              <Button className="w-full" variant="default">
-                <Home className="w-4 h-4 mr-2" />
-                Kembali ke Beranda
-              </Button>
-            </Link>
-            <Button onClick={() => window.history.back()} variant="outline" className="w-full">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Halaman Sebelumnya
+          </Card.Description>
+        </Card.Header>
+        <Card.Content className="flex flex-col gap-3">
+          <Link href="/" className="w-full">
+            <Button fullWidth>
+              <Home className="h-4 w-4" />
+              Kembali ke Beranda
             </Button>
-          </div>
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">
-              Jika masalah berlanjut, silakan hubungi administrator sistem.
-            </p>
-          </div>
-        </CardContent>
+          </Link>
+          <Button onPress={() => window.history.back()} variant="outline" fullWidth>
+            <ArrowLeft className="h-4 w-4" />
+            Halaman Sebelumnya
+          </Button>
+          <p className="text-center text-sm text-muted">
+            Jika masalah berlanjut, silakan hubungi administrator sistem.
+          </p>
+        </Card.Content>
       </Card>
     </div>
   )

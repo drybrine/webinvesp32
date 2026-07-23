@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { Modal } from "@heroui/react"
-import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type DialogContextValue = {
@@ -14,18 +13,21 @@ const DialogContext = React.createContext<DialogContextValue | null>(null)
 
 function useDialogCtx() {
   const ctx = React.useContext(DialogContext)
-  if (!ctx) throw new Error("Dialog components must be used within <Dialog>")
+  if (!ctx) throw new Error("Dialog parts must be inside <Dialog>")
   return ctx
 }
 
-type DialogProps = {
+function Dialog({
+  open: controlledOpen,
+  defaultOpen = false,
+  onOpenChange,
+  children,
+}: {
   open?: boolean
   defaultOpen?: boolean
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
-}
-
-function Dialog({ open: controlledOpen, defaultOpen = false, onOpenChange, children }: DialogProps) {
+}) {
   const [uncontrolled, setUncontrolled] = React.useState(defaultOpen)
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : uncontrolled
@@ -36,7 +38,6 @@ function Dialog({ open: controlledOpen, defaultOpen = false, onOpenChange, child
     },
     [isControlled, onOpenChange],
   )
-
   return <DialogContext.Provider value={{ open, setOpen }}>{children}</DialogContext.Provider>
 }
 
@@ -91,37 +92,18 @@ function DialogClose({
   )
 }
 
-function DialogOverlay({ className }: { className?: string }) {
-  return null // Modal.Backdrop owns overlay
-  void className
+function DialogOverlay() {
+  return null
 }
 
-function DialogContent({
-  className,
-  children,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+function DialogContent({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   const { open, setOpen } = useDialogCtx()
-
   return (
     <Modal.Backdrop isOpen={open} onOpenChange={setOpen} variant="blur">
-      <Modal.Container>
-        <Modal.Dialog
-          className={cn("sm:max-w-lg w-full max-w-[95vw] p-0 gap-0 relative", className)}
-          {...(props as Record<string, unknown>)}
-        >
-          <div className="relative flex flex-col gap-4 p-6">
-            {children}
-            <button
-              type="button"
-              className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring min-w-[44px] min-h-[44px] flex items-center justify-center"
-              aria-label="Tutup dialog"
-              onClick={() => setOpen(false)}
-            >
-              <X className="h-4 w-4" />
-              <span className="sr-only">Tutup</span>
-            </button>
-          </div>
+      <Modal.Container placement="center" size="md">
+        <Modal.Dialog className={cn("sm:max-w-lg w-full", className)} {...(props as Record<string, unknown>)}>
+          <Modal.CloseTrigger />
+          {children}
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
@@ -129,21 +111,19 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />
+  return <Modal.Header className={cn("gap-1", className)} {...props} />
 }
 
 function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)} {...props} />
-  )
+  return <Modal.Footer className={cn(className)} {...props} />
 }
 
 function DialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <Modal.Heading className={cn("text-lg font-semibold leading-none tracking-tight", className)} {...props} />
+  return <Modal.Heading className={cn(className)} {...props} />
 }
 
 function DialogDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-sm text-muted-foreground", className)} {...props} />
+  return <p className={cn("text-sm text-muted", className)} {...props} />
 }
 
 export {

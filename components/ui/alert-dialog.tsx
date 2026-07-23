@@ -1,15 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { Modal } from "@heroui/react"
+import { Button, Modal } from "@heroui/react"
 import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button"
 
-type Ctx = {
-  open: boolean
-  setOpen: (open: boolean) => void
-}
-
+type Ctx = { open: boolean; setOpen: (open: boolean) => void }
 const AlertDialogContext = React.createContext<Ctx | null>(null)
 
 function useAlertDialogCtx() {
@@ -67,9 +62,7 @@ function AlertDialogTrigger({
 function AlertDialogPortal({ children }: { children?: React.ReactNode }) {
   return <>{children}</>
 }
-
-function AlertDialogOverlay({ className }: { className?: string }) {
-  void className
+function AlertDialogOverlay() {
   return null
 }
 
@@ -77,8 +70,8 @@ function AlertDialogContent({ className, children, ...props }: React.HTMLAttribu
   const { open, setOpen } = useAlertDialogCtx()
   return (
     <Modal.Backdrop isOpen={open} onOpenChange={setOpen} isDismissable={false} variant="opaque">
-      <Modal.Container>
-        <Modal.Dialog className={cn("sm:max-w-lg w-full max-w-[95vw] p-6 gap-4", className)} {...(props as Record<string, unknown>)}>
+      <Modal.Container placement="center" size="sm">
+        <Modal.Dialog className={cn("sm:max-w-md", className)} {...(props as Record<string, unknown>)}>
           {children}
         </Modal.Dialog>
       </Modal.Container>
@@ -87,21 +80,16 @@ function AlertDialogContent({ className, children, ...props }: React.HTMLAttribu
 }
 
 function AlertDialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col space-y-2 text-center sm:text-left", className)} {...props} />
+  return <Modal.Header className={cn(className)} {...props} />
 }
-
 function AlertDialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)} {...props} />
-  )
+  return <Modal.Footer className={cn(className)} {...props} />
 }
-
 function AlertDialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <Modal.Heading className={cn("text-lg font-semibold", className)} {...props} />
+  return <Modal.Heading className={cn(className)} {...props} />
 }
-
 function AlertDialogDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-sm text-muted-foreground", className)} {...props} />
+  return <p className={cn("text-sm text-muted", className)} {...props} />
 }
 
 function AlertDialogAction({
@@ -113,18 +101,18 @@ function AlertDialogAction({
 }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const { setOpen } = useAlertDialogCtx()
   return (
-    <button
-      type="button"
-      className={cn(buttonVariants(), className)}
-      disabled={disabled}
-      onClick={(e) => {
-        onClick?.(e)
-        if (!e.defaultPrevented) setOpen(false)
+    <Button
+      variant="danger"
+      isDisabled={disabled}
+      className={className}
+      onPress={() => {
+        onClick?.({} as React.MouseEvent<HTMLButtonElement>)
+        setOpen(false)
       }}
-      {...props}
+      {...(props as Record<string, unknown>)}
     >
       {children}
-    </button>
+    </Button>
   )
 }
 
@@ -137,18 +125,18 @@ function AlertDialogCancel({
 }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const { setOpen } = useAlertDialogCtx()
   return (
-    <button
-      type="button"
-      className={cn(buttonVariants({ variant: "outline" }), "mt-2 sm:mt-0", className)}
-      disabled={disabled}
-      onClick={(e) => {
-        onClick?.(e)
+    <Button
+      variant="outline"
+      isDisabled={disabled}
+      className={className}
+      onPress={() => {
+        onClick?.({} as React.MouseEvent<HTMLButtonElement>)
         setOpen(false)
       }}
-      {...props}
+      {...(props as Record<string, unknown>)}
     >
       {children}
-    </button>
+    </Button>
   )
 }
 
