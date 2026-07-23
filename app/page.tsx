@@ -460,32 +460,59 @@ export default function DashboardPage() {
                 Belum cukup data transaksi untuk menghitung prediksi. Minimal 2 transaksi per barang.
               </div>
             ) : (
-              <div className="stagger-children grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="stagger-children grid grid-cols-1 gap-4 md:grid-cols-3">
                 {stockRisks.map(({ item, prediction, predictedLowest, daysToStockout }) => {
                   const belowMin = predictedLowest <= item.minStock
                   return (
-                    <div key={item.id} className="rounded-xl border border-border/60 bg-surface p-4 transition-all duration-200 hover:border-accent/25 hover:shadow-sm">
+                    <div
+                      key={item.id}
+                      className={`card-hover relative overflow-hidden rounded-2xl border bg-surface p-4 shadow-sm ${
+                        belowMin
+                          ? "border-danger/25 bg-danger/[0.03]"
+                          : "border-border/60"
+                      }`}
+                    >
+                      <div
+                        className={`absolute inset-x-0 top-0 h-1 ${
+                          belowMin ? "bg-danger/80" : "bg-emerald-500/80"
+                        }`}
+                      />
                       <div className="flex items-start justify-between gap-2">
-                        <div>
+                        <div className="min-w-0">
                           <div className="line-clamp-1 text-sm font-semibold text-foreground">{item.name}</div>
-                          <div className="mt-0.5 text-xs text-muted">Stok: <span className="font-mono font-medium text-foreground">{item.quantity}</span></div>
+                          <div className="mt-0.5 text-xs text-muted">
+                            Stok:{" "}
+                            <span className="font-mono font-medium text-foreground">{item.quantity}</span>
+                          </div>
                         </div>
-                        <span className={belowMin ? "rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-semibold text-danger" : "rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"}>
+                        <span
+                          className={
+                            belowMin
+                              ? "shrink-0 rounded-full border border-danger/20 bg-danger/10 px-2 py-0.5 text-[11px] font-semibold text-danger"
+                              : "shrink-0 rounded-full border border-emerald-200 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+                          }
+                        >
                           {belowMin ? "Risiko" : "Aman"}
                         </span>
                       </div>
-                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/50 pt-3 text-xs">
                         <div>
                           <div className="text-muted">Tren</div>
-                          <div className="font-mono font-semibold text-foreground">{prediction.model.slope.toFixed(2)}/hari</div>
+                          <div className="font-mono font-semibold text-foreground">
+                            {prediction.model.slope.toFixed(2)}/hari
+                          </div>
                         </div>
                         <div>
                           <div className="text-muted">Terendah</div>
-                          <div className="font-mono font-semibold text-foreground">{predictedLowest.toFixed(0)}</div>
+                          <div className="font-mono font-semibold text-foreground">
+                            {predictedLowest.toFixed(0)}
+                          </div>
                         </div>
                         <div>
                           <div className="text-muted">Habis</div>
-                          <div className="font-mono font-semibold text-foreground">{daysToStockout === null ? "—" : `${daysToStockout}h`}</div>
+                          <div className="font-mono font-semibold text-foreground">
+                            {daysToStockout === null ? "—" : `${daysToStockout}h`}
+                          </div>
                         </div>
                       </div>
                     </div>
