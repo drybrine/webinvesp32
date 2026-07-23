@@ -618,8 +618,12 @@ export default function DashboardPage() {
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setEditingItem(null)} disabled={isSaving}>Batal</Button>
-              <Button onClick={updateInventoryItem} disabled={isSaving}>{isSaving ? "Menyimpan..." : "Simpan"}</Button>
+              <Button variant="outline" onClick={() => setEditingItem(null)} disabled={isSaving}>
+                Batal
+              </Button>
+              <Button onClick={updateInventoryItem} disabled={isSaving} isPending={isSaving}>
+                {isSaving ? "Menyimpan..." : "Simpan"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

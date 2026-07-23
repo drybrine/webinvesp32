@@ -96,14 +96,35 @@ function DialogOverlay() {
   return null
 }
 
+function isDialogFooter(child: React.ReactNode): boolean {
+  return (
+    React.isValidElement(child) &&
+    typeof child.type !== "string" &&
+    (child.type as { displayName?: string }).displayName === "DialogFooter"
+  )
+}
+
 function DialogContent({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   const { open, setOpen } = useDialogCtx()
+  const childArray = React.Children.toArray(children)
+  const footers = childArray.filter(isDialogFooter)
+  const rest = childArray.filter((child) => !isDialogFooter(child))
+
   return (
     <Modal.Backdrop isOpen={open} onOpenChange={setOpen} variant="blur">
-      <Modal.Container placement="center" size="md">
-        <Modal.Dialog className={cn("sm:max-w-lg w-full", className)} {...(props as Record<string, unknown>)}>
+      <Modal.Container placement="center" size="md" scroll="inside">
+        <Modal.Dialog
+          className={cn(
+            "flex w-full max-h-[min(90dvh,720px)] flex-col overflow-hidden sm:max-w-lg",
+            className,
+          )}
+          {...(props as Record<string, unknown>)}
+        >
           <Modal.CloseTrigger />
-          {children}
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-1">
+            {rest}
+          </div>
+          {footers}
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
@@ -111,12 +132,22 @@ function DialogContent({ className, children, ...props }: React.HTMLAttributes<H
 }
 
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <Modal.Header className={cn("gap-1", className)} {...props} />
+  return <Modal.Header className={cn("shrink-0 gap-1", className)} {...props} />
 }
 
 function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <Modal.Footer className={cn(className)} {...props} />
+  return (
+    <Modal.Footer
+      className={cn(
+        "mt-0 shrink-0 gap-2 border-t border-border bg-overlay pt-4",
+        "flex w-full flex-col-reverse sm:flex-row sm:justify-end",
+        className,
+      )}
+      {...props}
+    />
+  )
 }
+DialogFooter.displayName = "DialogFooter"
 
 function DialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
   return <Modal.Heading className={cn("text-foreground", className)} {...props} />
