@@ -1,32 +1,73 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
-/* App accent: emerald (maps into HeroUI-friendly utilities still used in pages) */
+/*
+  Token map (HeroUI vs leftover shadcn class names):
+
+  HeroUI:
+    --muted            = secondary TEXT gray
+    --surface*         = card/panel backgrounds
+    --foreground       = primary text
+    --background       = page bg
+    --accent           = brand (emerald, set below)
+
+  Shadcn leftovers still used in pages:
+    text-muted-foreground  → must be TEXT gray
+    bg-muted*              → must be SURFACE, never text gray
+    bg-card / text-card-foreground
+    text-primary / bg-primary
+*/
+
+/* Emerald brand + dual muted mapping for Tailwind utilities */
 @theme {
-  --color-background: var(--background, oklch(0.99 0 0));
-  --color-foreground: var(--foreground, oklch(0.2 0 0));
-  --color-card: var(--surface, oklch(1 0 0));
-  --color-card-foreground: var(--foreground, oklch(0.2 0 0));
-  --color-popover: var(--surface, oklch(1 0 0));
-  --color-popover-foreground: var(--foreground, oklch(0.2 0 0));
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--surface);
+  --color-card-foreground: var(--surface-foreground);
+  --color-popover: var(--overlay);
+  --color-popover-foreground: var(--overlay-foreground);
+
+  /* bg-muted = surface; text-muted-foreground = gray text */
+  --color-muted: var(--surface-secondary);
+  --color-muted-foreground: var(--muted);
+
+  --color-secondary: var(--surface-secondary);
+  --color-secondary-foreground: var(--foreground);
+
   --color-primary: oklch(0.55 0.14 165);
   --color-primary-foreground: oklch(0.99 0 0);
-  --color-secondary: var(--surface-secondary, oklch(0.96 0 0));
-  --color-secondary-foreground: var(--foreground, oklch(0.2 0 0));
-  --color-muted: var(--surface-secondary, oklch(0.96 0 0));
-  --color-muted-foreground: var(--muted, oklch(0.5 0 0));
-  --color-accent: oklch(0.55 0.14 165);
-  --color-accent-foreground: oklch(0.99 0 0);
-  --color-destructive: oklch(0.55 0.2 25);
-  --color-destructive-foreground: oklch(0.99 0 0);
-  --color-border: var(--border, oklch(0.9 0 0));
-  --color-input: var(--border, oklch(0.9 0 0));
-  --color-ring: oklch(0.55 0.14 165);
-  --color-surface: var(--surface, oklch(1 0 0));
-  --color-surface-secondary: var(--surface-secondary, oklch(0.96 0 0));
-  --radius-lg: 1rem;
-  --radius-md: 0.75rem;
-  --radius-sm: 0.5rem;
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--danger-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+
+  --color-surface: var(--surface);
+  --color-surface-secondary: var(--surface-secondary);
+
+  --radius-lg: calc(var(--radius) * 1.5);
+  --radius-md: var(--radius);
+  --radius-sm: calc(var(--radius) * 0.75);
+}
+
+/* Tint HeroUI accent emerald after theme vars load */
+@layer theme {
+  :root,
+  .light,
+  .default,
+  [data-theme="light"],
+  [data-theme="default"] {
+    --accent: oklch(0.55 0.14 165);
+    --accent-foreground: oklch(0.99 0 0);
+    --focus: oklch(0.55 0.14 165);
+    --link: oklch(0.45 0.12 165);
+  }
 }
 
 @layer base {
@@ -35,11 +76,15 @@
     -webkit-text-size-adjust: 100%;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    color: var(--foreground);
+    background: var(--background);
   }
 
   body {
     min-height: 100dvh;
     line-height: 1.5;
+    color: var(--foreground);
+    background: var(--background);
   }
 
   img {
@@ -53,22 +98,52 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: color-mix(in oklab, var(--color-border) 80%, transparent);
+    background: color-mix(in oklab, var(--foreground) 15%, transparent);
     border-radius: 6px;
   }
 }
 
-/* Tint HeroUI accent toward emerald brand */
-@layer theme {
-  :root,
-  .light,
-  .default {
-    --accent: oklch(0.55 0.14 165);
-    --accent-foreground: oklch(0.99 0 0);
-  }
-}
-
+/*
+  Hard-fix contrast for leftover shadcn utilities.
+  HeroUI components that use var(--muted) for text stay correct because
+  we never overwrite the CSS variable --muted itself — only Tailwind
+  --color-muted (which feeds bg-muted / text-muted utilities).
+*/
 @layer utilities {
+  .text-muted {
+    color: var(--muted) !important;
+  }
+
+  .text-muted-foreground {
+    color: var(--muted) !important;
+  }
+
+  .text-foreground {
+    color: var(--foreground) !important;
+  }
+
+  .text-card-foreground,
+  .text-popover-foreground,
+  .text-secondary-foreground {
+    color: var(--foreground) !important;
+  }
+
+  .bg-muted {
+    background-color: var(--surface-secondary) !important;
+  }
+
+  .bg-background {
+    background-color: var(--background) !important;
+  }
+
+  .bg-card {
+    background-color: var(--surface) !important;
+  }
+
+  .bg-popover {
+    background-color: var(--overlay) !important;
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
@@ -85,25 +160,28 @@
     @apply transition-all duration-300 hover:shadow-md hover:-translate-y-[2px];
   }
   .heading-1 {
-    @apply text-3xl sm:text-4xl font-semibold tracking-tight;
+    @apply text-3xl sm:text-4xl font-semibold tracking-tight text-foreground;
   }
   .heading-2 {
-    @apply text-xl sm:text-2xl font-semibold tracking-tight;
+    @apply text-xl sm:text-2xl font-semibold tracking-tight text-foreground;
   }
   .heading-3 {
-    @apply text-lg sm:text-xl font-semibold tracking-tight;
+    @apply text-lg sm:text-xl font-semibold tracking-tight text-foreground;
   }
   .text-body {
-    @apply text-sm text-muted leading-relaxed;
+    @apply text-sm leading-relaxed;
+    color: var(--muted);
   }
   .text-label {
-    @apply text-xs font-semibold text-muted uppercase tracking-wider;
+    @apply text-xs font-semibold uppercase tracking-wider;
+    color: var(--muted);
   }
   .stat-value {
-    @apply text-2xl sm:text-3xl font-semibold tracking-tight;
+    @apply text-2xl sm:text-3xl font-semibold tracking-tight text-foreground;
   }
   .stat-label {
-    @apply text-xs font-medium text-muted;
+    @apply text-xs font-medium;
+    color: var(--muted);
   }
   .skip-link {
     @apply fixed left-4 top-4 z-[100] -translate-y-16 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground shadow-lg transition-transform duration-200 focus:translate-y-0;
