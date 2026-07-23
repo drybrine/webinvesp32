@@ -119,11 +119,11 @@ function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 }
 
 function DialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <Modal.Heading className={cn(className)} {...props} />
+  return <Modal.Heading className={cn("text-foreground", className)} {...props} />
 }
 
 function DialogDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-sm text-muted", className)} {...props} />
+  return <p className={cn("text-sm text-muted", className)} style={{ color: "var(--muted)" }} {...props} />
 }
 
 export {

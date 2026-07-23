@@ -27,25 +27,25 @@ function EntryRow({ entry }: { entry: ToastHistoryEntry }) {
   return (
     <div
       className={cn(
-        "flex gap-2 px-3 py-2 border-b border-border last:border-b-0",
-        !entry.read && "bg-accent/40",
+        "flex gap-2 border-b border-border px-3 py-2 last:border-b-0",
+        !entry.read ? "bg-default" : "bg-overlay",
       )}
     >
       <div className="mt-0.5 shrink-0">
         {isDestructive ? (
-          <AlertTriangle className="w-4 h-4 text-destructive" />
+          <AlertTriangle className="h-4 w-4 text-danger" />
         ) : (
-          <Info className="w-4 h-4 text-muted-foreground" />
+          <Info className="h-4 w-4 text-muted" />
         )}
       </div>
       <div className="min-w-0 flex-1">
         {title && (
-          <p className="text-sm font-medium text-foreground truncate">{title}</p>
+          <p className="truncate text-sm font-medium text-foreground">{title}</p>
         )}
         {description && (
-          <p className="text-xs text-muted-foreground line-clamp-2">{description}</p>
+          <p className="line-clamp-2 text-xs text-muted">{description}</p>
         )}
-        <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">
+        <p className="mt-1 text-[10px] uppercase tracking-wide text-muted">
           {formatTime(entry.createdAt)}
           {entry.dismissedAt ? " · dilihat" : ""}
         </p>
@@ -99,9 +99,8 @@ export function NotificationBell() {
         {unreadCount > 0 && (
           <span
             className={cn(
-              "absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full",
-              "bg-destructive text-destructive-foreground text-[10px] font-semibold",
-              "flex items-center justify-center pointer-events-none",
+              "pointer-events-none absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1",
+              "bg-danger text-[10px] font-semibold text-danger-foreground",
             )}
           >
             {unreadCount > 9 ? "9+" : unreadCount}
@@ -114,13 +113,12 @@ export function NotificationBell() {
           role="dialog"
           aria-label="Riwayat notifikasi"
           className={cn(
-            "absolute right-0 mt-2 w-80 max-w-[calc(100vw-1rem)] z-50",
-            "bg-popover text-popover-foreground border border-border rounded-md shadow-lg",
-            "flex flex-col overflow-hidden",
+            "absolute right-0 z-50 mt-2 flex w-80 max-w-[calc(100vw-1rem)] flex-col overflow-hidden",
+            "rounded-2xl border border-border bg-overlay text-overlay-foreground shadow-overlay",
           )}
         >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-            <p className="text-sm font-semibold">Riwayat Notifikasi</p>
+          <div className="flex items-center justify-between border-b border-border px-3 py-2">
+            <p className="text-sm font-semibold text-foreground">Riwayat Notifikasi</p>
             <div className="flex items-center gap-1">
               {entries.length > 0 && (
                 <Button
@@ -139,7 +137,7 @@ export function NotificationBell() {
 
           <div className="max-h-80 overflow-y-auto">
             {entries.length === 0 ? (
-              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+              <div className="px-3 py-6 text-center text-sm text-muted">
                 Belum ada notifikasi hari ini.
               </div>
             ) : (
@@ -148,12 +146,12 @@ export function NotificationBell() {
           </div>
 
           {entries.length > 0 && (
-            <div className="flex items-center justify-end gap-1 px-3 py-2 border-t border-border bg-muted/40">
+            <div className="flex items-center justify-end gap-1 border-t border-border bg-surface-secondary px-3 py-2">
               <Button
                 variant="ghost"
                 size="sm"
                 onPress={markAllRead}
-                className="h-7 px-2 text-xs text-muted"
+                className="h-7 px-2 text-xs"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
                 Tandai dibaca

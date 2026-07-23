@@ -131,9 +131,10 @@ function toast(props: ToastInput) {
     },
   }
 
+  // Prefer success for non-error so title uses success-soft-foreground (readable)
   const key = isDestructive
     ? heroToast.danger(message, opts)
-    : heroToast(message, { ...opts, variant: "default" })
+    : heroToast.success(message, opts)
 
   activeKeys.set(id, key)
   recordToastAdded({ ...props, id })

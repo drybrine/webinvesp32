@@ -2,34 +2,31 @@
 @import "@heroui/styles";
 
 /*
-  Token map (HeroUI vs leftover shadcn class names):
+  Contrast rules (HeroUI-first):
 
-  HeroUI:
-    --muted            = secondary TEXT gray
-    --surface*         = card/panel backgrounds
+  HeroUI CSS vars:
+    --muted            = secondary TEXT (gray) — used by toast/card description
     --foreground       = primary text
-    --background       = page bg
-    --accent           = brand (emerald, set below)
+    --surface*         = panel backgrounds
+    --background       = page background
 
-  Shadcn leftovers still used in pages:
-    text-muted-foreground  → must be TEXT gray
-    bg-muted*              → must be SURFACE, never text gray
-    bg-card / text-card-foreground
-    text-primary / bg-primary
+  Tailwind theme colors:
+    --color-muted MUST stay text-gray (HeroUI + text-muted utility)
+    bg-muted (shadcn leftover) is remapped via utilities → surface-secondary
+    text-muted-foreground (shadcn) → same gray as --muted
 */
 
-/* Emerald brand + dual muted mapping for Tailwind utilities */
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
   --color-card: var(--surface);
-  --color-card-foreground: var(--surface-foreground);
+  --color-card-foreground: var(--surface-foreground, var(--foreground));
   --color-popover: var(--overlay);
-  --color-popover-foreground: var(--overlay-foreground);
+  --color-popover-foreground: var(--overlay-foreground, var(--foreground));
 
-  /* bg-muted = surface; text-muted-foreground = gray text */
-  --color-muted: var(--surface-secondary);
+  /* TEXT gray — never a surface */
+  --color-muted: var(--muted);
   --color-muted-foreground: var(--muted);
 
   --color-secondary: var(--surface-secondary);
@@ -50,13 +47,16 @@
 
   --color-surface: var(--surface);
   --color-surface-secondary: var(--surface-secondary);
+  --color-surface-tertiary: var(--surface-tertiary);
+  --color-default: var(--default);
+  --color-overlay: var(--overlay);
 
   --radius-lg: calc(var(--radius) * 1.5);
   --radius-md: var(--radius);
   --radius-sm: calc(var(--radius) * 0.75);
 }
 
-/* Tint HeroUI accent emerald after theme vars load */
+/* Emerald brand after HeroUI theme vars */
 @layer theme {
   :root,
   .light,
@@ -67,6 +67,9 @@
     --accent-foreground: oklch(0.99 0 0);
     --focus: oklch(0.55 0.14 165);
     --link: oklch(0.45 0.12 165);
+
+    /* Stronger muted text for AA contrast on white/surface */
+    --muted: oklch(0.42 0.02 286);
   }
 }
 
@@ -87,6 +90,14 @@
     background: var(--background);
   }
 
+  /* Cards/modals/tables inherit readable text */
+  .card,
+  .modal__dialog,
+  .toast,
+  table {
+    color: var(--foreground);
+  }
+
   img {
     max-width: 100%;
     height: auto;
@@ -104,30 +115,101 @@
 }
 
 /*
-  Hard-fix contrast for leftover shadcn utilities.
-  HeroUI components that use var(--muted) for text stay correct because
-  we never overwrite the CSS variable --muted itself — only Tailwind
-  --color-muted (which feeds bg-muted / text-muted utilities).
+  Component-level contrast guarantees (HeroUI BEM).
+  Keep titles dark, secondary copy gray, never surface-as-text.
 */
-@layer utilities {
-  .text-muted {
-    color: var(--muted) !important;
+@layer components {
+  .card__title,
+  .modal__heading,
+  .toast__title {
+    color: var(--foreground);
   }
 
+  .card__description,
+  .toast__description {
+    color: var(--muted);
+  }
+
+  /* Toast body always readable on overlay surface */
+  .toast {
+    color: var(--overlay-foreground, var(--foreground));
+    background-color: var(--overlay, var(--surface));
+  }
+
+  .toast__title {
+    color: var(--overlay-foreground, var(--foreground));
+  }
+
+  .toast--danger .toast__title {
+    color: var(--danger-soft-foreground);
+  }
+
+  .toast--success .toast__title {
+    color: var(--success-soft-foreground);
+  }
+
+  .toast--warning .toast__title {
+    color: var(--warning-soft-foreground);
+  }
+
+  .toast--accent .toast__title {
+    color: var(--accent-soft-foreground);
+  }
+
+  /* Select / list items */
+  .select__value,
+  .list-box-item {
+    color: var(--foreground);
+  }
+
+  .select__value[data-placeholder="true"] {
+    color: var(--muted);
+  }
+
+  /* Chip labels stay on-chip contrast from HeroUI; ensure default chip text */
+  .chip__label {
+    color: inherit;
+  }
+}
+
+@layer utilities {
+  /* Text utilities — always gray/dark, never surface */
+  .text-muted,
   .text-muted-foreground {
     color: var(--muted) !important;
   }
 
-  .text-foreground {
-    color: var(--foreground) !important;
-  }
-
+  .text-foreground,
   .text-card-foreground,
   .text-popover-foreground,
   .text-secondary-foreground {
     color: var(--foreground) !important;
   }
 
+  .text-primary {
+    color: var(--color-primary) !important;
+  }
+
+  .text-primary-foreground {
+    color: var(--color-primary-foreground) !important;
+  }
+
+  .text-destructive {
+    color: var(--danger) !important;
+  }
+
+  .text-destructive-foreground {
+    color: var(--danger-foreground) !important;
+  }
+
+  .text-accent-foreground {
+    color: var(--accent-foreground) !important;
+  }
+
+  /*
+    Shadcn bg-muted* leftovers: map to surface, not text-gray.
+    (Tailwind --color-muted is text; these utilities override bg only.)
+  */
   .bg-muted {
     background-color: var(--surface-secondary) !important;
   }
@@ -142,6 +224,31 @@
 
   .bg-popover {
     background-color: var(--overlay) !important;
+  }
+
+  .bg-primary {
+    background-color: var(--color-primary) !important;
+  }
+
+  .bg-primary\/5 {
+    background-color: color-mix(in oklab, var(--color-primary) 5%, transparent) !important;
+  }
+
+  .bg-primary\/10 {
+    background-color: color-mix(in oklab, var(--color-primary) 10%, transparent) !important;
+  }
+
+  .bg-accent {
+    background-color: var(--accent) !important;
+  }
+
+  .bg-accent\/40 {
+    /* soft tint for unread rows — keep text readable */
+    background-color: color-mix(in oklab, var(--accent) 12%, var(--surface)) !important;
+  }
+
+  .bg-destructive {
+    background-color: var(--danger) !important;
   }
 
   .animate-fade-in {
@@ -160,13 +267,16 @@
     @apply transition-all duration-300 hover:shadow-md hover:-translate-y-[2px];
   }
   .heading-1 {
-    @apply text-3xl sm:text-4xl font-semibold tracking-tight text-foreground;
+    @apply text-3xl sm:text-4xl font-semibold tracking-tight;
+    color: var(--foreground);
   }
   .heading-2 {
-    @apply text-xl sm:text-2xl font-semibold tracking-tight text-foreground;
+    @apply text-xl sm:text-2xl font-semibold tracking-tight;
+    color: var(--foreground);
   }
   .heading-3 {
-    @apply text-lg sm:text-xl font-semibold tracking-tight text-foreground;
+    @apply text-lg sm:text-xl font-semibold tracking-tight;
+    color: var(--foreground);
   }
   .text-body {
     @apply text-sm leading-relaxed;
@@ -177,7 +287,8 @@
     color: var(--muted);
   }
   .stat-value {
-    @apply text-2xl sm:text-3xl font-semibold tracking-tight text-foreground;
+    @apply text-2xl sm:text-3xl font-semibold tracking-tight;
+    color: var(--foreground);
   }
   .stat-label {
     @apply text-xs font-medium;

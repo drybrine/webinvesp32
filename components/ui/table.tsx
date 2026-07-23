@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils"
 /** Lightweight table shell styled to sit well next to HeroUI surfaces. */
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto rounded-2xl border border-border/60 bg-surface">
-      <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
+    <div className="relative w-full overflow-auto rounded-2xl border border-border/60 bg-surface text-foreground">
+      <table ref={ref} className={cn("w-full caption-bottom text-sm text-foreground", className)} {...props} />
     </div>
   ),
 )
@@ -46,10 +46,11 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
 TableRow.displayName = "TableRow"
 
 const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
-  ({ className, ...props }, ref) => (
+  ({ className, style, ...props }, ref) => (
     <th
       ref={ref}
       className={cn("h-11 px-4 text-left align-middle text-xs font-semibold uppercase tracking-wide text-muted", className)}
+      style={{ color: "var(--muted)", ...style }}
       {...props}
     />
   ),
@@ -58,7 +59,7 @@ TableHead.displayName = "TableHead"
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
-    <td ref={ref} className={cn("p-4 align-middle", className)} {...props} />
+    <td ref={ref} className={cn("p-4 align-middle text-foreground", className)} {...props} />
   ),
 )
 TableCell.displayName = "TableCell"

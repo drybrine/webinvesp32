@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { variant?: "default" | "secondary" | "tertiary" | "transparent" }>(
   ({ className, variant = "default", children, ...props }, ref) => (
-    <HeroCard ref={ref as never} variant={variant} className={cn("w-full", className)} {...(props as Record<string, unknown>)}>
+    <HeroCard ref={ref as never} variant={variant} className={cn("w-full text-foreground", className)} {...(props as Record<string, unknown>)}>
       {children}
     </HeroCard>
   ),
@@ -24,7 +24,7 @@ CardHeader.displayName = "CardHeader"
 
 const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, children, ...props }, ref) => (
-    <HeroCard.Title ref={ref as never} className={cn(className)} {...(props as Record<string, unknown>)}>
+    <HeroCard.Title ref={ref as never} className={cn("text-foreground", className)} {...(props as Record<string, unknown>)}>
       {children}
     </HeroCard.Title>
   ),
@@ -33,7 +33,7 @@ CardTitle.displayName = "CardTitle"
 
 const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
   ({ className, children, ...props }, ref) => (
-    <HeroCard.Description ref={ref as never} className={cn(className)} {...(props as Record<string, unknown>)}>
+    <HeroCard.Description ref={ref as never} className={cn("text-muted", className)} {...(props as Record<string, unknown>)}>
       {children}
     </HeroCard.Description>
   ),
