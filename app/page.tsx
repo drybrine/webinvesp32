@@ -37,6 +37,7 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/components/auth-provider"
 import { canWrite } from "@/types/security"
 import { AuditTimeline } from "@/components/audit-timeline"
+import { LoadingSpinner } from "@/components/loading-spinner"
 
 const BarcodeComponent = dynamic(() => import("@/components/pdf417-barcode"), {
   ssr: false,
@@ -223,14 +224,7 @@ export default function DashboardPage() {
 
   // Only block on inventory — devices/stats can render while still connecting
   if (inventoryLoading) {
-    return (
-      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-2 border-border border-t-emerald-500 mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Memuat inventori...</p>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner fullScreen label="Memuat inventori..." />
   }
 
   if (inventoryError) {

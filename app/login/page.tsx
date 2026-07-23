@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { ArrowRight, LockKeyhole, Mail } from "lucide-react"
-import { Button, Card, Input, Label, Surface } from "@heroui/react"
+import { Button, Card, Input, Label, Spinner, Surface } from "@heroui/react"
 import { firebaseAuth } from "@/lib/firebase"
 import { BrandMark } from "@/components/brand-logo"
 import { useToast } from "@/hooks/use-toast"
@@ -115,6 +115,7 @@ export default function LoginPage() {
                 <Button type="submit" isPending={loading} fullWidth className="mt-1">
                   {({ isPending }) => (
                     <>
+                      {isPending ? <Spinner size="sm" color="current" /> : null}
                       {isPending ? "Memproses..." : resetMode ? "Kirim Reset" : "Masuk"}
                       {!isPending && <ArrowRight className="h-4 w-4" />}
                     </>

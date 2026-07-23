@@ -328,6 +328,27 @@
   width: 100% !important;
 }
 
+/* Ensure spin utilities always exist (TW4 + HeroUI spinner-fast) */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spin-fast {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.animate-spin-fast {
+  animation: spin-fast 0.6s linear infinite;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

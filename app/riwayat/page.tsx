@@ -24,6 +24,7 @@ import { firebaseHelpers } from "@/lib/firebase"
 import { downloadCsv } from "@/lib/csv"
 import { useAuth } from "@/components/auth-provider"
 import { canWrite } from "@/types/security"
+import { LoadingSpinner } from "@/components/loading-spinner"
 
 interface Transaction {
   id: string
@@ -276,14 +277,7 @@ export default function TransaksiPage() {
   }
 
   if (inventoryLoading || transactionsLoading) {
-    return (
-      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Memuat data...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen label="Memuat data..." />
   }
 
   if (transactionsError) {

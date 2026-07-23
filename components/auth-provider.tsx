@@ -15,6 +15,7 @@ import type { User } from "firebase/auth"
 import { usePathname, useRouter } from "next/navigation"
 import { database, firebaseAuth, getFirebaseAuth, waitForFirebaseReady } from "@/lib/firebase"
 import type { UserProfile, UserRole } from "@/types/security"
+import { LoadingSpinner } from "@/components/loading-spinner"
 
 interface AuthContextValue {
   user: User | null
@@ -28,14 +29,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 function LoadingScreen() {
-  return (
-    <div className="min-h-screen bg-muted/30 flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mx-auto mb-4" />
-        <p className="text-muted-foreground">Memverifikasi sesi...</p>
-      </div>
-    </div>
-  )
+  return <LoadingSpinner fullScreen label="Memverifikasi sesi..." className="bg-background" />
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

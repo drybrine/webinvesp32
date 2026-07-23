@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { InlineSpinner } from "@/components/loading-spinner"
 import { useToast } from "@/hooks/use-toast"
 import { useFirebaseInventory, type InventoryItem } from "@/hooks/use-firebase"
 import { firebaseHelpers } from "@/lib/firebase"
@@ -514,7 +515,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, scanMode, i
               className="bg-primary hover:bg-primary/95 text-primary-foreground h-11 text-xs font-bold rounded-xl shadow-lg shadow-primary/10 transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-1.5"
             >
               {isLoading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <InlineSpinner size="sm" className="text-white" />
               ) : (
                 <>
                   <Plus className="h-3.5 w-3.5" />
@@ -528,7 +529,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, scanMode, i
               className="bg-destructive hover:bg-destructive/95 text-destructive-foreground h-11 text-xs font-bold rounded-xl shadow-lg shadow-destructive/10 transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-1.5"
             >
               {isLoading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <InlineSpinner size="sm" className="text-white" />
               ) : (
                 <>
                   <Minus className="h-3.5 w-3.5" />
@@ -610,7 +611,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, scanMode, i
         <div className="rounded-xl border border-border/80 bg-muted/30 px-3.5 py-2.5 text-xs text-muted-foreground flex items-center gap-2 animate-fade-in-up">
           {lookupStatus === "loading" && (
             <>
-              <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary"></div>
+              <InlineSpinner size="sm" className="text-primary" />
               <span>Mencari data produk di Honda Cengkareng...</span>
             </>
           )}
@@ -824,7 +825,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, scanMode, i
         }`}
       >
         {isLoading ? (
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+          <InlineSpinner size="sm" className="mr-2 text-white" />
         ) : (
           <Plus className="h-4 w-4 mr-2" />
         )}
