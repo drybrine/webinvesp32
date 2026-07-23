@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { KeyRound, Plus, RefreshCw, UserCog } from "lucide-react"
+import { Cpu, KeyRound, Plus, RefreshCw, UserCog } from "lucide-react"
 import {
   createPasswordResetLink,
   createUserAccount,
@@ -111,10 +111,20 @@ export default function AdminUsersPage() {
             <h1 className="heading-1">Pengguna</h1>
             <p className="text-body max-w-2xl pt-1">Buat akun internal, atur peran, dan cabut akses.</p>
           </div>
-          <div className="flex gap-2">
-          <Button variant="outline" asChild><a href="/admin/devices">Kelola Scanner</a></Button>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-2" />Tambah Pengguna</Button></DialogTrigger>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" asChild className="border-border bg-surface shadow-sm hover:bg-default">
+              <a href="/admin/devices" className="inline-flex items-center gap-2">
+                <Cpu className="h-4 w-4 shrink-0" />
+                <span>Kelola Scanner</span>
+              </a>
+            </Button>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-4 w-4 shrink-0" />
+                  <span>Tambah Pengguna</span>
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Pengguna Baru</DialogTitle></DialogHeader>
               <div className="space-y-4 py-3">
