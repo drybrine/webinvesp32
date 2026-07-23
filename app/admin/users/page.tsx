@@ -112,8 +112,8 @@ export default function AdminUsersPage() {
             <p className="text-body max-w-2xl pt-1">Buat akun internal, atur peran, dan cabut akses.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" asChild className="border-border bg-surface shadow-sm hover:bg-default">
-              <a href="/admin/devices" className="inline-flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <a href="/admin/devices">
                 <Cpu className="h-4 w-4 shrink-0" />
                 <span>Kelola Scanner</span>
               </a>

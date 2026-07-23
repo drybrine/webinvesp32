@@ -56,10 +56,16 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       const child = children as React.ReactElement<{ className?: string; onClick?: React.MouseEventHandler }>
       return React.cloneElement(child, {
         className: cn(
-          "inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium transition-colors",
-          heroVariant === "primary" && "bg-accent text-accent-foreground hover:opacity-90",
-          heroVariant === "outline" && "border border-border bg-transparent hover:bg-default",
-          heroVariant === "ghost" && "hover:bg-default",
+          "inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium tracking-normal transition-colors",
+          // Match HeroUI button size tokens so asChild links align with real buttons
+          iconOnly && "size-9 p-0 md:size-8",
+          !iconOnly && heroSize === "sm" && "h-9 min-h-9 px-3 md:h-8 md:min-h-8",
+          !iconOnly && heroSize === "md" && "h-10 min-h-10 px-4 md:h-9 md:min-h-9",
+          !iconOnly && heroSize === "lg" && "h-11 min-h-11 px-6",
+          heroVariant === "primary" && "bg-accent text-accent-foreground shadow-sm hover:opacity-90",
+          heroVariant === "outline" && "border border-border bg-surface text-foreground shadow-sm hover:bg-default",
+          heroVariant === "ghost" && "text-foreground hover:bg-default",
+          heroVariant === "secondary" && "bg-secondary text-secondary-foreground hover:opacity-90",
           heroVariant === "danger" && "bg-danger text-danger-foreground",
           className,
           child.props.className,
