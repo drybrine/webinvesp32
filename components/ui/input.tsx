@@ -12,7 +12,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input"> &
       disabled={disabled}
       fullWidth={fullWidth}
       variant="secondary"
-      className={cn(className)}
+      className={cn("tracking-normal", className)}
       {...(props as Record<string, unknown>)}
     />
   ),

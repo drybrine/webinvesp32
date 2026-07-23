@@ -92,7 +92,7 @@ function Select({
         fullWidth
         variant="secondary"
       >
-        <HeroSelect.Trigger className={cn(triggerClassName)}>
+        <HeroSelect.Trigger className={cn("tracking-normal", triggerClassName)}>
           <HeroSelect.Value />
           <HeroSelect.Indicator />
         </HeroSelect.Trigger>

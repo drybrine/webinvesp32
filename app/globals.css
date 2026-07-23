@@ -81,6 +81,10 @@
     -moz-osx-font-smoothing: grayscale;
     color: var(--foreground);
     background: var(--background);
+    /* next/font sets --font-sans via layout; keep readable spacing */
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    word-spacing: normal;
+    letter-spacing: normal;
   }
 
   body {
@@ -88,6 +92,9 @@
     line-height: 1.5;
     color: var(--foreground);
     background: var(--background);
+    font-family: inherit;
+    word-spacing: normal;
+    letter-spacing: normal;
   }
 
   /* Cards/modals/tables inherit readable text */
@@ -96,6 +103,32 @@
   .toast,
   table {
     color: var(--foreground);
+  }
+
+  /*
+    Word spaces were collapsing on HeroUI controls after TW4 migration
+    (button gap compiled to 0; form controls inherit broken spacing).
+    Force normal spacing on interactive UI.
+  */
+  button,
+  input,
+  textarea,
+  select,
+  .button,
+  .input,
+  .select,
+  .select__trigger,
+  .select__value,
+  .list-box-item,
+  .chip,
+  .chip__label {
+    word-spacing: normal !important;
+    letter-spacing: normal !important;
+  }
+
+  /* HeroUI button source uses gap-2 but built CSS can collapse to 0 */
+  .button {
+    gap: 0.5rem !important;
   }
 
   img {

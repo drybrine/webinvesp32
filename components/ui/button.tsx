@@ -82,7 +82,11 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         isPending={isPending}
         fullWidth={fullWidth}
         type={type}
-        className={cn(variant === "link" && "underline-offset-4 hover:underline bg-transparent shadow-none", className)}
+        className={cn(
+          "gap-2 tracking-normal",
+          variant === "link" && "bg-transparent shadow-none underline-offset-4 hover:underline",
+          className,
+        )}
         onPress={() => {
           onPress?.()
           if (onClick) onClick({} as React.MouseEvent<HTMLButtonElement>)

@@ -83,44 +83,43 @@ export default function InventoryTable({
         <CardHeader className="border-b bg-muted/25">
           <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
             <div>
-              <CardTitle className="text-xl font-bold text-foreground">
-                Inventori ({filteredInventory.length})
+              <CardTitle className="text-xl font-bold tracking-normal text-foreground">
+                {`Inventori (${filteredInventory.length})`}
               </CardTitle>
-              <CardDescription className="text-sm text-muted-foreground mt-0.5">
+              <CardDescription className="mt-0.5 text-sm tracking-normal text-muted">
                 Kelola dan pantau stok barang
               </CardDescription>
             </div>
 
-            <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
               {canWrite && (
                 <Button onClick={onAddItem} size="sm" title="Tekan N untuk tambah item">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Tambah Item
+                  <Plus className="h-4 w-4 shrink-0" />
+                  <span>Tambah Item</span>
                 </Button>
               )}
               <Button variant="outline" onClick={onExport} size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Export CSV
+                <Download className="h-4 w-4 shrink-0" />
+                <span>Export CSV</span>
               </Button>
             </div>
           </div>
 
-          <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-4 mt-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
               <Input
                 placeholder="Cari item..."
                 value={searchTerm}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-10"
+                className="pl-10 tracking-normal"
                 title="Tekan / untuk fokus pencarian"
                 aria-label="Cari item inventori"
               />
             </div>
-            <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Select value={filterCategory} onValueChange={onFilterCategoryChange}>
-                <SelectTrigger className="w-full sm:w-[150px]" aria-label="Filter kategori">
-                  <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+                <SelectTrigger className="w-full tracking-normal sm:w-[160px]" aria-label="Filter kategori">
                   <SelectValue placeholder="Kategori" />
                 </SelectTrigger>
                 <SelectContent>
@@ -132,7 +131,7 @@ export default function InventoryTable({
                 </SelectContent>
               </Select>
               <Select value={sortOrder} onValueChange={onSortOrderChange}>
-                <SelectTrigger className="w-full sm:w-[150px]" aria-label="Urutkan">
+                <SelectTrigger className="w-full tracking-normal sm:w-[160px]" aria-label="Urutkan">
                   <SelectValue placeholder="Urutan" />
                 </SelectTrigger>
                 <SelectContent>

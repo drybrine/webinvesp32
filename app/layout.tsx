@@ -15,7 +15,8 @@ import { AppShell } from "@/components/app-shell"
 // Optimized font loading
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  display: 'swap',
+  display: "swap",
+  variable: "--font-sans",
 })
 
 export const metadata: Metadata = {
@@ -57,7 +58,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="id" className={jakarta.className}>
+    <html lang="id" className={`${jakarta.variable} ${jakarta.className}`}>
       <head>
         {/* Preconnect to critical origins for faster connections */}
         <link rel="preconnect" href="https://apis.google.com" />
