@@ -56,6 +56,7 @@ export default function TransaksiPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
   const [formData, setFormData] = useState({
     type: "in",
     productBarcode: "",
@@ -129,15 +130,16 @@ export default function TransaksiPage() {
   }, [filteredTransactions, currentPage])
 
   const handleAddTransaction = async () => {
+    if (isSaving) return
     if (!formData.productBarcode || !formData.productName || !formData.quantity || !formData.reason) {
-      toast({ title: "Error", description: "Mohon lengkapi semua field wajib.", variant: "destructive" })
+      toast({ title: "Gagal", description: "Mohon lengkapi semua field wajib.", variant: "destructive" })
       return
     }
 
     const quantityNum = Number.parseInt(formData.quantity)
 
-    if (isNaN(quantityNum)) {
-      toast({ title: "Error", description: "Jumlah harus berupa angka.", variant: "destructive" });
+    if (isNaN(quantityNum) || quantityNum === 0) {
+      toast({ title: "Gagal", description: "Jumlah harus berupa angka bukan nol.", variant: "destructive" });
       return;
     }
 
@@ -149,7 +151,7 @@ export default function TransaksiPage() {
       // Cek stok cukup sebelum proses
       const item = inventory.find(i => i.barcode === formData.productBarcode);
       if (item && (item.quantity || 0) + finalQuantity < 0) {
-        toast({ title: "Error", description: `Stok tidak cukup. Stok saat ini: ${item.quantity}`, variant: "destructive" });
+        toast({ title: "Gagal", description: `Stok tidak cukup. Stok saat ini: ${item.quantity}`, variant: "destructive" });
         return;
       }
     } else {
@@ -167,10 +169,11 @@ export default function TransaksiPage() {
       notes: formData.notes,
     }
 
+    setIsSaving(true)
     try {
       const itemToUpdate = inventory.find(item => item.barcode === formData.productBarcode);
       if (!itemToUpdate) {
-        toast({ title: "Error", description: `Produk dengan barcode ${formData.productBarcode} tidak ditemukan di inventory.`, variant: "destructive" });
+        toast({ title: "Gagal", description: `Produk dengan barcode ${formData.productBarcode} tidak ditemukan di inventori.`, variant: "destructive" });
         return;
       }
 
@@ -183,8 +186,18 @@ export default function TransaksiPage() {
       resetForm()
     } catch (error) {
       console.error("Error:", error);
-      toast({ title: "Error", description: "Gagal menambahkan transaksi.", variant: "destructive" })
+      toast({ title: "Gagal", description: "Gagal menambahkan transaksi.", variant: "destructive" })
+    } finally {
+      setIsSaving(false)
     }
+  }
+
+  /** Display signed qty: prefer type (abs ledger), fall back to signed legacy rows. */
+  const displayQty = (t: Transaction) => {
+    const abs = Math.abs(Number(t.quantity) || 0)
+    if (t.type === "out") return -abs
+    if (t.type === "in") return abs
+    return Number(t.quantity) || 0
   }
 
   const resetForm = () => {
@@ -275,9 +288,12 @@ export default function TransaksiPage() {
 
   if (transactionsError) {
     return (
-      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
-        <Card className="max-w-md">
-          <CardContent className="pt-6 text-destructive text-center">{transactionsError}</CardContent>
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardContent className="pt-6 text-center space-y-4">
+            <p className="text-destructive">{transactionsError}</p>
+            <Button onClick={() => window.location.reload()}>Muat Ulang</Button>
+          </CardContent>
         </Card>
       </div>
     );
@@ -440,8 +456,8 @@ export default function TransaksiPage() {
                       <div className="space-y-2"><Label>Catatan</Label><Input placeholder="Catatan (opsional)" value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} /></div>
                     </div>
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Batal</Button>
-                      <Button onClick={handleAddTransaction}>Simpan</Button>
+                      <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSaving}>Batal</Button>
+                      <Button onClick={handleAddTransaction} disabled={isSaving}>{isSaving ? "Menyimpan..." : "Simpan"}</Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>}
@@ -457,7 +473,45 @@ export default function TransaksiPage() {
             <CardDescription>Daftar transaksi yang telah dilakukan</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            {/* Mobile cards */}
+            <div className="block sm:hidden divide-y">
+              {filteredTransactions.length === 0 ? (
+                <div className="text-center py-12 px-4">
+                  <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground">Tidak ada transaksi</p>
+                </div>
+              ) : (
+                pagedTransactions.map((transaction) => {
+                  const qty = displayQty(transaction)
+                  return (
+                    <div key={transaction.id} className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">{transaction.productName || "—"}</p>
+                          <p className="text-xs font-mono text-muted-foreground">{transaction.productBarcode || "—"}</p>
+                        </div>
+                        <span className={`font-semibold text-sm shrink-0 ${qty < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                          {qty > 0 ? "+" : ""}{qty}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant={getTypeVariant(transaction.type)}>{getTypeLabel(transaction.type)}</Badge>
+                        <Badge variant={isManualSource(transaction) ? "outline" : "secondary"} className="text-[10px]">
+                          {isManualSource(transaction) ? "Manual" : "Scanner"}
+                        </Badge>
+                        <span>{formatDateTime(transaction.timestamp)}</span>
+                      </div>
+                      <Button variant="outline" size="sm" className="w-full h-9" onClick={() => openViewDialog(transaction)}>
+                        <Eye className="h-4 w-4 mr-1" /> Lihat detail
+                      </Button>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -478,35 +532,40 @@ export default function TransaksiPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    pagedTransactions.map((transaction) => (
-                      <TableRow key={transaction.id}>
-                        <TableCell className="text-sm">{formatDateTime(transaction.timestamp)}</TableCell>
-                        <TableCell><Badge variant={getTypeVariant(transaction.type)}>{getTypeLabel(transaction.type)}</Badge></TableCell>
-                        <TableCell>
-                          <div className="font-medium">{transaction.productName}</div>
-                          <div className="text-xs text-muted-foreground font-mono">{transaction.productBarcode}</div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <span className={transaction.quantity < 0 ? "text-red-600" : "text-emerald-600"}>
-                            {transaction.quantity > 0 ? "+" : ""}{transaction.quantity}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          <div className="flex flex-col gap-1">
-                            <span>{transaction.operator}</span>
-                            <Badge
-                              variant={isManualSource(transaction) ? "outline" : "secondary"}
-                              className="text-[10px] w-fit"
-                            >
-                              {isManualSource(transaction) ? "Manual" : "Scanner"}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => openViewDialog(transaction)}><Eye className="h-4 w-4" /></Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    pagedTransactions.map((transaction) => {
+                      const qty = displayQty(transaction)
+                      return (
+                        <TableRow key={transaction.id}>
+                          <TableCell className="text-sm">{formatDateTime(transaction.timestamp)}</TableCell>
+                          <TableCell><Badge variant={getTypeVariant(transaction.type)}>{getTypeLabel(transaction.type)}</Badge></TableCell>
+                          <TableCell>
+                            <div className="font-medium">{transaction.productName}</div>
+                            <div className="text-xs text-muted-foreground font-mono">{transaction.productBarcode}</div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className={qty < 0 ? "text-red-600" : "text-emerald-600"}>
+                              {qty > 0 ? "+" : ""}{qty}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            <div className="flex flex-col gap-1">
+                              <span>{transaction.operator}</span>
+                              <Badge
+                                variant={isManualSource(transaction) ? "outline" : "secondary"}
+                                className="text-[10px] w-fit"
+                              >
+                                {isManualSource(transaction) ? "Manual" : "Scanner"}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={() => openViewDialog(transaction)} aria-label="Lihat detail transaksi">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -514,7 +573,7 @@ export default function TransaksiPage() {
 
             {/* Pagination */}
             {filteredTransactions.length > PAGE_SIZE && (
-              <div className="flex items-center justify-between px-2 py-3 border-t">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t">
                 <div className="text-sm text-muted-foreground">
                   Menampilkan {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, filteredTransactions.length)} dari {filteredTransactions.length}
                 </div>
@@ -525,7 +584,7 @@ export default function TransaksiPage() {
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
                   >
-                    Prev
+                    Sebelumnya
                   </Button>
                   <span className="text-sm font-medium">
                     {currentPage} / {totalPages}
@@ -536,7 +595,7 @@ export default function TransaksiPage() {
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
                   >
-                    Next
+                    Berikutnya
                   </Button>
                 </div>
               </div>
@@ -556,7 +615,7 @@ export default function TransaksiPage() {
                   <div className="col-span-2"><Label className="text-xs text-muted-foreground">Produk</Label><p className="font-semibold">{selectedTransaction.productName}</p></div>
                   <div><Label className="text-xs text-muted-foreground">Barcode</Label><p className="text-sm font-mono">{selectedTransaction.productBarcode}</p></div>
                   <div><Label className="text-xs text-muted-foreground">Stok Sekarang</Label><p>{getCurrentStock(selectedTransaction.productBarcode)}</p></div>
-                  <div><Label className="text-xs text-muted-foreground">Jumlah</Label><p className={`font-semibold ${selectedTransaction.quantity < 0 ? "text-red-600" : "text-emerald-600"}`}>{selectedTransaction.quantity > 0 ? "+" : ""}{selectedTransaction.quantity} unit</p></div>
+                  <div><Label className="text-xs text-muted-foreground">Jumlah</Label><p className={`font-semibold ${displayQty(selectedTransaction) < 0 ? "text-red-600" : "text-emerald-600"}`}>{displayQty(selectedTransaction) > 0 ? "+" : ""}{displayQty(selectedTransaction)} unit</p></div>
                   <div className="col-span-2"><Label className="text-xs text-muted-foreground">Alasan</Label><p className="text-sm">{selectedTransaction.reason}</p></div>
                   {selectedTransaction.notes && <div className="col-span-2"><Label className="text-xs text-muted-foreground">Catatan</Label><p className="text-sm">{selectedTransaction.notes}</p></div>}
                 </div>

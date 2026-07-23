@@ -84,10 +84,10 @@ export default function InventoryTable({
           <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
             <div>
               <CardTitle className="text-xl font-bold text-foreground">
-                Inventory ({filteredInventory.length})
+                Inventori ({filteredInventory.length})
               </CardTitle>
               <CardDescription className="text-sm text-muted-foreground mt-0.5">
-                Kelola dan pantau stok barang Anda
+                Kelola dan pantau stok barang
               </CardDescription>
             </div>
 
@@ -114,6 +114,7 @@ export default function InventoryTable({
                 onChange={(e) => onSearchChange(e.target.value)}
                 className="pl-10"
                 title="Tekan / untuk fokus pencarian"
+                aria-label="Cari item inventori"
               />
             </div>
             <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
@@ -351,23 +352,23 @@ function DesktopRow({ item, onView, onEdit, onDelete, onStockAdjust, canWrite }:
       <TableCell className="text-muted-foreground text-sm">{item.location || "-"}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end items-center gap-1">
-          {canWrite && <Button variant="ghost" size="sm" className="h-8 px-2 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" onClick={() => onStockAdjust(item, "add")} title="Tambah stok">
-            <Plus className="h-3.5 w-3.5 mr-1" />
+          {canWrite && <Button variant="ghost" size="sm" className="h-9 px-2.5 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" onClick={() => onStockAdjust(item, "add")} title="Tambah stok" aria-label={`Tambah stok ${item.name}`}>
+            <Plus className="h-4 w-4 mr-1" />
             <span className="text-xs">Tambah</span>
           </Button>}
-          {canWrite && <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onStockAdjust(item, "subtract")} disabled={item.quantity <= 0} title="Kurangi stok">
-            <Minus className="h-3.5 w-3.5 mr-1" />
+          {canWrite && <Button variant="ghost" size="sm" className="h-9 px-2.5" onClick={() => onStockAdjust(item, "subtract")} disabled={item.quantity <= 0} title="Kurangi stok" aria-label={`Kurangi stok ${item.name}`}>
+            <Minus className="h-4 w-4 mr-1" />
             <span className="text-xs">Kurangi</span>
           </Button>}
           {canWrite && <div className="w-px h-4 bg-border mx-0.5" />}
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground" onClick={() => onView({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Lihat detail">
-            <Eye className="h-3.5 w-3.5" />
+          <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground" onClick={() => onView({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Lihat detail" aria-label={`Lihat ${item.name}`}>
+            <Eye className="h-4 w-4" />
           </Button>
-          {canWrite && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground" onClick={() => onEdit({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Edit item">
-            <Edit className="h-3.5 w-3.5" />
+          {canWrite && <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground" onClick={() => onEdit({ ...item, barcode: item.barcode ?? "", supplier: item.supplier ?? "" })} title="Edit item" aria-label={`Edit ${item.name}`}>
+            <Edit className="h-4 w-4" />
           </Button>}
-          {canWrite && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive/70 hover:text-destructive hover:bg-destructive/5" onClick={() => onDelete(item.id, item.name)} title="Hapus item">
-            <Trash2 className="h-3.5 w-3.5" />
+          {canWrite && <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-destructive/70 hover:text-destructive hover:bg-destructive/5" onClick={() => onDelete(item.id, item.name)} title="Hapus item" aria-label={`Hapus ${item.name}`}>
+            <Trash2 className="h-4 w-4" />
           </Button>}
         </div>
       </TableCell>

@@ -62,12 +62,10 @@ export default function DashboardPage() {
     updateItem,
     deleteItem,
   } = useFirebaseInventory()
-  const { loading: scansLoading, error: scansError } = { loading: false, error: null }
 
   const {
     devices,
     loading: devicesLoading,
-    error: devicesError,
     onlineDevices: realtimeOnlineDevices,
     totalDevices
   } = useRealtimeDeviceStatus()
@@ -81,6 +79,7 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState("all")
   const [sortOrder, setSortOrder] = useState("name-asc")
+  const [isSaving, setIsSaving] = useState(false)
 
   const { toast } = useToast()
 
@@ -222,24 +221,25 @@ export default function DashboardPage() {
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [writable])
 
-  if (inventoryLoading || scansLoading || devicesLoading) {
+  // Only block on inventory — devices/stats can render while still connecting
+  if (inventoryLoading) {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-2 border-border border-t-emerald-500 mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Memuat data...</p>
+          <p className="text-muted-foreground">Memuat inventori...</p>
         </div>
       </div>
     )
   }
 
-  if (inventoryError || scansError || devicesError) {
+  if (inventoryError) {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center p-4">
         <div className="text-center max-w-md">
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{inventoryError || scansError || devicesError || "Gagal memuat data."}</AlertDescription>
+            <AlertDescription>{inventoryError || "Gagal memuat data."}</AlertDescription>
           </Alert>
           <Button onClick={() => window.location.reload()}>Muat Ulang</Button>
         </div>
@@ -248,9 +248,9 @@ export default function DashboardPage() {
   }
 
   const addInventoryItem = async () => {
-    if (!writable) return
+    if (!writable || isSaving) return
     if (!newItem.name || !newItem.barcode) {
-      toast({ title: "Kesalahan", description: "Nama dan barcode wajib diisi", variant: "destructive" })
+      toast({ title: "Gagal", description: "Nama dan barcode wajib diisi", variant: "destructive" })
       return
     }
     const existingItemByBarcode = inventory.find((item) => item.barcode && item.barcode === newItem.barcode && newItem.barcode !== "")
@@ -258,18 +258,22 @@ export default function DashboardPage() {
       toast({ title: "Gagal", description: `Barcode ${newItem.barcode} sudah digunakan untuk ${existingItemByBarcode.name}`, variant: "destructive" })
       return
     }
+    setIsSaving(true)
     try {
       await addItem(newItem)
       setNewItem({ barcode: "", name: "", description: "", category: "", quantity: 0, minStock: 5, supplier: "", location: "" })
       setIsAddItemOpen(false)
       toast({ title: "Berhasil", description: "Item berhasil ditambahkan" })
     } catch {
-      toast({ title: "Error", description: "Gagal menambahkan item", variant: "destructive" })
+      toast({ title: "Gagal", description: "Gagal menambahkan item", variant: "destructive" })
+    } finally {
+      setIsSaving(false)
     }
   }
 
   const updateInventoryItem = async () => {
-    if (!writable || !editingItem) return
+    if (!writable || !editingItem || isSaving) return
+    setIsSaving(true)
     try {
       const operationId = firebaseHelpers.createOperationId()
       // Whitelist only known metadata fields — never spread full RTDB row
@@ -303,7 +307,9 @@ export default function DashboardPage() {
       setEditingItem(null)
       toast({ title: "Berhasil", description: "Item berhasil diperbarui" })
     } catch {
-      toast({ title: "Error", description: "Gagal memperbarui item", variant: "destructive" })
+      toast({ title: "Gagal", description: "Gagal memperbarui item", variant: "destructive" })
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -312,25 +318,28 @@ export default function DashboardPage() {
   }
 
   const confirmDelete = async () => {
-    if (!writable || !deletingItem) return
+    if (!writable || !deletingItem || isSaving) return
+    setIsSaving(true)
     try {
       await deleteItem(deletingItem.id)
       toast({ title: "Berhasil", description: `"${deletingItem.name}" berhasil dihapus` })
     } catch {
-      toast({ title: "Error", description: "Gagal menghapus item", variant: "destructive" })
+      toast({ title: "Gagal", description: "Gagal menghapus item", variant: "destructive" })
     } finally {
+      setIsSaving(false)
       setDeletingItem(null)
     }
   }
 
   const handleStockAdjustment = async () => {
-    if (!writable || !stockAdjustment) return
+    if (!writable || !stockAdjustment || isSaving) return
     const { itemId, amount, type, currentQuantity, itemName } = stockAdjustment
     const newQuantity = type === "add" ? currentQuantity + amount : currentQuantity - amount
     if (newQuantity < 0) {
-      toast({ title: "Error", description: "Stok tidak boleh kurang dari nol.", variant: "destructive" })
+      toast({ title: "Gagal", description: "Stok tidak boleh kurang dari nol.", variant: "destructive" })
       return
     }
+    setIsSaving(true)
     try {
       const adjustedItem = inventory.find((i) => i.id === itemId)
       const delta = type === "add" ? amount : -amount
@@ -349,7 +358,9 @@ export default function DashboardPage() {
       setStockAdjustment(null)
       toast({ title: "Berhasil", description: `Stok ${itemName} ${type === "add" ? "ditambah" : "dikurangi"} sebanyak ${amount}` })
     } catch {
-      toast({ title: "Error", description: "Gagal mengubah stok.", variant: "destructive" })
+      toast({ title: "Gagal", description: "Gagal mengubah stok.", variant: "destructive" })
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -390,9 +401,9 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between animate-fade-in-up">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Overview</p>
-            <h1 className="heading-1">Dashboard Inventory</h1>
-            <p className="text-body max-w-md pt-1">Kelola stok barang warehouse dan pantau prediksi stok otomatis.</p>
+            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Ringkasan</p>
+            <h1 className="heading-1">Dashboard Inventori</h1>
+            <p className="text-body max-w-md pt-1">Kelola stok barang gudang dan pantau prediksi stok otomatis.</p>
           </div>
 
           <div
@@ -515,43 +526,43 @@ export default function DashboardPage() {
         </div>
 
         {/* Add Item Dialog */}
-        <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
+        <Dialog open={isAddItemOpen} onOpenChange={(open) => { if (!isSaving) setIsAddItemOpen(open) }}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Tambah Item Baru</DialogTitle>
-              <DialogDescription>Masukkan detail item inventory.</DialogDescription>
+              <DialogDescription>Masukkan detail item inventori.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="barcode" className="text-right">Barcode</Label>
-                <Input id="barcode" value={newItem.barcode} onChange={(e) => setNewItem({ ...newItem, barcode: e.target.value })} className="col-span-3" placeholder="Scan atau ketik" />
+              <div className="space-y-2">
+                <Label htmlFor="barcode">Barcode</Label>
+                <Input id="barcode" value={newItem.barcode} onChange={(e) => setNewItem({ ...newItem, barcode: e.target.value })} placeholder="Scan atau ketik" disabled={isSaving} />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">Nama *</Label>
-                <Input id="name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} className="col-span-3" placeholder="Contoh: Coca Cola 330ml" />
+              <div className="space-y-2">
+                <Label htmlFor="name">Nama *</Label>
+                <Input id="name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} placeholder="Contoh: Busi NGK CPR8EA-9" disabled={isSaving} />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="category" className="text-right">Kategori</Label>
-                <Input id="category" value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} className="col-span-3" placeholder="Contoh: Minuman" />
+              <div className="space-y-2">
+                <Label htmlFor="category">Kategori</Label>
+                <Input id="category" value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} placeholder="Contoh: Sparepart" disabled={isSaving} />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="quantity" className="text-right">Kuantitas</Label>
-                <Input id="quantity" type="number" value={newItem.quantity} onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })} className="col-span-3" />
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Kuantitas</Label>
+                <Input id="quantity" type="number" value={newItem.quantity} onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })} disabled={isSaving} />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="location" className="text-right">Lokasi</Label>
-                <Input id="location" value={newItem.location} onChange={(e) => setNewItem({ ...newItem, location: e.target.value })} className="col-span-3" placeholder="Contoh: Rak A1" />
+              <div className="space-y-2">
+                <Label htmlFor="location">Lokasi</Label>
+                <Input id="location" value={newItem.location} onChange={(e) => setNewItem({ ...newItem, location: e.target.value })} placeholder="Contoh: Rak A1" disabled={isSaving} />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddItemOpen(false)}>Batal</Button>
-              <Button onClick={addInventoryItem}>Simpan</Button>
+              <Button variant="outline" onClick={() => setIsAddItemOpen(false)} disabled={isSaving}>Batal</Button>
+              <Button onClick={addInventoryItem} disabled={isSaving}>{isSaving ? "Menyimpan..." : "Simpan"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
         {/* Edit Item Dialog */}
-        <Dialog open={!!editingItem} onOpenChange={() => setEditingItem(null)}>
+        <Dialog open={!!editingItem} onOpenChange={(open) => { if (!open && !isSaving) setEditingItem(null) }}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Edit Item</DialogTitle>
@@ -559,35 +570,35 @@ export default function DashboardPage() {
             </DialogHeader>
             {editingItem && (
               <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-barcode" className="text-right">Barcode</Label>
-                  <Input id="edit-barcode" value={editingItem.barcode ?? ""} onChange={(e) => setEditingItem({ ...editingItem, barcode: e.target.value })} className="col-span-3" />
+                <div className="space-y-2">
+                  <Label htmlFor="edit-barcode">Barcode</Label>
+                  <Input id="edit-barcode" value={editingItem.barcode ?? ""} onChange={(e) => setEditingItem({ ...editingItem, barcode: e.target.value })} disabled={isSaving} />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-name" className="text-right">Nama</Label>
-                  <Input id="edit-name" value={editingItem.name} onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })} className="col-span-3" />
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name">Nama</Label>
+                  <Input id="edit-name" value={editingItem.name} onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })} disabled={isSaving} />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-category" className="text-right">Kategori</Label>
-                  <Input id="edit-category" value={editingItem.category} onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })} className="col-span-3" />
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Kategori</Label>
+                  <Input id="edit-category" value={editingItem.category} onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })} disabled={isSaving} />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-quantity" className="text-right">Kuantitas</Label>
-                  <Input id="edit-quantity" type="number" value={editingItem.quantity} onChange={(e) => setEditingItem({ ...editingItem, quantity: parseInt(e.target.value) || 0 })} className="col-span-3" />
+                <div className="space-y-2">
+                  <Label htmlFor="edit-quantity">Kuantitas</Label>
+                  <Input id="edit-quantity" type="number" value={editingItem.quantity} onChange={(e) => setEditingItem({ ...editingItem, quantity: parseInt(e.target.value) || 0 })} disabled={isSaving} />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-min-stock" className="text-right">Stok Minimum</Label>
-                  <Input id="edit-min-stock" type="number" min="0" value={editingItem.minStock} onChange={(e) => setEditingItem({ ...editingItem, minStock: parseInt(e.target.value) || 0 })} className="col-span-3" />
+                <div className="space-y-2">
+                  <Label htmlFor="edit-min-stock">Stok Minimum</Label>
+                  <Input id="edit-min-stock" type="number" min="0" value={editingItem.minStock} onChange={(e) => setEditingItem({ ...editingItem, minStock: parseInt(e.target.value) || 0 })} disabled={isSaving} />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-location" className="text-right">Lokasi</Label>
-                  <Input id="edit-location" value={editingItem.location} onChange={(e) => setEditingItem({ ...editingItem, location: e.target.value })} className="col-span-3" />
+                <div className="space-y-2">
+                  <Label htmlFor="edit-location">Lokasi</Label>
+                  <Input id="edit-location" value={editingItem.location} onChange={(e) => setEditingItem({ ...editingItem, location: e.target.value })} disabled={isSaving} />
                 </div>
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setEditingItem(null)}>Batal</Button>
-              <Button onClick={updateInventoryItem}>Simpan</Button>
+              <Button variant="outline" onClick={() => setEditingItem(null)} disabled={isSaving}>Batal</Button>
+              <Button onClick={updateInventoryItem} disabled={isSaving}>{isSaving ? "Menyimpan..." : "Simpan"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -656,25 +667,27 @@ export default function DashboardPage() {
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setStockAdjustment(null)}>Batal</Button>
-              <Button onClick={handleStockAdjustment}>{stockAdjustment?.type === "add" ? "Tambah" : "Kurangi"} Stok</Button>
+              <Button variant="outline" onClick={() => setStockAdjustment(null)} disabled={isSaving}>Batal</Button>
+              <Button onClick={handleStockAdjustment} disabled={isSaving}>
+                {isSaving ? "Menyimpan..." : `${stockAdjustment?.type === "add" ? "Tambah" : "Kurangi"} Stok`}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
         {/* Delete Confirmation AlertDialog */}
-        <AlertDialog open={!!deletingItem} onOpenChange={() => setDeletingItem(null)}>
+        <AlertDialog open={!!deletingItem} onOpenChange={(open) => { if (!open && !isSaving) setDeletingItem(null) }}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Hapus item?</AlertDialogTitle>
               <AlertDialogDescription>
-                {deletingItem && `"${deletingItem.name}" akan dihapus dari inventory. Tindakan ini tidak dapat dibatalkan.`}
+                {deletingItem && `"${deletingItem.name}" akan dihapus dari inventori. Tindakan ini tidak dapat dibatalkan.`}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Batal</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Hapus
+              <AlertDialogCancel disabled={isSaving}>Batal</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete} disabled={isSaving} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                {isSaving ? "Menghapus..." : "Hapus"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
