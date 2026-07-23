@@ -152,6 +152,56 @@
     color: var(--muted) !important;
   }
 
+  /*
+    Smoother modal open/close. Default HeroUI exit is ~100ms and feels
+    snappy/cut off when parent state clears content mid-animation.
+  */
+  .modal__backdrop[data-entering="true"],
+  .dialog-backdrop-motion[data-entering="true"] {
+    animation-duration: 220ms !important;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  .modal__backdrop[data-exiting="true"],
+  .dialog-backdrop-motion[data-exiting="true"] {
+    animation-duration: 240ms !important;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+
+  .modal__container[data-entering="true"],
+  .dialog-container-motion[data-entering="true"] {
+    animation-duration: 280ms !important;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  .modal__container[data-exiting="true"],
+  .dialog-container-motion[data-exiting="true"] {
+    animation-duration: 240ms !important;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+
+  .modal__dialog.dialog-panel-motion {
+    transition:
+      transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 240ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform, opacity;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .modal__backdrop[data-entering="true"],
+    .modal__backdrop[data-exiting="true"],
+    .modal__container[data-entering="true"],
+    .modal__container[data-exiting="true"],
+    .dialog-backdrop-motion[data-entering="true"],
+    .dialog-backdrop-motion[data-exiting="true"],
+    .dialog-container-motion[data-entering="true"],
+    .dialog-container-motion[data-exiting="true"],
+    .modal__dialog.dialog-panel-motion {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
   img {
     max-width: 100%;
     height: auto;

@@ -66,13 +66,43 @@ function AlertDialogOverlay() {
   return null
 }
 
+const EXIT_MS = 280
+
 function AlertDialogContent({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   const { open, setOpen } = useAlertDialogCtx()
+  const [mounted, setMounted] = React.useState(open)
+  const [visible, setVisible] = React.useState(open)
+  const contentRef = React.useRef(children)
+
+  if (open) contentRef.current = children
+
+  React.useEffect(() => {
+    if (open) {
+      setMounted(true)
+      const id = requestAnimationFrame(() => setVisible(true))
+      return () => cancelAnimationFrame(id)
+    }
+    setVisible(false)
+    const t = window.setTimeout(() => setMounted(false), EXIT_MS)
+    return () => window.clearTimeout(t)
+  }, [open])
+
+  if (!mounted) return null
+
   return (
-    <Modal.Backdrop isOpen={open} onOpenChange={setOpen} isDismissable={false} variant="opaque">
-      <Modal.Container placement="center" size="sm">
-        <Modal.Dialog className={cn("sm:max-w-md", className)} {...(props as Record<string, unknown>)}>
-          {children}
+    <Modal.Backdrop
+      isOpen={visible}
+      onOpenChange={setOpen}
+      isDismissable={false}
+      variant="opaque"
+      className="dialog-backdrop-motion"
+    >
+      <Modal.Container placement="center" size="sm" className="dialog-container-motion">
+        <Modal.Dialog
+          className={cn("dialog-panel-motion sm:max-w-md", className)}
+          {...(props as Record<string, unknown>)}
+        >
+          {contentRef.current}
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>

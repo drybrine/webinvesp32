@@ -4,6 +4,8 @@ import * as React from "react"
 import { Modal } from "@heroui/react"
 import { cn } from "@/lib/utils"
 
+const EXIT_MS = 280
+
 type DialogContextValue = {
   open: boolean
   setOpen: (open: boolean) => void
@@ -106,16 +108,49 @@ function isDialogFooter(child: React.ReactNode): boolean {
 
 function DialogContent({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   const { open, setOpen } = useDialogCtx()
-  const childArray = React.Children.toArray(children)
+  const [mounted, setMounted] = React.useState(open)
+  const [visible, setVisible] = React.useState(open)
+  const contentRef = React.useRef(children)
+
+  // Keep last open content so close animation still has body/footer
+  if (open) {
+    contentRef.current = children
+  }
+
+  React.useEffect(() => {
+    if (open) {
+      setMounted(true)
+      const id = requestAnimationFrame(() => setVisible(true))
+      return () => cancelAnimationFrame(id)
+    }
+
+    setVisible(false)
+    const t = window.setTimeout(() => setMounted(false), EXIT_MS)
+    return () => window.clearTimeout(t)
+  }, [open])
+
+  if (!mounted) return null
+
+  const childArray = React.Children.toArray(contentRef.current)
   const footers = childArray.filter(isDialogFooter)
   const rest = childArray.filter((child) => !isDialogFooter(child))
 
   return (
-    <Modal.Backdrop isOpen={open} onOpenChange={setOpen} variant="blur">
-      <Modal.Container placement="center" size="md" scroll="inside">
+    <Modal.Backdrop
+      isOpen={visible}
+      onOpenChange={setOpen}
+      variant="blur"
+      className="dialog-backdrop-motion"
+    >
+      <Modal.Container
+        placement="center"
+        size="md"
+        scroll="inside"
+        className="dialog-container-motion"
+      >
         <Modal.Dialog
           className={cn(
-            "flex w-full max-h-[min(90dvh,720px)] flex-col overflow-hidden sm:max-w-lg",
+            "dialog-panel-motion flex w-full max-h-[min(90dvh,720px)] flex-col overflow-hidden sm:max-w-lg",
             className,
           )}
           {...(props as Record<string, unknown>)}
