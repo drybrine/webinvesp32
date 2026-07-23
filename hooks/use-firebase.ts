@@ -21,6 +21,31 @@ export interface InventoryItem {
   deleted?: boolean
 }
 
+/** Drop legacy retail fields that rules reject ($other:false). */
+function sanitizeInventoryItem(raw: Record<string, unknown>, id: string): InventoryItem {
+  const {
+    price: _price,
+    unitPrice: _unitPrice,
+    totalAmount: _totalAmount,
+    ...rest
+  } = raw
+  return {
+    id,
+    name: typeof rest.name === "string" ? rest.name : "",
+    category: typeof rest.category === "string" ? rest.category : "",
+    quantity: Number(rest.quantity) || 0,
+    minStock: Number(rest.minStock) || 0,
+    description: typeof rest.description === "string" ? rest.description : "",
+    location: typeof rest.location === "string" ? rest.location : "",
+    barcode: typeof rest.barcode === "string" ? rest.barcode : undefined,
+    supplier: typeof rest.supplier === "string" ? rest.supplier : undefined,
+    createdAt: rest.createdAt,
+    updatedAt: rest.updatedAt,
+    lastUpdated: rest.lastUpdated,
+    deleted: typeof rest.deleted === "boolean" ? rest.deleted : undefined,
+  }
+}
+
 export interface ScanRecord {
   id: string
   barcode: string
@@ -90,7 +115,14 @@ export function useFirebaseInventory() {
             try {
               const data = snapshot.val();
               const loadedItems: InventoryItem[] = data
-                ? Object.keys(data).map((key) => ({ ...data[key], id: key }))
+                ? Object.keys(data).map((key) =>
+                    sanitizeInventoryItem(
+                      typeof data[key] === "object" && data[key] !== null
+                        ? (data[key] as Record<string, unknown>)
+                        : {},
+                      key,
+                    ),
+                  )
                 : [];
               setItemsData(loadedItems);
               setError(null);

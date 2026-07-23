@@ -485,7 +485,7 @@ export default function PrediksiPage() {
       predicted: Number(f.predictedQuantity.toFixed(2)),
     }))
     return [...hist, ...fc]
-  }, [history, prediction])
+  }, [history, prediction, selectedItem?.quantity])
 
   const forecastStockout = useMemo(() => {
     if (!prediction) return null

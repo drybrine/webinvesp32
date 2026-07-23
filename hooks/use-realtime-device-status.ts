@@ -112,12 +112,19 @@ export function useRealtimeDeviceStatus() {
   }, [])
 
   useEffect(() => {
-    if (!role) return
+    if (!role) {
+      setRawDevices({})
+      recomputeDevices({})
+      setConnectionStatus("disconnected")
+      setLoading(false)
+      return
+    }
     let unsubscribe: Unsubscribe | undefined
     let unsubscribeOffset: Unsubscribe | undefined
     let cancelled = false
 
     const initializeDevices = async () => {
+      setLoading(true)
       setConnectionStatus("connecting")
       const firebaseReady = await waitForFirebaseReady(5000)
 

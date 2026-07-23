@@ -114,10 +114,10 @@ export default function DashboardPage() {
       const term = searchTerm.toLowerCase()
       result = result.filter(
         (item) =>
-          item.name.toLowerCase().includes(term) ||
-          (item.barcode && item.barcode.toLowerCase().includes(term)) ||
-          (item.category && item.category.toLowerCase().includes(term)) ||
-          (item.location && item.location.toLowerCase().includes(term)),
+          (item.name || "").toLowerCase().includes(term) ||
+          (item.barcode || "").toLowerCase().includes(term) ||
+          (item.category || "").toLowerCase().includes(term) ||
+          (item.location || "").toLowerCase().includes(term),
       )
     }
 
@@ -272,17 +272,24 @@ export default function DashboardPage() {
     if (!writable || !editingItem) return
     try {
       const operationId = firebaseHelpers.createOperationId()
-      // Write only metadata — never the absolute quantity, to avoid clobbering
-      // concurrent stock changes (scanner/other tabs) that happened while the
-      // dialog was open.
-      const { quantity, id, lastUpdated, updatedAt, createdAt, ...metadata } = editingItem
-      await updateItem(id, metadata, operationId)
+      // Whitelist only known metadata fields — never spread full RTDB row
+      // (legacy keys like price trip $other:false rules).
+      const metadata = {
+        name: editingItem.name,
+        category: editingItem.category,
+        barcode: editingItem.barcode,
+        minStock: editingItem.minStock,
+        location: editingItem.location,
+        description: editingItem.description,
+        supplier: editingItem.supplier,
+      }
+      await updateItem(editingItem.id, metadata, operationId)
 
       // If the user changed quantity in the dialog, apply it as an atomic delta
       // relative to what they saw when the dialog opened (not the live value).
-      const qtyDiff = quantity - editBaselineQtyRef.current
+      const qtyDiff = editingItem.quantity - editBaselineQtyRef.current
       if (qtyDiff !== 0) {
-        await firebaseHelpers.adjustStock(id, qtyDiff, {
+        await firebaseHelpers.adjustStock(editingItem.id, qtyDiff, {
           type: qtyDiff > 0 ? "in" : "out",
           productName: editingItem.name,
           productBarcode: editingItem.barcode ?? "",

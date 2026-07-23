@@ -40,7 +40,8 @@ export const usePredictionContext = () => useContext(PredictionContext)
 const PREDICTION_HORIZON_DAYS = 14
 const PREDICTION_TRAIN_RATIO = 0.85
 const PREDICTION_TOP_N = 3
-const PREDICTION_RECENT_DAYS = 90
+/** null = full history (match /prediksi). Number = last N days only. */
+const PREDICTION_RECENT_DAYS: number | null = null
 
 function isScannerOperator(operator: unknown): boolean {
   if (typeof operator !== "string") return false
@@ -123,8 +124,8 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast()
   const { devices, loading: devicesLoading } = useRealtimeDeviceStatus()
   const { items: inventory, loading: inventoryLoading } = useFirebaseInventory()
-  // Cukup 500 terbaru untuk toast scanner; prediksi batch pakai fetchAllTransactions(90)
-  const { transactions, loading: transactionsLoading } = useFirebaseTransactions(500)
+  // Full history for prediction fallback; toast scanner still filters client-side
+  const { transactions, loading: transactionsLoading } = useFirebaseTransactions(null)
 
   const [stockRisks, setStockRisks] = useState<StockRisk[]>([])
   const [predictionRisks, setPredictionRisks] = useState<PredictionBatchItem[]>([])
@@ -217,8 +218,8 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
         minStock: Number(i.minStock) || 0,
       }))
 
-      // 1) Ambil transaksi 90 hari (dengan fallback full-get di helper).
-      //    Jika gagal total, pakai snapshot realtime hook (limit 500) agar UI tidak kosong.
+      // 1) Full history (null) so dashboard risk matches /prediksi.
+      //    Jika gagal total, pakai snapshot realtime hook agar UI tidak kosong.
       let txs: Array<{ productBarcode: unknown; timestamp: number; quantity: number; type?: string }> = []
       try {
         const allTxData = await firebaseHelpers.fetchAllTransactions(PREDICTION_RECENT_DAYS)
@@ -256,7 +257,8 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
               horizonDays: PREDICTION_HORIZON_DAYS,
               trainRatio: PREDICTION_TRAIN_RATIO,
               topN: PREDICTION_TOP_N,
-              recentDays: PREDICTION_RECENT_DAYS,
+              // Python batch defaults null→90; send 3650 for full-history parity with /prediksi
+              recentDays: PREDICTION_RECENT_DAYS ?? 3650,
             }),
             signal: controller.signal,
           })
@@ -290,9 +292,9 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
     })
     return () => controller.abort()
     // inventorySignature: re-run when stock/barcode set changes.
-    // transactions used only as emergency fallback source (not a dep — avoid abort storms).
+    // transactionsLoading: re-run once live hook finishes (fallback source ready).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getIdToken, inventoryLoading, inventorySignature])
+  }, [getIdToken, inventoryLoading, inventorySignature, transactionsLoading])
 
   // Toast stockout risk (session-deduped)
   useEffect(() => {

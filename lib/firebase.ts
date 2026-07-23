@@ -295,6 +295,15 @@ const createOperationId = () => {
   return `op_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`
 }
 
+/** RTDB rejects undefined; drop those keys before write. */
+function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v
+  }
+  return out as T
+}
+
 const getMutationActor = async () => {
   const authInstance = await getFirebaseAuth()
   const user = authInstance.currentUser
@@ -368,13 +377,13 @@ export const firebaseHelpers = {
     try {
       const actor = await getMutationActor()
       const itemRef = ref(database, `inventory/${id}`);
-      await update(itemRef, {
+      await update(itemRef, stripUndefined({
         ...updates,
         operationId,
         updatedByUid: actor.uid,
         lastUpdated: Date.now(),  // rules check lastUpdated, not updatedAt
         updatedAt: serverTimestamp(),
-      });
+      }));
     } catch (error) {
       console.error("Error updating inventory item:", error);
       throw error;
@@ -411,13 +420,13 @@ export const firebaseHelpers = {
 
       if (transactionData) {
         const newTxRef = push(dbRefs.transactions);
-        updates[`transactions/${newTxRef.key}`] = {
+        updates[`transactions/${newTxRef.key}`] = stripUndefined({
           ...transactionData,
           id: newTxRef.key,
           operationId,
           operatorUid: actor.uid,
           timestamp: serverTimestamp(),
-        };
+        });
       }
 
       // Single atomic multi-path update at the root
@@ -487,11 +496,11 @@ export const firebaseHelpers = {
       const authInstance = await getFirebaseAuth()
       const user = authInstance.currentUser
       if (!user) return
-      await set(ref(database, `deviceLookupStatus/${deviceId}`), {
+      await set(ref(database, `deviceLookupStatus/${deviceId}`), stripUndefined({
         ...payload,
         updatedByUid: user.uid,
         updatedAt: Date.now(),
-      })
+      }))
     } catch (e) {
       console.warn("[lookup] deviceLookupStatus write skipped:", e)
     }
@@ -607,13 +616,13 @@ export const firebaseHelpers = {
     try {
       const actor = await getMutationActor()
       const newTransactionRef = push(dbRefs.transactions);
-      await set(newTransactionRef, {
+      await set(newTransactionRef, stripUndefined({
         ...transactionData,
         id: newTransactionRef.key, // Simpan ID yang digenerate Firebase
         operationId: createOperationId(),
         operatorUid: actor.uid,
         timestamp: serverTimestamp(),
-      });
+      }));
       return newTransactionRef.key;
     } catch (error) {
       console.error("Error adding transaction:", error);

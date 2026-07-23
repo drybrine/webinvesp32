@@ -142,9 +142,12 @@ export function RealtimeScanProvider({ children }: RealtimeScanProviderProps) {
     setLastScannedBarcode(null)
   }, [pathname])
 
-  // Firebase listener: setup once on mount and update latestScan
+  // Firebase listener: setup once role ready; clear scan when logged out
   useEffect(() => {
-    if (!role) return
+    if (!role) {
+      setLatestScan(null)
+      return
+    }
     let cleanup: (() => void) | undefined
     let cancelled = false
 

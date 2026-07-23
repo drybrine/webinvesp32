@@ -73,11 +73,12 @@ export default function TransaksiPage() {
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((transaction) => {
+      const term = searchTerm.toLowerCase()
       const matchesSearch =
-        transaction.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.productBarcode.includes(searchTerm) ||
-        transaction.operator.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (transaction.reason && transaction.reason.toLowerCase().includes(searchTerm.toLowerCase()))
+        (transaction.productName || "").toLowerCase().includes(term) ||
+        (transaction.productBarcode || "").includes(searchTerm) ||
+        (transaction.operator || "").toLowerCase().includes(term) ||
+        (transaction.reason || "").toLowerCase().includes(term)
       const matchesType = selectedType === "all" || transaction.type === selectedType
       const matchesSource =
         selectedSource === "all" ||
@@ -155,11 +156,12 @@ export default function TransaksiPage() {
       finalQuantity = Math.abs(quantityNum);
     }
 
+    // quantity always absolute; sign lives in type + adjustStock delta
     const newTransactionData = {
       type: formData.type as "in" | "out" | "adjustment",
       productName: formData.productName,
       productBarcode: formData.productBarcode,
-      quantity: finalQuantity,
+      quantity: Math.abs(quantityNum),
       reason: formData.reason,
       operator: "Dashboard",
       notes: formData.notes,
