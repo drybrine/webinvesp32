@@ -1,5 +1,4 @@
 import * as React from "react"
-
 import { cn } from "@/lib/utils"
 
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
@@ -13,11 +12,7 @@ Table.displayName = "Table"
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
   ({ className, ...props }, ref) => (
-    <thead
-      ref={ref}
-      className={cn("bg-muted/60 [&_tr]:border-b-0", className)}
-      {...props}
-    />
+    <thead ref={ref} className={cn("bg-muted/60 [&_tr]:border-b-0", className)} {...props} />
   ),
 )
 TableHeader.displayName = "TableHeader"
@@ -40,10 +35,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
   ({ className, ...props }, ref) => (
     <tr
       ref={ref}
-      className={cn(
-        "transition-colors hover:bg-muted/60 data-[state=selected]:bg-muted",
-        className,
-      )}
+      className={cn("transition-colors hover:bg-muted/60 data-[state=selected]:bg-muted", className)}
       {...props}
     />
   ),

@@ -121,7 +121,7 @@ export default function AdminUsersPage() {
                 <div className="space-y-2"><Label>Nama</Label><Input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} /></div>
                 <div className="space-y-2">
                   <Label>Peran</Label>
-                  <Select value={form.role} onValueChange={(role: UserRole) => setForm({ ...form, role })}>
+                  <Select value={form.role} onValueChange={(role) => setForm({ ...form, role: role as UserRole })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
@@ -152,7 +152,7 @@ export default function AdminUsersPage() {
                 <TableRow key={user.uid}>
                   <TableCell><div className="font-medium">{user.displayName || user.email}</div><div className="text-xs text-muted-foreground">{user.email}</div></TableCell>
                   <TableCell>
-                    <Select value={user.role} onValueChange={(role: UserRole) => void changeRole(user, role)}>
+                    <Select value={user.role} onValueChange={(role) => void changeRole(user, role as UserRole)}>
                       <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="admin">Admin</SelectItem><SelectItem value="operator">Operator</SelectItem><SelectItem value="viewer">Viewer</SelectItem></SelectContent>
                     </Select>

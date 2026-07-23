@@ -541,10 +541,7 @@ export default function PrediksiPage() {
                 <SelectValue placeholder={loading ? "Memuat..." : "Pilih barang"} />
               </SelectTrigger>
               <SelectContent
-                align="start"
-                side="bottom"
-                sideOffset={4}
-                className="max-h-[min(14rem,var(--radix-select-content-available-height))] w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-2rem)]"
+                className="max-h-56 w-full max-w-[calc(100vw-2rem)]"
               >
                 {activeInventory.map((item) => (
                   <SelectItem key={item.id} value={item.id} title={`${item.name}${item.barcode ? ` - ${item.barcode}` : ""}`}>
