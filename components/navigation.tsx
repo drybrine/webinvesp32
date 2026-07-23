@@ -51,12 +51,12 @@ export default function Navigation() {
 	}, [navigation, router])
 
 	return (
-		<nav className="sticky top-0 z-50 border-b border-border/60 bg-background/90 shadow-sm backdrop-blur-xl">
+		<nav className="nav-glass sticky top-0 z-50">
 			<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 				<div className="flex h-14 items-center justify-between gap-3">
 					{/* Brand */}
 					<Link href="/" className="group flex shrink-0 items-center gap-2">
-						<BrandMark className="h-8 w-8 shadow-sm ring-1 ring-accent/20 transition-transform duration-200 group-hover:-translate-y-0.5" />
+						<BrandMark className="h-8 w-8 shadow-sm ring-1 ring-white/40 transition-transform duration-200 group-hover:-translate-y-0.5" />
 						<span className="text-base font-extrabold tracking-normal text-foreground">
 							StokManager
 						</span>
@@ -64,7 +64,7 @@ export default function Navigation() {
 
 					{/* Desktop tabs */}
 					<div
-						className="hidden items-center gap-0.5 rounded-full border border-border/70 bg-surface p-1 shadow-sm md:flex"
+						className="nav-glass-pill hidden items-center gap-0.5 rounded-full p-1 md:flex"
 						role="navigation"
 						aria-label="Menu utama"
 					>
@@ -78,10 +78,10 @@ export default function Navigation() {
 									title={`${item.name} (${item.key})`}
 									aria-current={active ? "page" : undefined}
 									className={cn(
-										"inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-sm font-medium tracking-normal transition-colors duration-150",
+										"inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-sm font-medium tracking-normal transition-all duration-200",
 										active
-											? "bg-accent text-accent-foreground shadow-sm"
-											: "text-muted hover:bg-default hover:text-foreground",
+											? "bg-accent text-accent-foreground shadow-md shadow-accent/20"
+											: "text-muted hover:bg-white/50 hover:text-foreground hover:backdrop-blur-sm",
 									)}
 								>
 									<Icon className="h-4 w-4 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
@@ -129,9 +129,9 @@ export default function Navigation() {
 
 			{/* Mobile menu */}
 			{mobileMenuOpen && (
-				<div className="animate-slide-up border-t border-border/70 bg-background/95 md:hidden">
+				<div className="nav-glass-menu animate-slide-up md:hidden">
 					<div className="space-y-1 px-4 py-3">
-						<div className="mb-2 border-b border-border px-3 pb-3">
+						<div className="mb-2 border-b border-white/30 px-3 pb-3">
 							<div className="truncate text-sm font-medium text-foreground">
 								{profile?.displayName || profile?.email}
 							</div>
@@ -150,7 +150,7 @@ export default function Navigation() {
 										"flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium tracking-normal transition-colors",
 										active
 											? "bg-accent text-accent-foreground shadow-sm"
-											: "text-muted hover:bg-default hover:text-foreground",
+											: "text-muted hover:bg-white/45 hover:text-foreground",
 									)}
 								>
 									<Icon className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden />

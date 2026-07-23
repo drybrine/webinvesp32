@@ -368,6 +368,49 @@
   .gradient-text {
     @apply bg-gradient-to-r from-emerald-700 to-teal-500 bg-clip-text text-transparent;
   }
+
+  /* Liquid glass top bar */
+  .nav-glass {
+    border-bottom: 1px solid color-mix(in oklab, white 55%, var(--border));
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, white 72%, transparent) 0%,
+        color-mix(in oklab, white 42%, transparent) 100%
+      );
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    box-shadow:
+      0 1px 0 color-mix(in oklab, white 65%, transparent) inset,
+      0 8px 24px color-mix(in oklab, var(--foreground) 4%, transparent);
+  }
+
+  .nav-glass-pill {
+    border: 1px solid color-mix(in oklab, white 55%, var(--border));
+    background: color-mix(in oklab, white 48%, transparent);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    box-shadow:
+      0 1px 0 color-mix(in oklab, white 70%, transparent) inset,
+      0 4px 14px color-mix(in oklab, var(--foreground) 5%, transparent);
+  }
+
+  .nav-glass-menu {
+    border-top: 1px solid color-mix(in oklab, white 45%, var(--border));
+    background: color-mix(in oklab, white 55%, transparent);
+    backdrop-filter: blur(20px) saturate(170%);
+    -webkit-backdrop-filter: blur(20px) saturate(170%);
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .nav-glass {
+      background: color-mix(in oklab, var(--background) 92%, transparent);
+    }
+    .nav-glass-pill,
+    .nav-glass-menu {
+      background: color-mix(in oklab, var(--surface) 92%, transparent);
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
