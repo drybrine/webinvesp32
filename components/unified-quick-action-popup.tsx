@@ -838,7 +838,7 @@ export function UnifiedQuickActionPopup({ barcode, scanId, deviceId, scanMode, i
   const dialogContentClass = `w-[95vw] ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto p-0 rounded-2xl max-h-[85vh] border border-border/80 shadow-2xl backdrop-blur-md bg-background/95 flex flex-col overflow-hidden animate-scale-in`
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className={`${dialogContentClass} [&>button]:hidden`}>
         {/* Header */}
         <DialogHeader className={`border-b border-border/60 relative overflow-hidden shrink-0 ${isMobile ? "p-5 pb-4" : "p-6 pb-4"}`}>

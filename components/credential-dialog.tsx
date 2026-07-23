@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { AlertTriangle, Check, Copy } from "lucide-react"
 import { Button, Label, Modal } from "@heroui/react"
 import Pdf417Barcode from "@/components/pdf417-barcode"
+
+const EXIT_MS = 280
 
 export interface CredentialField {
   label: string
@@ -47,30 +49,59 @@ function CopyButton({ value }: { value: string }) {
 }
 
 export function CredentialDialog({ credential, onClose }: { credential: Credential | null; onClose: () => void }) {
+  const open = !!credential
+  const [mounted, setMounted] = useState(open)
+  const [visible, setVisible] = useState(open)
+  const dataRef = useRef<Credential | null>(credential)
+
+  if (credential) dataRef.current = credential
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      const id = requestAnimationFrame(() => setVisible(true))
+      return () => cancelAnimationFrame(id)
+    }
+    setVisible(false)
+    const t = window.setTimeout(() => setMounted(false), EXIT_MS)
+    return () => window.clearTimeout(t)
+  }, [open])
+
+  if (!mounted || !dataRef.current) return null
+
+  const data = dataRef.current
+
   return (
-    <Modal.Backdrop isOpen={!!credential} onOpenChange={(open) => { if (!open) onClose() }} variant="blur">
-      <Modal.Container placement="center" size="md">
-        <Modal.Dialog className="sm:max-w-lg">
+    <Modal.Backdrop
+      isOpen={visible}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+      variant="blur"
+      className="dialog-backdrop-motion"
+    >
+      <Modal.Container placement="center" size="md" className="dialog-container-motion">
+        <Modal.Dialog className="dialog-panel-motion sm:max-w-lg">
           <Modal.CloseTrigger />
           <Modal.Header>
-            <Modal.Heading>{credential?.title}</Modal.Heading>
+            <Modal.Heading>{data.title}</Modal.Heading>
             <p className="text-sm text-muted">
-              {credential?.description ?? "Salin dan simpan sekarang. Nilai ini hanya ditampilkan satu kali."}
+              {data.description ?? "Salin dan simpan sekarang. Nilai ini hanya ditampilkan satu kali."}
             </p>
           </Modal.Header>
           <Modal.Body className="flex flex-col gap-3">
-            {credential?.barcodeValue ? (
+            {data.barcodeValue ? (
               <div className="flex flex-col items-center gap-2 rounded-2xl border border-border p-3">
                 <Label className="text-xs text-muted">Pindai dengan scanner</Label>
                 <Pdf417Barcode
-                  value={credential.barcodeValue}
+                  value={data.barcodeValue}
                   height={90}
                   className="h-auto max-w-full"
                   ariaLabel="Barcode provisioning scanner"
                 />
               </div>
             ) : null}
-            {credential?.fields.map((field) => (
+            {data.fields.map((field) => (
               <div key={field.label} className="flex flex-col gap-1">
                 <Label className="text-xs text-muted">{field.label}</Label>
                 <div className="flex items-center gap-2">
