@@ -37,7 +37,7 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/components/auth-provider"
 import { canWrite } from "@/types/security"
 import { AuditTimeline } from "@/components/audit-timeline"
-import { LoadingSpinner } from "@/components/loading-spinner"
+import { LoadingSpinner, InlineSpinner } from "@/components/loading-spinner"
 
 const BarcodeComponent = dynamic(() => import("@/components/pdf417-barcode"), {
   ssr: false,
@@ -452,8 +452,9 @@ export default function DashboardPage() {
             </div>
 
             {stockRisksLoading ? (
-              <div className="text-sm text-muted-foreground py-3">
-                Memuat ringkasan prediksi...
+              <div className="flex items-center gap-2.5 py-4">
+                <InlineSpinner size="sm" className="text-accent" />
+                <span className="text-sm text-muted">Memuat ringkasan prediksi...</span>
               </div>
             ) : stockRisks.length === 0 ? (
               <div className="text-sm text-muted-foreground py-3">

@@ -41,6 +41,7 @@ import {
 } from "@/lib/stock-prediction"
 import PredictionChart from "@/components/prediction-chart"
 import { useAuth } from "@/components/auth-provider"
+import { LoadingSpinner } from "@/components/loading-spinner"
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const SUMMARY_BATCH_LIMIT = 500
@@ -589,9 +590,7 @@ export default function PrediksiPage() {
         </CardHeader>
         <CardContent className={summaryLoading || summaryError || summaryRows.length === 0 ? "" : "p-0"}>
           {summaryLoading ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              Memuat ringkasan prediksi...
-            </div>
+            <LoadingSpinner label="Memuat ringkasan prediksi..." className="py-10" />
           ) : summaryError ? (
             <div className="py-8 text-center">
               <p className="font-medium text-destructive">Gagal memuat ringkasan prediksi</p>
