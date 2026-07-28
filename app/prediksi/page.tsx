@@ -36,7 +36,6 @@ import {
   consumptionToStockLevels,
   predictStock,
   type DailyConsumptionPoint,
-  type StockDataPoint,
   type PredictionResult,
 } from "@/lib/stock-prediction"
 import PredictionChart from "@/components/prediction-chart"
@@ -334,7 +333,9 @@ export default function PrediksiPage() {
           model: {
             slope: data.model.slope,
             intercept: data.model.intercept,
-            baseTimestamp: Date.now(),
+            baseTimestamp: Number.isFinite(Number(data.model.baseTimestamp))
+              ? Number(data.model.baseTimestamp)
+              : Date.now(),
             n: data.model.n,
             avgDailyConsumption: data.model.avgDailyConsumption,
             totalConsumption: data.model.totalConsumption ?? 0,
@@ -352,7 +353,7 @@ export default function PrediksiPage() {
             nTest: data.metrics.nTest,
           },
           forecast: data.forecast,
-          stockoutDate: data.stockoutDate ? new Date(data.stockoutDate) : null,
+          stockoutDate: data.stockoutDate ? new Date(`${data.stockoutDate}T00:00:00`) : null,
         })
         setPredictionSource("server")
       } catch (err) {
@@ -395,9 +396,8 @@ export default function PrediksiPage() {
 
     const fetchSummary = async () => {
       try {
-        // Full history (null) for ringkasan prediksi — default 90 hari merusak model
-        const allTxData = await firebaseHelpers.fetchAllTransactions(null)
-        const txs = (allTxData as Array<Record<string, unknown>>).map((t) => ({
+        // Hook sudah memuat full history (null); hindari fetch kedua untuk tiap update RTDB.
+        const txs = transactions.map((t) => ({
           productBarcode: t.productBarcode,
           timestamp: Number(t.timestamp) || Date.now(),
           quantity: Number(t.quantity) || 0,
@@ -447,8 +447,7 @@ export default function PrediksiPage() {
         if ((err as Error).name === "AbortError") return
 
         try {
-          const allTxData = await firebaseHelpers.fetchAllTransactions(null)
-          const txs = (allTxData as Array<Record<string, unknown>>).map((t) => ({
+          const txs = transactions.map((t) => ({
             productBarcode: t.productBarcode,
             timestamp: Number(t.timestamp) || Date.now(),
             quantity: Number(t.quantity) || 0,
@@ -472,7 +471,7 @@ export default function PrediksiPage() {
 
     fetchSummary()
     return () => controller.abort()
-  }, [activeInventory, getIdToken, horizonDays, inventoryLoading, trainRatio])
+  }, [activeInventory, getIdToken, horizonDays, inventoryLoading, trainRatio, transactions])
 
   const chartData = useMemo(() => {
     if (!prediction || history.length === 0) return []

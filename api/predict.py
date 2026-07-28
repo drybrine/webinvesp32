@@ -20,7 +20,7 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 MS_PER_DAY = 86400000
@@ -108,7 +108,7 @@ def verify_firebase_token(authorization):
 def bounded_int(value, default, minimum, maximum, field):
     try:
         parsed = int(value if value is not None else default)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError(f"{field} tidak valid")
     if parsed < minimum or parsed > maximum:
         raise ValueError(f"{field} harus antara {minimum} dan {maximum}")
@@ -118,9 +118,9 @@ def bounded_int(value, default, minimum, maximum, field):
 def bounded_float(value, default, minimum, maximum, field):
     try:
         parsed = float(value if value is not None else default)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError(f"{field} tidak valid")
-    if parsed < minimum or parsed > maximum:
+    if not math.isfinite(parsed) or parsed < minimum or parsed > maximum:
         raise ValueError(f"{field} harus antara {minimum} dan {maximum}")
     return parsed
 
@@ -128,8 +128,12 @@ def bounded_float(value, default, minimum, maximum, field):
 def safe_int(value, default=0):
     try:
         return int(value if value is not None else default)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
+
+
+def safe_non_negative_int(value, default=0):
+    return max(0, safe_int(value, default))
 
 
 class handler(BaseHTTPRequestHandler):
@@ -159,7 +163,7 @@ class handler(BaseHTTPRequestHandler):
             if not isinstance(transactions, list) or len(transactions) > MAX_SINGLE_TRANSACTIONS:
                 self._send_json(400, {'error': f'Maksimal {MAX_SINGLE_TRANSACTIONS} transaksi'})
                 return
-            current_quantity = safe_int(data.get('currentQuantity'), 0)
+            current_quantity = safe_non_negative_int(data.get('currentQuantity'), 0)
             horizon_days = bounded_int(data.get('horizonDays'), 14, 1, 90, "horizonDays")
             train_ratio = bounded_float(data.get('trainRatio'), 0.85, 0.5, 0.95, "trainRatio")
 
@@ -201,10 +205,10 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(400, {'error': f'Maksimal {MAX_BATCH_TRANSACTIONS} transaksi', 'source': 'lr-consumption-batch'})
             return
 
-        cutoff = (datetime.now().timestamp() * 1000) - recent_days * MS_PER_DAY
+        cutoff = (datetime.now(timezone.utc).timestamp() * 1000) - recent_days * MS_PER_DAY
         recent_tx = [
             t for t in transactions
-            if safe_int(t.get('timestamp'), -1) >= cutoff
+            if isinstance(t, dict) and safe_int(t.get('timestamp'), -1) >= cutoff
         ]
 
         tx_by_barcode = {}
@@ -217,12 +221,11 @@ class handler(BaseHTTPRequestHandler):
 
         risks = []
         for item in items:
-            if item.get('deleted') or not item.get('barcode'):
-                continue
-
             try:
+                if not isinstance(item, dict) or item.get('deleted') or not item.get('barcode'):
+                    continue
                 item_tx = tx_by_barcode.get(item['barcode'], [])
-                current_qty = int(item.get('quantity', 0))
+                current_qty = safe_non_negative_int(item.get('quantity', 0))
                 consumption_data = build_consumption_from_transactions(item_tx)
                 if len(consumption_data) < 2:
                     continue
@@ -356,6 +359,7 @@ def build_consumption_from_transactions(transactions, end_timestamp=None):
     karena event-day-only.
     """
     daily = {}
+    max_timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
     for tx in transactions:
         if not isinstance(tx, dict):
             continue
@@ -363,10 +367,10 @@ def build_consumption_from_transactions(transactions, end_timestamp=None):
             continue
         try:
             ts = int(tx.get('timestamp', 0))
-            qty = abs(int(tx.get('quantity', 0)))
-        except (TypeError, ValueError):
+            qty = abs(float(tx.get('quantity', 0)))
+        except (TypeError, ValueError, OverflowError):
             continue
-        if ts <= 0:
+        if ts <= 0 or ts > max_timestamp or not math.isfinite(qty):
             continue
         day_key = (ts // MS_PER_DAY) * MS_PER_DAY
         daily[day_key] = daily.get(day_key, 0) + qty
@@ -410,7 +414,6 @@ def fit_consumption_regression(data):
     avg_daily = max(0.0, slope)
 
     # Monday=0 .. Sunday=6 (UTC) — sama dengan client fallback
-    from datetime import timezone
     dow_totals = [[] for _ in range(7)]
     for point in data:
         dow = datetime.fromtimestamp(point['timestamp'] / 1000, tz=timezone.utc).weekday()
@@ -419,10 +422,10 @@ def fit_consumption_regression(data):
 
     return {
         'baseTimestamp': base_ts,
-        'intercept': round(intercept, 4),
-        'avgDailyConsumption': round(avg_daily, 2),
-        'totalConsumption': round(cumulative[-1] if cumulative else 0, 2),
-        'dowConsumption': [round(v, 2) for v in dow_consumption],
+        'intercept': intercept,
+        'avgDailyConsumption': avg_daily,
+        'totalConsumption': cumulative[-1] if cumulative else 0,
+        'dowConsumption': dow_consumption,
         'n': len(data),
     }
 
@@ -482,9 +485,9 @@ def evaluate_consumption(model, train_data, test_data, current_stock):
 
 def estimate_stockout_date(model, current_quantity, base_timestamp):
     """Tanggal habis = base + ceil(S0/b) hari — sama dgn first forecast point <= 0."""
-    base_date = datetime.fromtimestamp(base_timestamp / 1000)
+    base_date = datetime.fromtimestamp(base_timestamp / 1000, tz=timezone.utc)
     if current_quantity <= 0:
-        return base_date.strftime('%Y-%m-%d')
+        return (base_date + timedelta(days=1)).strftime('%Y-%m-%d')
 
     daily_consumption = model['avgDailyConsumption']
     if daily_consumption <= 0:
@@ -497,7 +500,7 @@ def estimate_stockout_date(model, current_quantity, base_timestamp):
 
 
 def current_day_timestamp():
-    return int((datetime.now().timestamp() * 1000) // MS_PER_DAY) * MS_PER_DAY
+    return int((datetime.now(timezone.utc).timestamp() * 1000) // MS_PER_DAY) * MS_PER_DAY
 
 
 def train_test_split(data, train_ratio=0.85):
@@ -530,6 +533,12 @@ def fill_calendar_days(data, end_timestamp=None):
 def predict_stock(consumption_data, current_stock, horizon_days=14, train_ratio=0.85,
                   now_timestamp=None):
     """Pipeline: fit regresi kumulatif, evaluate, forecast stok iteratif."""
+    try:
+        current_stock = max(0.0, float(current_stock))
+        if not math.isfinite(current_stock):
+            current_stock = 0.0
+    except (TypeError, ValueError, OverflowError):
+        current_stock = 0.0
     today_ts = current_day_timestamp() if now_timestamp is None else int((now_timestamp // MS_PER_DAY) * MS_PER_DAY)
     # Hari berjalan belum lengkap; memasukkannya sebagai satu hari penuh akan
     # menurunkan estimasi konsumsi dan merusak metrik holdout.
@@ -577,8 +586,9 @@ def predict_stock(consumption_data, current_stock, horizon_days=14, train_ratio=
         'source': 'lr-consumption-py',
         'model': {
             'type': 'Simple Linear Regression (cumulative consumption)',
+            'baseTimestamp': model['baseTimestamp'],
             'intercept': model['intercept'],
-            'slope': round(-model['avgDailyConsumption'], 4),
+            'slope': -model['avgDailyConsumption'],
             'avgDailyConsumption': model['avgDailyConsumption'],
             'totalConsumption': model['totalConsumption'],
             'dowConsumption': model['dowConsumption'],

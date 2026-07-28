@@ -147,9 +147,16 @@ export function buildConsumptionFromTransactions(
   endTimestamp?: number,
 ): DailyConsumptionPoint[] {
   const dailyConsumption = new Map<number, number>()
+  const maxTimestamp = Date.now()
   for (const tx of transactions) {
     if (tx.type !== "out") continue
-    const dayKey = Math.floor(tx.timestamp / MS_PER_DAY) * MS_PER_DAY
+    if (
+      !Number.isFinite(tx.timestamp) ||
+      tx.timestamp <= 0 ||
+      tx.timestamp > maxTimestamp ||
+      !Number.isFinite(tx.quantity)
+    ) continue
+    const dayKey = dayTimestamp(tx.timestamp)
     dailyConsumption.set(dayKey, (dailyConsumption.get(dayKey) ?? 0) + Math.abs(tx.quantity))
   }
   if (dailyConsumption.size === 0) return []
@@ -323,7 +330,7 @@ export function estimateStockoutDate(
   baseTimestamp = Date.now(),
 ): Date | null {
   const quantity = currentQty ?? 0
-  if (quantity <= 0) return new Date(baseTimestamp)
+  if (quantity <= 0) return new Date(baseTimestamp + MS_PER_DAY)
 
   const dailyConsumption = model.avgDailyConsumption
   if (dailyConsumption <= 0) return null
@@ -344,6 +351,7 @@ export function predictStock(
   options: { horizonDays?: number; trainRatio?: number; currentTimestamp?: number } = {},
 ): PredictionResult {
   const { horizonDays = 14, trainRatio = 0.85, currentTimestamp = Date.now() } = options
+  const normalizedCurrentStock = Number.isFinite(currentStock) ? Math.max(0, currentStock) : 0
 
   const today = dayTimestamp(currentTimestamp)
   // Hari berjalan belum lengkap; train hanya memakai hari kalender yang selesai.
@@ -373,14 +381,14 @@ export function predictStock(
   // Holdout: R² kumulatif + MAE/RMSE stok; jangan evaluasi full data saat test < 2
   const metrics =
     test.length >= 2
-      ? { ...evaluate(model, train, test, currentStock), nTrain: train.length, nTest: test.length }
+      ? { ...evaluate(model, train, test, normalizedCurrentStock), nTrain: train.length, nTest: test.length }
       : { mae: null, rmse: null, r2: null, available: false, nTrain: train.length, nTest: test.length }
 
   const lastTimestamp = sorted[sorted.length - 1].timestamp
   const forecastBaseTimestamp = Math.max(lastTimestamp, today)
 
   const dailyConsumption = model.avgDailyConsumption
-  let forecastQty = currentStock
+  let forecastQty = normalizedCurrentStock
 
   const forecast: PredictionResult["forecast"] = []
   for (let day = 1; day <= horizonDays; day++) {
@@ -398,7 +406,7 @@ export function predictStock(
     model,
     metrics,
     forecast,
-    stockoutDate: estimateStockoutDate(model, currentStock, forecastBaseTimestamp),
+    stockoutDate: estimateStockoutDate(model, normalizedCurrentStock, forecastBaseTimestamp),
   }
 }
 

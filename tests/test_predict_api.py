@@ -1,9 +1,16 @@
 import io
 import json
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 
-from api.predict import MAX_BODY_BYTES, MS_PER_DAY, handler, predict_stock
+from api.predict import (
+    MAX_BODY_BYTES,
+    MS_PER_DAY,
+    build_consumption_from_transactions,
+    handler,
+    predict_stock,
+)
 
 
 def make_handler(payload, authorization="Bearer valid"):
@@ -87,6 +94,35 @@ class PredictApiSecurityTests(unittest.TestCase):
 
 
 class PredictionModelTests(unittest.TestCase):
+    def test_float_quantities_keep_precision_and_invalid_values_are_ignored(self):
+        day = 1_700_000_000_000
+        consumption = build_consumption_from_transactions([
+            {"timestamp": day, "quantity": 1.9, "type": "out"},
+            {"timestamp": day, "quantity": float("nan"), "type": "out"},
+            {"timestamp": -1, "quantity": 50, "type": "out"},
+            {"timestamp": day + MS_PER_DAY, "quantity": 2.7, "type": "out"},
+        ])
+
+        self.assertEqual(len(consumption), 2)
+        self.assertAlmostEqual(consumption[0]["consumption"], 1.9)
+        self.assertAlmostEqual(consumption[1]["consumption"], 2.7)
+
+    def test_empty_stock_date_matches_first_forecast_point(self):
+        today = 2_000 * MS_PER_DAY
+        consumption = [
+            {"timestamp": today - offset * MS_PER_DAY, "consumption": 2}
+            for offset in range(10, 0, -1)
+        ]
+
+        result = predict_stock(consumption, 0, horizon_days=2, now_timestamp=today)
+
+        first_forecast_date = result["forecast"][0]["timestamp"]
+        expected_date = datetime.fromtimestamp(
+            first_forecast_date / 1000, tz=timezone.utc
+        ).strftime("%Y-%m-%d")
+        self.assertEqual(result["stockoutDate"], expected_date)
+        self.assertEqual(first_forecast_date, today + MS_PER_DAY)
+
     def test_partial_current_day_is_excluded_from_training(self):
         today = 2_000 * MS_PER_DAY
         consumption = [
