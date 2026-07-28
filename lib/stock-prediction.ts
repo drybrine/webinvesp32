@@ -40,7 +40,7 @@ export interface RegressionModel {
   avgDailyConsumption: number
   /** total konsumsi historis */
   totalConsumption: number
-  /** konsumsi per day-of-week [0=Sun..6=Sat], untuk kompatibilitas UI lama */
+  /** konsumsi per day-of-week [0=Mon..6=Sun] (UTC), untuk kompatibilitas UI lama */
   dowConsumption: number[]
   /** @deprecated — tidak digunakan di model konsumsi */
   consumptionSlope?: number

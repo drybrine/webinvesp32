@@ -366,7 +366,7 @@ def build_consumption_from_transactions(transactions, end_timestamp=None):
             qty = abs(int(tx.get('quantity', 0)))
         except (TypeError, ValueError):
             continue
-        if ts <= 0 or qty < 0:
+        if ts <= 0:
             continue
         day_key = (ts // MS_PER_DAY) * MS_PER_DAY
         daily[day_key] = daily.get(day_key, 0) + qty

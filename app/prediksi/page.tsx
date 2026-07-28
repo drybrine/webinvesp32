@@ -215,6 +215,14 @@ function buildClientBatchRisks(
         ...result.forecast.map((point) => point.predictedQuantity),
       )
       const stockoutIndex = result.forecast.findIndex((point) => point.predictedQuantity <= 0)
+      let daysToStockout: number | null = stockoutIndex === -1 ? null : stockoutIndex + 1
+      // Mirror server/alert-provider: extrapolate beyond horizon when b > 0
+      if (daysToStockout === null) {
+        const avgDaily = result.model.avgDailyConsumption
+        if (avgDaily > 0 && currentStock > 0) {
+          daysToStockout = Math.ceil(currentStock / avgDaily)
+        }
+      }
 
       return [{
         itemId: item.id,
@@ -224,7 +232,7 @@ function buildClientBatchRisks(
         minStock: Number(item.minStock) || 0,
         avgDailyConsumption: result.model.avgDailyConsumption,
         predictedLowest,
-        daysToStockout: stockoutIndex === -1 ? null : stockoutIndex + 1,
+        daysToStockout,
         r2: result.metrics.r2,
         mae: result.metrics.mae,
         rmse: result.metrics.rmse,

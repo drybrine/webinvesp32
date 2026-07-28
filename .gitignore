@@ -53,6 +53,9 @@ werkzeug/
 Werkzeug-*.dist-info/
 *.dist-info/
 
+# Python virtualenv
+.venv/
+
 # Performance testing
 performance-report.json
 performance-test.js

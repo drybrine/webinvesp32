@@ -1,7 +1,8 @@
 """
 Model Accuracy Visualization for StokManager Prediction
 Data source: honda_tune_model.ipynb (winner: v3_OLS) + honda_test_model.ipynb
-Deployed: api/predict.py — OLS, 3 features [lag1, dow, weekend], EMA α=0.05, train 85/15
+Deployed: api/predict.py — Simple Linear Regression on cumulative daily consumption
+(ΣC(t) = a + b·t, b = avgDailyConsumption), calendar zero-fill, train 85/15
 """
 
 import matplotlib.pyplot as plt
