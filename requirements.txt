@@ -1,6 +1,1 @@
-# Notebook + visualisasi model prediksi (scripts/*.ipynb, plot-model-accuracy.py)
-# API /api/predict (api/predict.py) pure stdlib — tidak butuh dependensi ini.
-jupyter
-pandas
-matplotlib
-numpy
+# api/predict.py uses only the Python standard library.

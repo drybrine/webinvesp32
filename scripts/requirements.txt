@@ -1,0 +1,5 @@
+# Local notebooks and prediction visualization scripts only.
+jupyter
+pandas
+matplotlib
+numpy
