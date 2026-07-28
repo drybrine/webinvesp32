@@ -346,15 +346,21 @@ export function predictStock(
   const { horizonDays = 14, trainRatio = 0.85, currentTimestamp = Date.now() } = options
 
   const today = dayTimestamp(currentTimestamp)
-  // Zero-fill gap + sampai hari ini (mirror Python fill_calendar_days)
-  let sorted = [...data].sort((a, b) => a.timestamp - b.timestamp)
-  if (sorted.length > 0) {
-    const map = new Map(sorted.map((p) => [p.timestamp, p.consumption]))
-    const start = sorted[0].timestamp
-    const end = Math.max(sorted[sorted.length - 1].timestamp, today)
+  // Hari berjalan belum lengkap; train hanya memakai hari kalender yang selesai.
+  let sorted: DailyConsumptionPoint[] = []
+  const completedDays = new Map<number, number>()
+  for (const point of data) {
+    const day = dayTimestamp(point.timestamp)
+    if (day >= today) continue
+    completedDays.set(day, (completedDays.get(day) ?? 0) + point.consumption)
+  }
+  const completedTimestamps = [...completedDays.keys()].sort((a, b) => a - b)
+  if (completedTimestamps.length > 0) {
+    const start = completedTimestamps[0]
+    const end = Math.max(completedTimestamps[completedTimestamps.length - 1], today - MS_PER_DAY)
     const filled: DailyConsumptionPoint[] = []
     for (let ts = start; ts <= end; ts += MS_PER_DAY) {
-      filled.push({ timestamp: ts, consumption: map.get(ts) ?? 0 })
+      filled.push({ timestamp: ts, consumption: completedDays.get(ts) ?? 0 })
     }
     sorted = filled
   }

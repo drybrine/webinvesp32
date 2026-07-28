@@ -3,7 +3,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from api.predict import MAX_BODY_BYTES, handler
+from api.predict import MAX_BODY_BYTES, MS_PER_DAY, handler, predict_stock
 
 
 def make_handler(payload, authorization="Bearer valid"):
@@ -84,6 +84,29 @@ class PredictApiSecurityTests(unittest.TestCase):
         instance.do_POST()
         self.assertEqual(captured[0][0], 500)
         self.assertNotIn("secret", captured[0][1]["error"])
+
+
+class PredictionModelTests(unittest.TestCase):
+    def test_partial_current_day_is_excluded_from_training(self):
+        today = 2_000 * MS_PER_DAY
+        consumption = [
+            {"timestamp": today - offset * MS_PER_DAY, "consumption": 2}
+            for offset in range(20, 0, -1)
+        ]
+        consumption.append({"timestamp": today + 1_000, "consumption": 0})
+
+        result = predict_stock(consumption, 20, horizon_days=20, now_timestamp=today)
+
+        self.assertEqual(result["model"]["avgDailyConsumption"], 2.0)
+        self.assertEqual(result["metrics"]["r2"], 1.0)
+        self.assertEqual(result["metrics"]["nTrain"], 17)
+        self.assertEqual(result["metrics"]["nTest"], 3)
+        first_stockout = next(
+            index + 1
+            for index, point in enumerate(result["forecast"])
+            if point["predictedQuantity"] <= 0
+        )
+        self.assertEqual(first_stockout, 10)
 
 
 if __name__ == "__main__":

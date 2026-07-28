@@ -531,7 +531,16 @@ def predict_stock(consumption_data, current_stock, horizon_days=14, train_ratio=
                   now_timestamp=None):
     """Pipeline: fit regresi kumulatif, evaluate, forecast stok iteratif."""
     today_ts = current_day_timestamp() if now_timestamp is None else int((now_timestamp // MS_PER_DAY) * MS_PER_DAY)
-    data = fill_calendar_days(sorted(consumption_data, key=lambda p: p['timestamp']), end_timestamp=today_ts)
+    # Hari berjalan belum lengkap; memasukkannya sebagai satu hari penuh akan
+    # menurunkan estimasi konsumsi dan merusak metrik holdout.
+    completed_days = [
+        point for point in consumption_data
+        if int((int(point['timestamp']) // MS_PER_DAY) * MS_PER_DAY) < today_ts
+    ]
+    data = fill_calendar_days(
+        sorted(completed_days, key=lambda p: p['timestamp']),
+        end_timestamp=today_ts - MS_PER_DAY,
+    )
     if len(data) < 2:
         return {'error': 'Not enough data'}
 
