@@ -54,7 +54,7 @@ unsigned long lastBarcodeOnOled   = 0;
 #define EEPROM_SIZE       1024
 #define WIFI_CONFIG_ADDR     0
 #define DEVICE_CONFIG_ADDR 512
-#define FIRMWARE_VERSION   "6.7.1"
+#define FIRMWARE_VERSION   "6.7.2"
 #define AUTH_REFRESH_MARGIN_MS 300000UL
 #define AUTH_MAX_BACKOFF_MS     60000UL
 #define FIREBASE_DATABASE_URL "https://barcodescanesp32-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -74,7 +74,9 @@ unsigned long lastBarcodeOnOled   = 0;
 #define OTA_MIN_BATTERY_PCT     30      // do not flash below this charge
 #define OTA_IDLE_REQUIRED_MS    10000UL // require this long since last scan
 #define OTA_MAX_RETRIES         3       // attempts per commandId before giving up
-#define OTA_BOOT_VALIDATE_MS    20000UL // confirm heartbeat OK within this window post-update
+#define OTA_BOOT_FAIL_LIMIT     3       // roll back after this many boots without a confirmed heartbeat
+#define OTA_BOOT_CONFIRM_WINDOW_MS 600000UL // max time post-update to reach first successful heartbeat
+#define OTA_STREAM_STALL_MS     10000UL // OTA download stall timeout (harus < WDT_TIMEOUT_SEC)
 #define WDT_TIMEOUT_SEC         15      // hardware watchdog timeout (reboot if loop hangs)
 #define MAIN_MENU_COUNT      7
 #define LED_MENU_COUNT       4
@@ -269,7 +271,7 @@ uint8_t       otaRetryCount      = 0;
 bool          otaInProgress      = false;
 bool          otaCheckRequested  = false;
 Preferences   otaPreferences;
-#define OTA_CHECK_INTERVAL_MS 300000UL
+#define OTA_CHECK_INTERVAL_MS 8000UL
 
 // --- Function Declarations ---------------------------------------------------
 void          processBarcodeInput(String input);
@@ -357,7 +359,10 @@ bool          performOtaUpdate(const String& commandId, const String& binaryUrl,
 bool          verifyOtaSignature(const uint8_t* hash, const uint8_t* signature, size_t sigLen);
 void          reportOtaStatus(const char* phase, const String& version, int progress, const String& message);
 bool          otaPreconditionsMet();
-void          validateOtaBootSuccess(bool heartbeatOk);
+void          confirmOtaBoot();
+void          serviceOtaBootWindow();
+void          serviceOtaBootCount();
+void          rollbackOtaImage(const char* reason);
 void          oledShowOtaProgress(const String& version, const char* phase, int progress);
 void          performBatteryCalibration(bool returnHomeAfter = false);
 // -----------------------------------------------------------------------------
@@ -2036,20 +2041,18 @@ void serviceHeartbeat(bool force) {
   sampleBattery();  // read ADC BEFORE WiFi HTTP to avoid voltage sag noise
   if (isWiFiConnected) {
     bool hbOk = sendHeartbeatToFirebase();
-    // First successful heartbeat after an OTA reboot confirms the new image.
-    validateOtaBootSuccess(hbOk);
     if (hbOk) {
       lastHeartbeat = millis();
+      // Heartbeat sukses pertama pasca-OTA mengonfirmasi image baru.
+      confirmOtaBoot();
     } else {
       lastHeartbeat = millis() > 4000 ? millis() - 4000 : 0; // retry in ~1 detik
     }
   } else {
-    // WiFi belum konek. Beri grace period OTA_BOOT_VALIDATE_MS agar WiFi
-    // punya waktu connect setelah reboot, baru hitung sebagai boot failure.
-    // Mencegah false-positive rollback saat WiFi lambat connect.
-    if (millis() > OTA_BOOT_VALIDATE_MS) {
-      validateOtaBootSuccess(false);
-    }
+    // WiFi belum konek. Rollback hanya bila sama sekali tidak ada heartbeat
+    // sukses sepanjang OTA_BOOT_CONFIRM_WINDOW_MS sejak boot — WiFi lambat
+    // atau server outage tidak lagi memicu rollback palsu per-tick.
+    serviceOtaBootWindow();
     lastHeartbeat = millis();
   }
 }
@@ -2174,7 +2177,7 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
     return false;
   }
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  http.setTimeout(20000);
+  http.setTimeout(10000);  // harus < WDT_TIMEOUT_SEC agar GET lambat tidak panic
 
   int code = http.GET();
   if (code != HTTP_CODE_OK) {
@@ -2211,7 +2214,8 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
   while (http.connected() && written < total) {
     size_t avail = stream->available();
     if (avail == 0) {
-      if (millis() - lastData > 15000) { Serial.println("OTA: stream stall"); break; }
+      if (millis() - lastData > OTA_STREAM_STALL_MS) { Serial.println("OTA: stream stall"); break; }
+      esp_task_wdt_reset();  // branch tanpa data tetap feed WDT agar stall diakhiri bersih, bukan panic
       yield();
       continue;
     }
@@ -2283,6 +2287,7 @@ bool performOtaUpdate(const String& commandId, const String& binaryUrl,
   // Mark the new image so the boot validator knows which command to confirm.
   otaPreferences.putString("pendingId", commandId);
   otaPreferences.putString("pendingVer", version);
+  otaPreferences.putUChar("bootFails", 0);  // siklus validasi boot dimulai dari nol
   reportOtaStatus("flashing", version, 100, "rebooting");
   oledShowOtaProgress(version, "Reboot", 100);
   Serial.println("OTA: sukses, reboot...");
@@ -2370,47 +2375,65 @@ void checkForOtaCommand(bool force) {
   }
 }
 
-// Dipanggil setelah reboot pasca-OTA. Bila heartbeat pertama sukses, image baru
-// ditandai valid; bila gagal berulang, rollback ke firmware sebelumnya.
-void validateOtaBootSuccess(bool heartbeatOk) {
+// Dipanggil dari setup(): hitung boot pasca-OTA secara per-boot (NVS), bukan
+// per-heartbeat tick. Bila image baru gagal tervalidasi >= OTA_BOOT_FAIL_LIMIT
+// boot, rollback sebelum aplikasi jalan lagi (melindungi dari crash loop).
+void serviceOtaBootCount() {
   String pendingId = otaPreferences.getString("pendingId", "");
   if (pendingId.length() == 0) return;  // bukan boot pasca-OTA
 
-  const esp_partition_t* running = esp_ota_get_running_partition();
-  esp_ota_img_states_t state;
-  bool pendingVerify = (esp_ota_get_state_partition(running, &state) == ESP_OK &&
-                        state == ESP_OTA_IMG_PENDING_VERIFY);
-
-  if (heartbeatOk) {
-    otaActiveCommandId = pendingId;
-    otaPreferences.putString("doneId", pendingId);
-    otaPreferences.remove("pendingId");
-    otaPreferences.putUChar("bootFails", 0);
-    if (pendingVerify) esp_ota_mark_app_valid_cancel_rollback();
-    reportOtaStatus("success", String(FIRMWARE_VERSION), 100, "boot ok");
-    Serial.println("OTA: image baru tervalidasi");
+  uint8_t fails = otaPreferences.getUChar("bootFails", 0);
+  if (fails >= OTA_BOOT_FAIL_LIMIT) {
+    rollbackOtaImage("boot failures");
     return;
   }
+  otaPreferences.putUChar("bootFails", fails + 1);
+  Serial.printf("OTA: boot ke-%d pasca-update (menunggu konfirmasi heartbeat)\n", fails + 1);
+}
 
-  // Heartbeat gagal pada boot ini: hitung kegagalan; rollback setelah 3x.
-  uint8_t fails = otaPreferences.getUChar("bootFails", 0) + 1;
-  otaPreferences.putUChar("bootFails", fails);
-  Serial.printf("OTA: boot gagal %d kali\n", fails);
-  if (fails >= 3) {
-    otaPreferences.remove("pendingId");
-    otaPreferences.putUChar("bootFails", 0);
-    reportOtaStatus("rollback", otaPreferences.getString("pendingVer", ""), -1, "boot failures");
-    Serial.println("OTA: rollback ke firmware sebelumnya");
-    delay(250);
-    if (Update.canRollBack() && Update.rollBack()) {
-      ESP.restart();
-    } else {
-      // Rollback tidak tersedia (mis. partisi factory hilang). Tetap restart
-      // agar device mencoba boot ulang; jika image benar-benar rusak, WDT
-      // 15s akan reboot berulang dan operator dapat reflash manual.
-      Serial.println("OTA: rollback tidak tersedia, restart darurat");
-      ESP.restart();
-    }
+// Heartbeat sukses: image baru dinyatakan valid.
+void confirmOtaBoot() {
+  String pendingId = otaPreferences.getString("pendingId", "");
+  if (pendingId.length() == 0) return;  // bukan boot pasca-OTA
+
+  otaActiveCommandId = pendingId;
+  otaPreferences.putString("doneId", pendingId);
+  otaPreferences.remove("pendingId");
+  otaPreferences.putUChar("bootFails", 0);
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  esp_ota_img_states_t state;
+  if (esp_ota_get_state_partition(running, &state) == ESP_OK &&
+      state == ESP_OTA_IMG_PENDING_VERIFY) {
+    esp_ota_mark_app_valid_cancel_rollback();
+  }
+  reportOtaStatus("success", String(FIRMWARE_VERSION), 100, "boot ok");
+  Serial.println("OTA: image baru tervalidasi");
+}
+
+// Pasca-OTA dengan WiFi yang tidak pernah konek: rollback setelah window.
+// Hanya dipanggil di branch WiFi putus — server outage saat WiFi normal tidak
+// memicu rollback; image tetap terkonfirmasi begitu heartbeat berhasil.
+void serviceOtaBootWindow() {
+  String pendingId = otaPreferences.getString("pendingId", "");
+  if (pendingId.length() == 0) return;  // bukan boot pasca-OTA
+  if (millis() - bootTime < OTA_BOOT_CONFIRM_WINDOW_MS) return;
+  rollbackOtaImage("no heartbeat since update");
+}
+
+void rollbackOtaImage(const char* reason) {
+  otaPreferences.remove("pendingId");
+  otaPreferences.putUChar("bootFails", 0);
+  reportOtaStatus("rollback", otaPreferences.getString("pendingVer", ""), -1, reason);
+  Serial.println("OTA: rollback ke firmware sebelumnya");
+  delay(250);
+  if (Update.canRollBack() && Update.rollBack()) {
+    ESP.restart();
+  } else {
+    // Rollback tidak tersedia (mis. partisi factory hilang). Tetap restart
+    // agar device mencoba boot ulang; jika image benar-benar rusak, WDT
+    // 15s akan reboot berulang dan operator dapat reflash manual.
+    Serial.println("OTA: rollback tidak tersedia, restart darurat");
+    ESP.restart();
   }
 }
 
@@ -2916,6 +2939,7 @@ void setup() {
   authPreferences.begin("deviceAuth", false);
   batCalibPrefs.begin("batCalib", false);
   otaPreferences.begin("deviceOta", false);
+  serviceOtaBootCount();  // hitung boot pasca-OTA & rollback bila crash loop
   loadWiFiConfig();
   loadDeviceConfig();
   loadFirebaseRefreshToken();

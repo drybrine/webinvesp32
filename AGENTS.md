@@ -40,7 +40,7 @@ Firebase Realtime Database + Auth is the backend. Client config keys are `NEXT_P
 
 ## Architecture
 
-This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.5.16). The web app and the firmware share one Firebase Realtime Database.
+This is a Next.js 16 App Router app (Turbopack) paired with an ESP32 firmware sketch (`GM67_ESP32_BARCODESCANNER.ino`, single-mode inventory scanner, v6.7.2). The web app and the firmware share one Firebase Realtime Database.
 
 ### Data flow
 
@@ -101,11 +101,11 @@ The `/prediksi` "Perkiraan Habis" card must stay synchronized with the chart/tab
 
 ### Firmware notes (`GM67_ESP32_BARCODESCANNER.ino`)
 
-Single file, ~1800 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, and `driver/adc` libraries; OTA additionally uses `Update.h`, `esp_ota_ops.h`, `WiFiClientSecure`, and mbedTLS (`mbedtls_sha256`, `mbedtls_pk_verify`). OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.5.16"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state, including batteryLevel, rssi, and scanMode, to `/devices/{deviceId}` every 5s. Scan mode is controlled from the physical buttons and `/deviceCommands/{deviceId}/scanMode` is ignored by current firmware. Provisioning is scan-only: scan QR WiFi, register the OLED `deviceId`, then scan the one-time PDF417 credential from the admin page.
+Single file, ~3000 lines. Requires `Adafruit_GFX`, `Adafruit_SSD1306`, `esp_adc_cal`, and `driver/adc` libraries; OTA additionally uses `Update.h`, `esp_ota_ops.h`, `WiFiClientSecure`, and mbedTLS (`mbedtls_sha256`, `mbedtls_pk_verify`). OLED wired on SDA=21, SCL=22, address 0x3C. Firmware version constant `FIRMWARE_VERSION = "6.7.2"` is reported in heartbeat payload and shown on the boot screen. EEPROM layout: WiFi config at 0, device config at 512, size 1024. Heartbeat PUTs the full device state, including batteryLevel, rssi, and scanMode, to `/devices/{deviceId}` every 5s. Scan mode is controlled from the physical buttons and `/deviceCommands/{deviceId}/scanMode` is ignored by current firmware. Provisioning is scan-only: scan QR WiFi, register the OLED `deviceId`, then scan the one-time PDF417 credential from the admin page.
 
-Battery monitoring uses `esp_adc_cal` eFuse Vref calibration, EMA smoothing (alpha=0.05), hysteresis +/-2%, and range 3200-3800mV. OLED shows a 4-bar battery icon and 4-bar WiFi signal icon.
+Battery monitoring uses `esp_adc_cal` eFuse Vref calibration, EMA smoothing (alpha=0.02), hysteresis 5%, and range 3200-3800mV. OLED shows a 4-bar battery icon and 4-bar WiFi signal icon.
 
-OTA (HTTP-pull) lives in the same sketch: `checkForOtaCommand()` polls `/deviceCommands/{deviceId}/ota.json` every 8s, `performOtaUpdate()` downloads + verifies (SHA-256 + ECDSA via embedded `OTA_PUBLIC_KEY_PEM`) + flashes, `validateOtaBootSuccess()` confirms or rolls back after reboot, `reportOtaStatus()` writes phases to `/deviceOtaStatus/{deviceId}`. Gated on battery >=30% + idle. `OTA_PUBLIC_KEY_PEM` must be the pair of the CI signing key. See the README "OTA Firmware Update" section for the full flow.
+OTA (HTTP-pull) lives in the same sketch: `checkForOtaCommand()` polls `/deviceCommands/{deviceId}/ota.json` every 8s (SSE push on `/ota` child events makes dispatch near-instant while the stream is up), `performOtaUpdate()` downloads + verifies (SHA-256 + ECDSA via embedded `OTA_PUBLIC_KEY_PEM`) + flashes, boot validation is per-boot: `serviceOtaBootCount()` (setup) counts boots in NVS and rolls back after `OTA_BOOT_FAIL_LIMIT` (3) unconfirmed boots, `confirmOtaBoot()` marks the image valid on the first successful heartbeat, and `serviceOtaBootWindow()` rolls back if WiFi never connects within `OTA_BOOT_CONFIRM_WINDOW_MS` (10 min) post-update — heartbeat ticks are never counted, so slow WiFi/server flake cannot trigger a false rollback. `reportOtaStatus()` writes phases to `/deviceOtaStatus/{deviceId}`. Gated on battery >=30% + idle. `OTA_PUBLIC_KEY_PEM` must be the pair of the CI signing key. See the README "OTA Firmware Update" section for the full flow.
 
 ## Coding conventions
 

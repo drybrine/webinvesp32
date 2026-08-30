@@ -62,7 +62,7 @@ Buka http://localhost:3000
 
 ### Device Management (ESP32)
 - Setiap scanner memakai akun Firebase Auth unik yang dipetakan ke satu `deviceId`
-- Firmware 6.5.16 menyimpan refresh token saja di Preferences/NVS dan memperbarui ID token otomatis
+- Firmware 6.7.2 menyimpan refresh token saja di Preferences/NVS dan memperbarui ID token otomatis
 - **OTA firmware update** — admin dispatch versi dari panel, perangkat HTTP-pull, verifikasi SHA-256 + ECDSA P-256, flash + auto-rollback (lihat bagian OTA Firmware Update)
 - Monitoring realtime via Firebase `onValue` listener (bukan polling)
 - Deteksi online/offline client-side: offline bila `lastSeen` >30 detik, re-evaluasi tiap 1 detik
@@ -176,7 +176,7 @@ GND           ←    GND                GND          ← GND
 
 ### Firmware
 - File: `GM67_ESP32_BARCODESCANNER/GM67_ESP32_BARCODESCANNER.ino`
-- Version: 6.5.16
+- Version: 6.7.2
 - Mode: Inventory only (single mode)
 - Heartbeat: tiap ~5 detik ke Firebase `/devices/{id}` berisi `batteryLevel`, `rssi`, dan `scanMode`
 - Battery: `esp_adc_cal` eFuse Vref + EMA(α=0.05) + hysteresis ±2%, MIN=3200mV, MAX=3800mV
@@ -204,7 +204,7 @@ Implementasi pure Python — tidak pakai numpy agar fit dalam Vercel 250MB serve
 ```
 1. Transaksi (in/out/adjustment) → level stok harian (buildDailySeriesFromTransactions)
 2. Konsumsi harian antar hari transaksi = Δstok / gapDays
-3. EMA smoothing (alpha = 0.05)
+3. EMA smoothing (alpha = 0.02)
 4. Regresi lag-1: Y = a + b·X
 5. Forecast stok: S_{d+1} = S_d − predictNextConsumption
 ```
@@ -280,7 +280,7 @@ Update firmware ESP32 jarak jauh dari panel admin. Mekanisme **HTTP-pull**: pera
 2. **Dispatch** — panel admin pilih versi + perangkat (max 50/batch) → `POST /api/admin/devices/ota` → `lib/server/firmware-ota.ts` ambil release dari GitHub → tulis `deviceCommands/{deviceId}/ota` via Firebase Admin SDK → audit `ota-dispatch`. `binaryUrl` diambil dari daftar aset release (bukan manifest) untuk cegah manifest-tampering redirect.
 3. **Poll (ESP32)** — `checkForOtaCommand()` GET `/deviceCommands/{deviceId}/ota.json` tiap 8s. Idempotency via NVS `Preferences` (`doneId`); skip kalau `version == FIRMWARE_VERSION`; gate prasyarat `otaPreconditionsMet()` (baterai ≥30% + idle ≥10s) → lapor `"deferred"` bila belum siap.
 4. **Download → verify → flash** — `performOtaUpdate()`: stream binary HTTPS, hash SHA-256 streaming vs manifest, verifikasi tanda tangan ECDSA `verifyOtaSignature()` pakai public key tertanam, `Update.begin/write/end(true)`, simpan `pendingId`, `ESP.restart()`.
-5. **Validate / rollback** — setelah reboot, `validateOtaBootSuccess()`: heartbeat pertama sukses → `esp_ota_mark_app_valid_cancel_rollback()` (commit). Gagal boot 3x → `Update.rollBack()` balik ke firmware lama (anti-bricking).
+5. **Validate / rollback** — validasi per-boot: `serviceOtaBootCount()` di setup menghitung boot di NVS → gagal tervalidasi 3 boot (`OTA_BOOT_FAIL_LIMIT`) → `Update.rollBack()` (anti-crash-loop). `confirmOtaBoot()` menandai image valid saat heartbeat pertama sukses (`esp_ota_mark_app_valid_cancel_rollback()`). `serviceOtaBootWindow()` rollback bila WiFi tidak pernah konek dalam 10 menit pasca-update. Heartbeat tick tidak dihitung, jadi WiFi lambat/server flake tidak memicu rollback palsu.
 6. **Status** — `reportOtaStatus()` PUT ke `/deviceOtaStatus/{deviceId}` tiap fase; OLED tampil progress; panel admin tampil badge per-perangkat + tombol cancel.
 
 ### Prasyarat deploy
@@ -344,7 +344,7 @@ Semua `/api/admin/*` berjalan sebagai Vercel Functions, mewajibkan Firebase ID t
 2. Set `FIREBASE_SERVICE_ACCOUNT` pada Vercel untuk Preview dan Production, lalu deploy aplikasi.
 3. Jalankan bootstrap admin.
 4. Buat akun pengguna dan scanner dari panel admin; operasi admin dicatat ke `/auditLogs` oleh Vercel Functions.
-5. Flash firmware 6.5.16, scan QR WiFi, daftarkan `deviceId` dari OLED, lalu scan PDF417 kredensial yang ditampilkan panel admin.
+5. Flash firmware 6.7.2, scan QR WiFi, daftarkan `deviceId` dari OLED, lalu scan PDF417 kredensial yang ditampilkan panel admin.
 6. Verifikasi login, heartbeat, scan, role, dan audit administrasi backend.
 7. Jalankan workflow `Deploy Strict Firebase Rules` setelah approval environment.
 
