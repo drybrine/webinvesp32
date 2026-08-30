@@ -32,10 +32,9 @@ import { AlertTriangle, TrendingDown, TrendingUp, Activity, ArrowLeft } from "lu
 import { useFirebaseInventory, useFirebaseTransactions, type InventoryItem } from "@/hooks/use-firebase"
 import { firebaseHelpers } from "@/lib/firebase"
 import {
-  buildConsumptionFromTransactions,
-  consumptionToStockLevels,
+  buildDailySeriesFromTransactions,
   predictStock,
-  type DailyConsumptionPoint,
+  type StockDataPoint,
   type PredictionResult,
 } from "@/lib/stock-prediction"
 import PredictionChart from "@/components/prediction-chart"
@@ -83,14 +82,6 @@ function fmt(ts: number): string {
   return new Date(ts).toLocaleDateString("id-ID", {
     day: "2-digit",
     month: "short",
-  })
-}
-
-function fmtFullDate(date: Date): string {
-  return date.toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
   })
 }
 
@@ -205,23 +196,23 @@ function buildClientBatchRisks(
     if (!item.barcode) return []
     const itemTx = txByBarcode.get(item.barcode) ?? []
     const currentStock = Number(item.quantity) || 0
-    const consumptionData = buildConsumptionFromTransactions(itemTx)
-    if (consumptionData.length < 2) return []
+    const stockSeries = buildDailySeriesFromTransactions(
+      itemTx.map((tx) => ({
+        timestamp: Number(tx.timestamp) || Date.now(),
+        quantity: Number(tx.quantity) || 0,
+        type: tx.type as "in" | "out" | "adjustment",
+      })),
+      currentStock,
+    )
+    if (stockSeries.length < 2) return []
 
     try {
-      const result = predictStock(consumptionData, currentStock, { horizonDays, trainRatio })
+      const result = predictStock(stockSeries, { horizonDays, trainRatio })
       const predictedLowest = Math.min(
         ...result.forecast.map((point) => point.predictedQuantity),
       )
-      const stockoutIndex = result.forecast.findIndex((point) => point.predictedQuantity <= 0)
-      let daysToStockout: number | null = stockoutIndex === -1 ? null : stockoutIndex + 1
-      // Mirror server/alert-provider: extrapolate beyond horizon when b > 0
-      if (daysToStockout === null) {
-        const avgDaily = result.model.avgDailyConsumption
-        if (avgDaily > 0 && currentStock > 0) {
-          daysToStockout = Math.ceil(currentStock / avgDaily)
-        }
-      }
+      // Habis di luar horizon: pakai iterasi penuh (sama dengan server/clientside)
+      const daysToStockout = result.daysToStockout
 
       return [{
         itemId: item.id,
@@ -270,7 +261,7 @@ export default function PrediksiPage() {
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [summaryAnalyzedCount, setSummaryAnalyzedCount] = useState(0)
 
-  const history: DailyConsumptionPoint[] = useMemo(() => {
+  const history: StockDataPoint[] = useMemo(() => {
     if (!selectedItem) return []
     const itemTx = transactions
       .filter((t) => t.productBarcode === selectedItem.barcode)
@@ -279,7 +270,7 @@ export default function PrediksiPage() {
         quantity: Number(t.quantity) || 0,
         type: t.type as "in" | "out" | "adjustment",
       }))
-    return buildConsumptionFromTransactions(itemTx)
+    return buildDailySeriesFromTransactions(itemTx, Number(selectedItem.quantity) || 0)
   }, [selectedItem, transactions])
 
   const [prediction, setPrediction] = useState<PredictionResult | null>(null)
@@ -348,19 +339,21 @@ export default function PrediksiPage() {
             mae: data.metrics.mae ?? null,
             rmse: data.metrics.rmse ?? null,
             r2: data.metrics.r2 ?? null,
+            mape: data.metrics.mape ?? null,
             available: data.metrics.available ?? data.metrics.r2 != null,
             nTrain: data.metrics.nTrain,
             nTest: data.metrics.nTest,
           },
           forecast: data.forecast,
           stockoutDate: data.stockoutDate ? new Date(`${data.stockoutDate}T00:00:00`) : null,
+          daysToStockout: data.daysToStockout ?? null,
         })
         setPredictionSource("server")
       } catch (err) {
         if ((err as Error).name === "AbortError") return
 
         try {
-          const fallback = predictStock(history, Number(selectedItem.quantity) || 0, { horizonDays, trainRatio })
+          const fallback = predictStock(history, { horizonDays, trainRatio })
           setPrediction(fallback)
           setPredictionSource("client")
           setPredictionError(null)
@@ -477,9 +470,7 @@ export default function PrediksiPage() {
     if (!prediction || history.length === 0) return []
     const HISTORY_DAYS = 30
     const cutoff = Date.now() - HISTORY_DAYS * MS_PER_DAY
-    const currentStock = Number(selectedItem?.quantity) || 0
-    const stockLevels = consumptionToStockLevels(history, currentStock)
-    const recentHistory = stockLevels.filter((h) => h.timestamp >= cutoff)
+    const recentHistory = history.filter((h) => h.timestamp >= cutoff)
     const hist = recentHistory.map((h) => ({
       date: fmt(h.timestamp),
       timestamp: h.timestamp,
@@ -493,20 +484,27 @@ export default function PrediksiPage() {
       predicted: Number(f.predictedQuantity.toFixed(2)),
     }))
     return [...hist, ...fc]
-  }, [history, prediction, selectedItem?.quantity])
+  }, [history, prediction])
 
   const forecastStockout = useMemo(() => {
     if (!prediction) return null
 
+    // Deretkan dari hari ke-1 (bukan hari-0) agar "hari ke-N" bisa di luar horizon.
+    const daysToStockout = prediction.daysToStockout ?? null
+    if (daysToStockout === null) return null
+
     const stockoutIndex = prediction.forecast.findIndex(
       (point: { predictedQuantity: number }) => point.predictedQuantity <= 0,
     )
-    if (stockoutIndex === -1) return null
+    const date =
+      stockoutIndex !== -1
+        ? new Date(prediction.forecast[stockoutIndex].timestamp)
+        : prediction.stockoutDate
 
-    const point = prediction.forecast[stockoutIndex]
     return {
-      date: new Date(point.timestamp),
-      daysFromForecastStart: stockoutIndex + 1,
+      date,
+      daysToStockout,
+      daysFromForecastStart: stockoutIndex !== -1 ? stockoutIndex + 1 : null,
     }
   }, [prediction])
 
@@ -617,7 +615,7 @@ export default function PrediksiPage() {
                   <TableHead className="text-right">Avg Konsumsi</TableHead>
                   <TableHead className="text-right">Stok Terendah Forecast</TableHead>
                   <TableHead className="text-right">Perkiraan Habis</TableHead>
-                  <TableHead className="text-right">R² (tren stok)</TableHead>
+                  <TableHead className="text-right">R² (tren konsumsi)</TableHead>
                   <TableHead className="text-right">Status Prediksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -653,9 +651,9 @@ export default function PrediksiPage() {
                       <TableCell className="text-right font-mono font-semibold">
                         {row.predictedLowest === null ? "—" : row.predictedLowest.toFixed(1)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        {row.stockoutDate ? fmtFullDate(row.stockoutDate) : "—"}
-                      </TableCell>
+                       <TableCell className="text-right">
+                         {row.daysToStockout === null ? "—" : `Hari ke-${row.daysToStockout}`}
+                       </TableCell>
                       <TableCell className="text-right">
                         {row.r2 === null || row.mae === null || row.rmse === null ? (
                           "—"
@@ -663,7 +661,7 @@ export default function PrediksiPage() {
                           <div className="font-mono text-xs leading-relaxed">
                             <div className="font-semibold">R² tren {row.r2.toFixed(3)}</div>
                             <div className="text-muted-foreground">
-                              MAE stok {row.mae.toFixed(2)} · RMSE {row.rmse.toFixed(2)}
+                              MAE {row.mae.toFixed(2)} · RMSE {row.rmse.toFixed(2)}
                             </div>
                           </div>
                         )}
@@ -724,7 +722,7 @@ export default function PrediksiPage() {
               hint={prediction.model.slope < 0 ? "Stok menurun" : "Stok naik/stabil"}
             />
             <MetricCard
-              label="R² (tren kumulatif)"
+              label="R² (tren konsumsi)"
               value={
                 prediction.metrics.r2 == null || prediction.metrics.available === false
                   ? "—"
@@ -732,8 +730,8 @@ export default function PrediksiPage() {
               }
               hint={
                 prediction.metrics.r2 == null || prediction.metrics.available === false
-                  ? "Metrik holdout tidak tersedia (test < 2)"
-                  : `MAE stok ${Number(prediction.metrics.mae).toFixed(2)} · RMSE stok ${Number(prediction.metrics.rmse).toFixed(2)}`
+                  ? "Metrik tidak tersedia"
+                  : `MAE ${Number(prediction.metrics.mae).toFixed(2)} · RMSE ${Number(prediction.metrics.rmse).toFixed(2)}`
               }
             />
             <MetricCard
@@ -741,12 +739,14 @@ export default function PrediksiPage() {
               label="Perkiraan Habis"
               value={
                 forecastStockout
-                  ? forecastStockout.date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+                  ? `Hari ke-${forecastStockout.daysToStockout}`
                   : "—"
               }
               hint={
                 forecastStockout
-                  ? `Hari ke-${forecastStockout.daysFromForecastStart} pada forecast`
+                  ? forecastStockout.daysFromForecastStart !== null
+                    ? `Titik habis pada tabel forecast (hari ke-${forecastStockout.daysFromForecastStart})`
+                    : `Di luar horizon ${horizonDays} hari forecast`
                   : `Tidak habis dalam ${horizonDays} hari forecast`
               }
             />
@@ -808,14 +808,14 @@ export default function PrediksiPage() {
             <CardHeader>
               <CardTitle className="text-base">Testing Model</CardTitle>
               <CardDescription>
-                Holdout kronologis 85/15: R² pada ΣC vs a+b·t (tren), MAE/RMSE pada level stok
+                Holdout kronologis 85/15: fit model dari train, evaluasi in-sample R²/MAE/RMSE/MAPE konsumsi
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Key metrics — visually prominent */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-lg border border-primary/10 bg-primary/[0.03] p-3 text-center">
-                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">R² tren</div>
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">R² tren konsumsi</div>
                   <div className="text-xl font-bold text-primary mt-1 tabular-nums">
                     {prediction.metrics.r2 == null || prediction.metrics.available === false
                       ? "—"
@@ -823,7 +823,7 @@ export default function PrediksiPage() {
                   </div>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-3 text-center">
-                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">MAE stok</div>
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">MAE konsumsi</div>
                   <div className="text-lg font-bold text-foreground mt-1 tabular-nums">
                     {prediction.metrics.mae == null || prediction.metrics.available === false
                       ? "—"
@@ -831,7 +831,7 @@ export default function PrediksiPage() {
                   </div>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-3 text-center">
-                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">RMSE stok</div>
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">RMSE konsumsi</div>
                   <div className="text-lg font-bold text-foreground mt-1 tabular-nums">
                     {prediction.metrics.rmse == null || prediction.metrics.available === false
                       ? "—"
@@ -841,11 +841,11 @@ export default function PrediksiPage() {
               </div>
               {/* Technical parameters — secondary */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3 text-sm pt-2 border-t border-border">
-                <KV k="Slope" v={`${prediction.model.slope.toFixed(4)} /hari`} />
-                <KV k="Intercept" v={prediction.model.intercept.toFixed(4)} />
+                <KV k="Slope stok" v={`${prediction.model.slope.toFixed(4)} /hari`} />
+                <KV k="Intercept konsumsi" v={prediction.model.consumptionIntercept.toFixed(4)} />
+                <KV k="Slope konsumsi" v={prediction.model.consumptionSlope.toFixed(4)} />
                 <KV k="Avg Konsumsi" v={`${prediction.model.avgDailyConsumption.toFixed(2)} /hari`} />
-                <KV k="n train" v={String(prediction.metrics.nTrain ?? prediction.model.n)} />
-                <KV k="n test" v={String(prediction.metrics.nTest ?? Math.max(0, history.length - prediction.model.n))} />
+                <KV k="MAPE" v={`${(prediction.metrics.mape ?? 0).toFixed(2)}%`} />
                 <KV k="Horizon" v={`${horizonDays} hari`} />
               </div>
             </CardContent>

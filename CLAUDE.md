@@ -82,18 +82,19 @@ Legacy data migration: if the production database still has `price` on `/invento
 
 ### Prediction pipeline
 
-Primary prediction runs on **Python serverless** (`api/predict.py`) — pure Python Simple Linear Regression / OLS (no numpy, fits Vercel 250MB limit). Pipeline:
+Primary prediction runs on **Python serverless** (`api/predict.py`) — pure Python Simple Linear Regression (lag-1) on EMA-smoothed daily consumption (no numpy, fits Vercel 250MB limit). Pipeline:
 
 ```
-transactions (type=out) → daily consumption + zero-fill calendar gaps
-→ cumulative series ΣC(t)
-→ OLS: ΣC(t) = a + b*t   (b = avgDailyConsumption)
-→ forecast: S_d = max(0, S0 − d·b)
+transactions (in/out/adjustment) → daily stock levels (buildDailySeriesFromTransactions)
+→ daily consumption = Δstock / gapDays
+→ EMA smoothing (alpha 0.05)
+→ lag-1 regression: Y = a + b*X   (X = yesterday smoothed consumption)
+→ forecast: S_{d+1} = max(0, S_d − predictNextConsumption)
 ```
 
-Train/test split kronologis default 85/15. Metrik holdout (Opsi A): R² membandingkan ΣC aktual vs a+b·t (kecocokan tren kumulatif / prediksi stok); MAE/RMSE membandingkan level stok holdout aktual vs S_train − d·b. Jika `nTest < 2`, metrik ditandai tidak tersedia (tidak dihitung ulang di full data). Semakin tinggi R² tren dan semakin rendah MAE stok, semakin baik model menjelaskan pengurangan stok.
+Train/test split kronologis default 85/15. Metrik dihitung **in-sample pada deret penuh** (model di-fit dari train): R² membandingkan konsumsi EMA aktual vs a+b·X; MAE/RMSE/MAPE pada konsumsi EMA. R² selalu pada selang 0..1 (tidak pernah minus), konsisten dengan notebook/seminar.
 
-**Client-side fallback** in `lib/stock-prediction.ts` (TypeScript, same OLS math) — used if Python serverless fails or `/api/predict` is unavailable in local `next start`. Badge shows "Linear Regression (server)" or "Linear Regression (client)".
+**Client-side fallback** in `lib/stock-prediction.ts` (TypeScript, same lag-1 math, parity terverifikasi) — used if Python serverless fails or `/api/predict` is unavailable in local `next start`. Badge shows "Linear Regression (server)" or "Linear Regression (client)".
 
 The `/prediksi` page calls single-item prediction and displays only the regression/forecast outputs needed for the thesis: model parameters, chart, metrics, forecast table, and testing model details. The dashboard calls batch mode (`mode: 'batch'`) to get top-N risk items. Standalone test: `scripts/test-stock-prediction.ts`. Minimum 2 points to fit — callers must guard.
 

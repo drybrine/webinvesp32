@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Wireframe — Dashboard</title>
+<style>
+  :root { --line:#bbb; --fill:#e8e8e8; --fill2:#f3f3f3; --txt:#333; }
+  * { box-sizing:border-box; }
+  body { font-family: system-ui, Arial, sans-serif; background:#fafafa; color:var(--txt); margin:0; padding:24px; }
+  .sub { font-size:13px; color:#777; margin-bottom:16px; }
+  .wf { border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:20px; background:#fff; }
+  .wf > .cap { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:#999; margin-bottom:6px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .grow { flex:1 1 0; }
+  .box { border:1px solid var(--line); border-radius:6px; background:var(--fill); padding:10px 12px; font-size:12px; min-width:0; }
+  .box.dim { background:var(--fill2); }
+  .box .t { font-weight:bold; font-size:12px; margin-bottom:2px; }
+  .box .m { color:#666; font-size:11px; }
+  .box.small { padding:6px 8px; font-size:11px; }
+  .box.center { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:4px; }
+  .box.blue { background:#e3edf7; }
+  .box.green { background:#e6f4e6; }
+  .box.red { background:#f8e3e3; }
+  .box.amber { background:#fdf3dc; }
+  .badge { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:1px 8px; font-size:10px; background:#fff; }
+  .badge.green { border-color:#4caf50; color:#2e7d32; }
+  .badge.red { border-color:#e57373; color:#c62828; }
+  .badge.amber { border-color:#e0a800; color:#9a6b00; }
+  .badge.gray { background:#f0f0f0; color:#666; }
+  table.grid { width:100%; border-collapse:collapse; font-size:11px; }
+  table.grid th, table.grid td { border:1px solid var(--line); padding:6px 8px; text-align:left; }
+  table.grid th { background:var(--fill2); font-size:10px; text-transform:uppercase; letter-spacing:.5px; }
+  .placeholder { background:repeating-linear-gradient(45deg,#ececec,#ececec 6px,#f5f5f5 6px,#f5f5f5 12px); }
+  .modal { border:2px dashed #666; border-radius:10px; background:#fff; padding:14px; }
+  .modal .cap { font-size:10px; letter-spacing:1px; color:#666; text-transform:uppercase; margin-bottom:8px; }
+  .field { border:1px dashed #999; border-radius:4px; padding:6px 8px; font-size:11px; color:#888; background:#fff; margin-bottom:6px; }
+  .btnrow { display:flex; gap:6px; justify-content:flex-end; }
+  .btn { border:1px solid var(--line); border-radius:4px; padding:4px 12px; font-size:11px; background:#fff; white-space:nowrap; }
+  .btn.primary { background:#222; color:#fff; border-color:#222; }
+  .btn.danger { background:#c62828; color:#fff; border-color:#c62828; }
+  .mono { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div class="sub">Layout kotak low-fidelity halaman utama inventori.</div>
+
+<div class="wf">
+  <div class="cap">Navbar global (sticky) — semua halaman</div>
+  <div class="box">
+    <div class="row">
+      <div class="box small dim grow">[logo] StokManager</div>
+      <div class="box small blue">📊 Dashboard <span class="m">(1)</span></div>
+      <div class="box small dim">🧾 Riwayat <span class="m">(2)</span></div>
+      <div class="box small dim">📈 Prediksi <span class="m">(3)</span></div>
+      <div class="box small dim">🛡 Pengguna <span class="m">(4, admin only)</span></div>
+      <div class="box small dim grow"></div>
+      <div class="box small dim">🔔 Bell + badge angka notif &rarr; panel "Riwayat Notifikasi"</div>
+      <div class="box small dim">Nama user · badge <span class="badge gray">ADMIN</span></div>
+      <div class="box small dim">logout (icon)</div>
+    </div>
+  </div>
+</div>
+
+<div class="wf">
+  <div class="cap">Header halaman</div>
+  <div class="row">
+    <div class="grow">
+      <div class="box">
+        <div class="m">Ringkasan</div>
+        <div class="t">Dashboard Inventori</div>
+        <div class="m">Kelola stok barang gudang dan pantau prediksi stok otomatis.</div>
+      </div>
+    </div>
+    <div class="box small center"><span class="badge green">● Auto IN</span><span class="m">tooltip: "Mode Scanner dikontrol dari tombol alat: Auto IN"</span></div>
+  </div>
+</div>
+
+<div class="wf">
+  <div class="cap">Stat cards (grid sm:2 / lg:3 kolom)</div>
+  <div class="row">
+    <div class="box grow center"><div class="t">Total Item</div><div class="t">120</div><div class="m">Jenis barang unik</div></div>
+    <div class="box grow center amber"><div class="t">Stok Rendah</div><div class="t">5</div><div class="m">2 habis · 3 rendah</div></div>
+    <div class="box grow center"><div class="t">Scanner</div><div class="t">1/1</div><div class="m">🔋 87% (badge baterai saat online)</div><div class="m">Device online / Semua offline</div></div>
+  </div>
+</div>
+
+<div class="wf">
+  <div class="cap">Prediksi Stok — ringkasan top-3 risiko</div>
+  <div class="box">
+    <div class="row">
+      <div class="t grow">Prediksi Stok</div>
+      <div class="m">Barang paling berisiko berdasarkan histori transaksi.</div>
+      <div class="btn">Detail Prediksi →</div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div class="box grow center red">
+        <div class="t">Busi NGK CPR8EA-9</div>
+        <div class="m">Stok: <span class="mono">4</span></div>
+        <span class="badge red">Risiko</span>
+        <div class="row"><div class="box small dim center grow">Tren<br>0.33/hari</div><div class="box small dim center grow">Terendah<br>0</div><div class="box small dim center grow">Habis<br>9h</div></div>
+      </div>
+      <div class="box grow center red">
+        <div class="t">Oli Mesin 1L</div>
+        <div class="m">Stok: <span class="mono">7</span></div>
+        <span class="badge red">Risiko</span>
+        <div class="row"><div class="box small dim center grow">Tren<br>1.00/hari</div><div class="box small dim center grow">Terendah<br>1</div><div class="box small dim center grow">Habis<br>6h</div></div>
+      </div>
+      <div class="box grow center">
+        <div class="t">Filter Udara</div>
+        <div class="m">Stok: <span class="mono">25</span></div>
+        <span class="badge green">Aman</span>
+        <div class="row"><div class="box small dim center grow">Tren<br>0.30/hari</div><div class="box small dim center grow">Terendah<br>9</div><div class="box small dim center grow">Habis<br>—</div></div>
+      </div>
+    </div>
+    <div class="box center placeholder" style="margin-top:8px">[state kosong] Belum cukup data transaksi untuk menghitung prediksi. Minimal 2 transaksi per barang.</div>
+  </div>
+</div>
+
+<div class="wf">
+  <div class="cap">Tabel inventori</div>
+  <div class="box amber small" style="margin-bottom:8px">● 2 Item Memerlukan Perhatian — blok "Habis (2)": chip nama barang (max 6, +n lainnya) · blok "Stok Rendah (3)": chip "nama (qty)"</div>
+  <div class="box">
+    <div class="row">
+      <div class="t grow">Inventori (120)</div>
+      <div class="m">Kelola dan pantau stok barang</div>
+      <div class="btn primary">+ Tambah Item <span class="m">(tooltip: Tekan N)</span></div>
+      <div class="btn">⇩ Export CSV</div>
+    </div>
+    <div class="row" style="margin:8px 0">
+      <div class="box small dim grow">🔍 Cari item... <span class="m">(tooltip: Tekan / untuk fokus)</span></div>
+      <div class="box small dim">Kategori ▾ — Semua Kategori + daftar kategori</div>
+      <div class="box small dim">Urutan ▾ — Nama A-Z · Nama Z-A · Stok Terendah · Stok Tertinggi</div>
+    </div>
+    <table class="grid">
+      <tr><th>Item</th><th>Kategori</th><th>Stok</th><th>Lokasi</th><th>Aksi</th></tr>
+      <tr>
+        <td><span class="badge red">●</span> Busi NGK CPR8EA-9<br><span class="m">deskripsi / "-"</span></td>
+        <td>Sparepart</td>
+        <td><span class="badge red">2</span><br><span class="m">Min: 5</span></td>
+        <td>Rak A1</td>
+        <td><span class="badge green">+ Tambah</span> <span class="badge">− Kurangi</span> | 👁 ✏ 🗑</td>
+      </tr>
+      <tr>
+        <td><span class="badge green">●</span> Oli Mesin 1L<br><span class="m">deskripsi / "-"</span></td>
+        <td>Oli</td>
+        <td><span class="badge">50</span></td>
+        <td>Rak B2</td>
+        <td><span class="badge green">+ Tambah</span> <span class="badge">− Kurangi</span> | 👁 ✏ 🗑</td>
+      </tr>
+      <tr><td class="m" colspan="5">Tooltip aksi: "Tambah stok" / "Kurangi stok" (disabled saat stok 0) | "Lihat detail" / "Edit item" / "Hapus item" — tombol ✏ 🗑 hanya utk user dgn hak tulis</td></tr>
+    </table>
+    <div class="box center placeholder" style="margin-top:8px">[state kosong] Tidak ada item yang ditemukan — Coba ubah filter atau tambah item baru</div>
+    <div class="m" style="margin-top:6px">Mobile: kartu — nama + badge Habis/Rendah, kategori, barcode, qty, Stok Minimum:, Lokasi:, tombol Lihat · Edit · Hapus · Tambah Stok · Kurangi Stok</div>
+  </div>
+</div>
+
+<div class="wf">
+  <div class="cap">Dialog (modal)</div>
+  <div class="row" style="align-items:flex-start">
+    <div class="box grow">
+      <div class="modal">
+        <div class="cap">Tambah Item Baru</div>
+        <div class="m" style="margin-bottom:6px">Masukkan detail item inventori.</div>
+        <div class="field">Barcode — "Scan atau ketik"</div>
+        <div class="field">Nama * — "Contoh: Busi NGK CPR8EA-9"</div>
+        <div class="field">Kategori — "Contoh: Sparepart"</div>
+        <div class="field">Kuantitas (number)</div>
+        <div class="field">Lokasi — "Contoh: Rak A1"</div>
+        <div class="btnrow"><div class="btn">Batal</div><div class="btn primary">Simpan</div></div>
+      </div>
+    </div>
+    <div class="box grow">
+      <div class="modal">
+        <div class="cap">Edit Item</div>
+        <div class="m" style="margin-bottom:6px">Perbarui informasi item.</div>
+        <div class="field">Barcode</div>
+        <div class="field">Nama</div>
+        <div class="field">Kategori</div>
+        <div class="field">Kuantitas (number)</div>
+        <div class="field">Stok Minimum (number, min 0)</div>
+        <div class="field">Lokasi</div>
+        <div class="btnrow"><div class="btn">Batal</div><div class="btn primary">Simpan</div></div>
+      </div>
+    </div>
+    <div class="box grow">
+      <div class="modal">
+        <div class="cap">Detail Item</div>
+        <div class="box center dim">▮▮ PDF417 barcode<br><span class="mono">123456789012</span><br>fallback: "Tidak ada barcode"</div>
+        <div class="row"><div class="field grow">Nama</div><div class="field grow">Kategori</div></div>
+        <div class="row"><div class="field grow">Stok (besar)</div><div class="field grow">Stok Minimum</div></div>
+        <div class="field placeholder">Timeline Audit (admin only) — "Belum ada audit untuk item ini."</div>
+        <div class="btnrow"><div class="btn primary">Tutup</div></div>
+      </div>
+    </div>
+    <div class="box grow">
+      <div class="modal">
+        <div class="cap">Tambah Stok: Busi NGK</div>
+        <div class="m" style="margin-bottom:6px">Stok saat ini: 4</div>
+        <div class="field">Jumlah (number, min 1)</div>
+        <div class="btnrow"><div class="btn">Batal</div><div class="btn primary">Tambah Stok</div></div>
+      </div>
+      <div class="modal" style="margin-top:10px">
+        <div class="cap">Hapus item?</div>
+        <div class="m">"Busi NGK" akan dihapus dari inventori. Tindakan ini tidak dapat dibatalkan.</div>
+        <div class="btnrow"><div class="btn">Batal</div><div class="btn danger">Hapus</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

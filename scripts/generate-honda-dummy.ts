@@ -27,7 +27,7 @@ import { writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs"
 import { resolve } from "node:path"
 import { execFileSync } from "node:child_process"
 import {
-  buildConsumptionFromTransactions,
+  buildDailySeriesFromTransactions,
   predictStock,
 } from "../lib/stock-prediction"
 
@@ -373,14 +373,14 @@ function testPrediction(part: SparePart, txs: GeneratedTransaction[], finalStock
     quantity: tx.quantity,
     type: tx.type,
   }))
-  const series = buildConsumptionFromTransactions(txInput)
+  const series = buildDailySeriesFromTransactions(txInput, finalStock)
   if (series.length < 2) {
     console.log(`  ⚠ Data konsumsi kurang untuk ${part.name}`)
     return null
   }
 
   try {
-    const prediction = predictStock(series, finalStock, { horizonDays: 14, trainRatio: 0.85 })
+    const prediction = predictStock(series, { horizonDays: 14, trainRatio: 0.85 })
     const lowest = Math.min(...prediction.forecast.map((f) => f.predictedQuantity))
     const lastHistoryTs = series[series.length - 1].timestamp
     const stockoutDay = prediction.stockoutDate

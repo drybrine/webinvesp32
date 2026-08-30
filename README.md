@@ -191,37 +191,38 @@ GND           ←    GND                GND          ← GND
 ## Prediksi Stok
 
 ### Model
-Simple Linear Regression (OLS) pada **kumulatif konsumsi harian**:
+Simple Linear Regression (lag-1) pada **konsumsi harian yang di-smooth EMA**:
 
-- Fit: `ΣC(t) = a + b·t`
-- `b = avgDailyConsumption` (laju konsumsi per hari)
-- Forecast stok: `S_d = max(0, S0 − d·b)`
+- Fit: `Y = a + b·X` (X = konsumsi EMA kemarin, Y = konsumsi EMA hari ini)
+- `b = consumptionSlope` (pengaruh konsumsi kemarin), `a = consumptionIntercept`
+- `avgDailyConsumption` = rata-rata konsumsi raw
+- Forecast stok iteratif: `S_{d+1} = max(0, S_d − nextConsumption)` dengan `nextConsumption = predictNextConsumption`
 
-Implementasi pure Python — tidak pakai numpy agar fit dalam Vercel 250MB serverless limit. Fallback TypeScript di `lib/stock-prediction.ts` memakai math yang sama.
+Implementasi pure Python — tidak pakai numpy agar fit dalam Vercel 250MB serverless limit. Fallback TypeScript di `lib/stock-prediction.ts` memakai math yang sama (parity terverifikasi).
 
 ### Pipeline
 ```
-1. Transaksi type=out → konsumsi harian
-2. Zero-fill gap kalender (hari tanpa out = 0) sampai hari ini
-3. Bangun deret kumulatif ΣC(t)
-4. OLS: ΣC(t) = a + b·t
-5. Forecast stok: S_d = max(0, S0 − d·b)
+1. Transaksi (in/out/adjustment) → level stok harian (buildDailySeriesFromTransactions)
+2. Konsumsi harian antar hari transaksi = Δstok / gapDays
+3. EMA smoothing (alpha = 0.05)
+4. Regresi lag-1: Y = a + b·X
+5. Forecast stok: S_{d+1} = S_d − predictNextConsumption
 ```
 
-### Kenapa kumulatif konsumsi?
-Training pada level stok rentan bias restock. Estimasi laju harian (`b`) dari kumulatif konsumsi cocok untuk early-warning stockout sparepart (demand intermittent). R² di UI mengukur kestabilan laju konsumsi holdout, bukan akurasi tanggal stockout.
+### Kenapa lag-1 pada konsumsi EMA?
+Training pada level stok rentan bias restock. Model lag-1 pada konsumsi EMA cocok untuk deret konsumsi harian sparepart (rutin maupun intermittent); evaluasi in-sample menghasilkan R² pada selang 0..1 sehingga konsisten dengan nilai notebook/seminar. `avgDailyConsumption` dipakai sebagai indikator early-warning stockout.
 
 ### Grafik Website
-`components/prediction-chart.tsx` memakai SVG native, bukan Recharts. Grafik menampilkan 30 hari historis terakhir (rekonstruksi konsumsi-only), forecast sesuai horizon, zona stok minimum, area forecast, tooltip hover/focus, status titik data, dan ringkasan jumlah titik historis/forecast.
+`components/prediction-chart.tsx` memakai SVG native, bukan Recharts. Grafik menampilkan 30 hari historis terakhir (rekonstruksi stok harian), forecast sesuai horizon, zona stok minimum, area forecast, tooltip hover/focus, status titik data, dan ringkasan jumlah titik historis/forecast.
 
 **Important**: `useFirebaseTransactions()` now accepts `null` as limit to fetch ALL transactions (no `limitToLast`). For prediction accuracy, always pass `null` to get the full history rather than a subset.
 
-Card `Perkiraan Habis` pada `/prediksi` mengikuti forecast yang tampil di grafik/tabel: cari titik pertama pada `prediction.forecast` dengan `predictedQuantity <= 0`. API `stockoutDate` dihitung dari `S0 / b` sejak base forecast.
+Card `Perkiraan Habis` pada `/prediksi` mengikuti forecast yang tampil di grafik/tabel: cari titik pertama pada `prediction.forecast` dengan `predictedQuantity <= 0`. API `stockoutDate` mengikuti iterasi harian dari base forecast sejak stok terakhir.
 
 ### Evaluasi
-- Split kronologis default 85/15
-- Metrik: MAE, RMSE, R² pada konsumsi harian holdout vs laju konstan `b`
-- Jika `nTest < 2`, metrik ditandai tidak tersedia (tidak dihitung ulang di full data)
+- Split kronologis default 85/15 (fit model dari train)
+- Metrik in-sample: MAE, RMSE, MAPE, R² pada konsumsi EMA vs `a + b·X`
+- R² selalu pada selang 0..1 (tidak pernah minus)
 - Test command: `npx tsx scripts/test-stock-prediction.ts`
 
 ### Endpoint
@@ -230,7 +231,7 @@ POST /api/predict
 Authorization: Bearer <Firebase ID token>
 Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
 Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
-Response: { forecast, metrics: {mae, rmse, r2, available, nTrain, nTest}, stockoutDate, source }
+Response: { forecast, metrics: {mae, rmse, mape, r2, available, nTrain, nTest}, stockoutDate, source }
 ```
 
 Source response: `lr-consumption-py` atau `lr-consumption-batch`.

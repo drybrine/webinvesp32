@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Wireframe — Prediksi</title>
+<style>
+  :root { --line:#bbb; --fill:#e8e8e8; --fill2:#f3f3f3; --txt:#333; }
+  * { box-sizing:border-box; }
+  body { font-family: system-ui, Arial, sans-serif; background:#fafafa; color:var(--txt); margin:0; padding:24px; }
+  .sub { font-size:13px; color:#777; margin-bottom:16px; }
+  .wf { border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:20px; background:#fff; }
+  .wf > .cap { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:#999; margin-bottom:6px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .grow { flex:1 1 0; }
+  .box { border:1px solid var(--line); border-radius:6px; background:var(--fill); padding:10px 12px; font-size:12px; min-width:0; }
+  .box.dim { background:var(--fill2); }
+  .box .t { font-weight:bold; font-size:12px; margin-bottom:2px; }
+  .box .m { color:#666; font-size:11px; }
+  .box.small { padding:6px 8px; font-size:11px; }
+  .box.center { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:4px; }
+  .box.blue { background:#e3edf7; }
+  .box.red { background:#f8e3e3; }
+  .box.amber { background:#fdf3dc; }
+  .badge { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:1px 8px; font-size:10px; background:#fff; }
+  .badge.red { border-color:#e57373; color:#c62828; }
+  .badge.amber { border-color:#e0a800; color:#9a6b00; }
+  .badge.blue { border-color:#90a4ae; color:#37474f; background:#e3edf7; }
+  .badge.gray { background:#f0f0f0; color:#666; }
+  .mono { font-family: Consolas, monospace; }
+  table.grid { width:100%; border-collapse:collapse; font-size:11px; }
+  table.grid th, table.grid td { border:1px solid var(--line); padding:6px 8px; text-align:left; }
+  table.grid th { background:var(--fill2); font-size:10px; text-transform:uppercase; letter-spacing:.5px; }
+  .placeholder { background:repeating-linear-gradient(45deg,#ececec,#ececec 6px,#f5f5f5 6px,#f5f5f5 12px); }
+  .btn { border:1px solid var(--line); border-radius:4px; padding:4px 12px; font-size:11px; background:#fff; display:inline-block; white-space:nowrap; }
+</style>
+</head>
+<body>
+
+<div class="sub">Layout kotak low-fidelity halaman prediksi stok (linear regression).</div>
+
+<div class="wf">
+  <div class="cap">Navbar global (sticky) — semua halaman</div>
+  <div class="box">
+    <div class="row">
+      <div class="box small dim grow">[logo] StokManager</div>
+      <div class="box small dim">📊 Dashboard <span class="m">(1)</span></div>
+      <div class="box small dim">🧾 Riwayat <span class="m">(2)</span></div>
+      <div class="box small blue">📈 Prediksi <span class="m">(3)</span></div>
+      <div class="box small dim">🛡 Pengguna <span class="m">(4, admin only)</span></div>
+      <div class="box small dim grow"></div>
+      <div class="box small dim">🔔 Bell + badge angka notif &rarr; panel "Riwayat Notifikasi"</div>
+      <div class="box small dim">Nama user · badge <span class="badge gray">ADMIN</span></div>
+      <div class="box small dim">logout (icon)</div>
+    </div>
+  </div>
+</div>
+
+<div class="wf">
+  <div class="cap">Header halaman</div>
+  <div class="row">
+    <div class="grow">
+      <div class="box">
+        <div class="m">Analitik</div>
+        <div class="t">Prediksi Stok</div>
+        <div class="m">Linear regression untuk memperkirakan level stok ke depan.</div>
+      </div>
+    </div>
+    <div class="box small center"><span class="badge blue">Server</span><span class="m">badge sumber model: Server / Client</span></div>
+    <div class="btn">← Kembali</div>
+  </div>
+</div>
+
+<div class="wf">
+  <div class="cap">Parameter model</div>
+  <div class="box">
+    <div class="t">Parameter Model</div>
+    <div class="m">Pilih barang dan atur horizon prediksi</div>
+    <div class="row" style="margin-top:8px">
+      <div class="box small dim grow">Barang ▾ — "Memuat..." / "Pilih barang"; opsi: "Nama - barcode"</div>
+      <div class="box small dim">Horizon (hari) — [ 14 ] min 1, max 90</div>
+    </div>
+  </div>
+</div>
+
+<div class="wf">
+  <div class="cap">Ringkasan hasil prediksi semua barang</div>
+  <div class="box">
+    <div class="row">
+      <div class="t grow">Ringkasan Hasil Prediksi Semua Barang</div>
+      <div class="m">8 dari 10 barang memiliki data cukup untuk prediksi.</div>
+      <span class="badge gray">8 Barang</span>
+    </div>
+    <table class="grid" style="margin-top:8px">
+      <tr>
+        <th>Barang</th><th>Stok Saat Ini</th><th>Stok Minimum</th><th>Avg Konsumsi</th>
+        <th>Stok Terendah Forecast</th><th>Perkiraan Habis</th><th>R² (tren stok)</th><th>Status Prediksi</th>
+      </tr>
+      <tr>
+        <td>Busi NGK (klik → pilih utk chart) <span class="m mono">123456</span></td>
+        <td class="mono">4</td><td class="mono">5</td>
+        <td class="mono">0.33/hari</td><td class="mono">0.0</td>
+        <td>12 Agu 2026</td>
+        <td><span class="mono">R² tren 0.850</span><br><span class="m mono">MAE stok 0.80 · RMSE 1.20</span></td>
+        <td><span class="badge red">Berisiko Habis</span></td>
+      </tr>
+      <tr>
+        <td>Oli Mesin 1L <span class="m mono">654321</span></td>
+        <td class="mono">7</td><td class="mono">3</td>
+        <td class="mono">1.00/hari</td><td class="mono">1.0</td>
+        <td>16 Agu 2026</td>
+        <td><span class="mono">R² tren 0.720</span><br><span class="m mono">MAE stok 1.10 · RMSE 1.40</span></td>
+        <td><span class="badge amber">Rendah</span></td>
+      </tr>
+      <tr>
+        <td>Filter Udara <span class="m mono">112233</span></td>
+        <td class="mono">25</td><td class="mono">5</td>
+        <td class="mono">0.30/hari</td><td class="mono">9.0</td>
+        <td>—</td>
+        <td><span class="mono">R² tren 0.400</span><br><span class="m mono">MAE stok 2.00 · RMSE 2.50</span></td>
+        <td><span class="badge">Aman</span></td>
+      </tr>
+      <tr>
+        <td>Kampas Rem <span class="m mono">778899</span></td>
+        <td class="mono">2</td><td class="mono">5</td>
+        <td>—</td><td>—</td><td>—</td><td>—</td>
+        <td><span class="badge">Data belum cukup</span></td>
+      </tr>
+      <tr>
+        <td class="m" colspan="8">state: loading "Memuat ringkasan prediksi..." · error "Gagal memuat ringkasan prediksi" · kosong "Belum ada barang untuk diringkas." · sel R² kosong → "—"</td>
+      </tr>
+    </table>
+    <div class="box center placeholder" style="margin-top:8px">[placeholder] "Pilih barang untuk mulai memprediksi."</div>
+    <div class="box center placeholder" style="margin-top:8px">[placeholder] "Data transaksi untuk &lt;nama&gt; belum cukup (minimal 2 titik)." + "Tambahkan transaksi in/out lebih dulu agar model dapat fit."</div>
+    <div class="box center placeholder" style="margin-top:8px">[placeholder error] "Gagal memuat prediksi"</div>
+  </div>
+</div>
+
+<div class="wf">
+  <div class="cap">Metric cards (grid md:4 kolom — hanya saat prediksi dimuat)</div>
+  <div class="row">
+    <div class="box grow center"><div class="t">Stok Saat Ini</div><div class="t">4</div><div class="m">Min stok: 5</div></div>
+    <div class="box grow center red"><div class="t">Tren</div><div class="t mono">-0.12/hari</div><div class="m">Stok menurun</div></div>
+    <div class="box grow center"><div class="t">R² (tren kumulatif)</div><div class="t mono">0.850</div><div class="m">MAE stok 0.80 · RMSE stok 1.20</div></div>
+    <div class="box grow center amber"><div class="t">Perkiraan Habis</div><div class="t">12 Agu 2026</div><div class="m">Hari ke-2 pada forecast</div></div>
+  </div>
+  <div class="m" style="margin-top:6px">Hints alternatif: "Metrik holdout tidak tersedia (test &lt; 2)" · "Tidak habis dalam 14 hari forecast" · Tren "+0.33/hari" hijau / "Stok naik/stabil"</div>
+</div>
+
+<div class="wf">
+  <div class="cap">Grafik historis &amp; forecast (SVG native)</div>
+  <div class="box">
+    <div class="t">Grafik Historis &amp; Forecast</div>
+    <div class="m">Garis padat = data 30 hari terakhir, garis putus = prediksi 14 hari</div>
+    <svg viewBox="0 0 760 360" preserveAspectRatio="none" style="width:100%; height:180px; border:1px dashed var(--line); background:#fbfbfb; margin-top:8px">
+      <rect x="0" y="0" width="760" height="360" fill="#fff" stroke="#bbb"/>
+      <rect x="520" y="30" width="220" height="300" fill="#fdf3dc" stroke="#e0a800" stroke-dasharray="6 4"/>
+      <line x1="520" y1="150" x2="740" y2="150" stroke="#e0a800" stroke-dasharray="6 4"/>
+      <text x="530" y="310" fill="#9a6b00" font-size="11">Forecast</text>
+      <text x="530" y="140" fill="#9a6b00" font-size="11">Min Stok (5)</text>
+      <polyline points="20,280 130,270 240,285 350,260 450,250 520,240" fill="none" stroke="#2e7d32" stroke-width="2.5"/>
+      <polyline points="520,240 570,230 620,215 670,200 730,185" fill="none" stroke="#2e7d32" stroke-dasharray="8 6" stroke-width="2.5"/>
+      <line x1="20" y1="150" x2="740" y2="150" stroke="#ccc" stroke-dasharray="4 4"/>
+      <text x="350" y="345" fill="#999" font-size="11">Tanggal</text>
+      <text x="10" y="180" fill="#999" font-size="11">Stok</text>
+    </svg>
+    <div class="row" style="margin-top:6px">
+      <span class="badge">■ Historis</span><span class="badge">- - Prediksi</span>
+      <span class="badge amber">- - Min Stok</span><span class="badge amber">▒ Area Forecast</span>
+      <span class="m grow">(Area Forecast hanya tampil saat forecast ada)</span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="box small dim grow center"><div class="t">Titik historis</div><div class="mono">30</div></div>
+      <div class="box small dim grow center"><div class="t">Titik forecast</div><div class="mono">14</div></div>
+      <div class="box small dim grow center"><div class="t">Rentang stok</div><div class="mono">0 - 25</div></div>
+      <div class="box small dim grow center"><div class="t">Batas minimum</div><div class="mono">5</div></div>
+    </div>
+    <div class="m" style="margin-top:6px">Hover tooltip: tanggal · "Historis: 4" / "Prediksi: 3.50" · "Min stok: 5" · "Status: Berisiko Habis / Di bawah minimum / Aman"</div>
+  </div>
+</div>
+
+<div class="wf">
+  <div class="cap">Tabel forecast</div>
+  <div class="box">
+    <div class="t">Tabel Forecast</div>
+    <div class="m">Prediksi kuantitas 14 hari ke depan (iterative, tanpa restock)</div>
+    <div class="row" style="margin-top:8px">
+      <div class="box small dim center grow"><div class="t">11 Agu</div><div class="mono">4.0</div><div class="m mono">-2.0/hari</div></div>
+      <div class="box small dim center grow"><div class="t">12 Agu</div><div class="mono">2.0</div><div class="m mono">-2.0/hari</div></div>
+      <div class="box small dim center grow"><div class="t">13 Agu</div><div class="mono">0.0</div><span class="badge red">habis</span></div>
+      <div class="box small dim center grow"><div class="t">14 Agu</div><div class="mono">0.0</div><span class="badge red">habis</span></div>
+      <div class="box small dim center grow"><div class="t">15 Agu</div><div class="mono">1.5</div><span class="badge amber">rendah</span></div>
+    </div>
+    <div class="m" style="margin-top:6px">Grid: 2 / sm:3 / md:4 / lg:7 kolom · badge "habis" (&le; 0) / "rendah" (&lt; minStock)</div>
+  </div>
+</div>
+
+<div class="wf">
+  <div class="cap">Testing model (holdout kronologis 85/15)</div>
+  <div class="box">
+    <div class="t">Testing Model</div>
+    <div class="m">Holdout kronologis 85/15: R² pada ΣC vs a+b·t (tren), MAE/RMSE pada level stok</div>
+    <div class="row" style="margin-top:8px">
+      <div class="box grow center blue"><div class="t">R² tren</div><div class="t mono">0.850</div></div>
+      <div class="box grow center"><div class="t">MAE stok</div><div class="t mono">0.80</div></div>
+      <div class="box grow center"><div class="t">RMSE stok</div><div class="t mono">1.20</div></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="box small dim grow center"><div class="t">Slope</div><div class="mono">-0.1234 /hari</div></div>
+      <div class="box small dim grow center"><div class="t">Intercept</div><div class="mono">30.5000</div></div>
+      <div class="box small dim grow center"><div class="t">Avg Konsumsi</div><div class="mono">2.00 /hari</div></div>
+      <div class="box small dim grow center"><div class="t">n train</div><div class="mono">26</div></div>
+      <div class="box small dim grow center"><div class="t">n test</div><div class="mono">4</div></div>
+      <div class="box small dim grow center"><div class="t">Horizon</div><div class="mono">14 hari</div></div>
+    </div>
+    <div class="m" style="margin-top:6px">Nilai tidak tersedia → "—"</div>
+  </div>
+</div>
+
+</body>
+</html>

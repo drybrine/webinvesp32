@@ -303,33 +303,35 @@ API web sengaja terbatas: `/api/predict` adalah Vercel Python function di `api/p
 
 ### Model
 
-Pure Python (no numpy) — OLS regresi linear sederhana pada **kumulatif konsumsi harian**:
+Pure Python (no numpy) — Simple Linear Regression (lag-1) pada **konsumsi harian yang di-smooth EMA**:
 
-- Fit: `ΣC(t) = a + b·t`
-- `b = avgDailyConsumption` (laju konsumsi per hari)
-- Forecast stok: `S_d = max(0, S0 − d·b)`
+- Fit: `Y = a + b·X` (X = konsumsi EMA kemarin, Y = konsumsi EMA hari ini)
+- `b = consumptionSlope`, `a = consumptionIntercept`
+- `avgDailyConsumption` = rata-rata konsumsi raw
+- Forecast stok iteratif: `S_{d+1} = max(0, S_d − predictNextConsumption)`
 
 ### Pipeline
 
 ```
-1. Transaksi type=out → konsumsi harian
-2. Zero-fill gap kalender (hari tanpa out = 0) sampai hari ini
-3. Bangun deret kumulatif ΣC(t)
-4. OLS fit: ΣC(t) = a + b·t
-5. Forecast stok: kurangi b dari stok saat ini tiap hari
+1. Transaksi (in/out/adjustment) → level stok harian (buildDailySeriesFromTransactions)
+2. Konsumsi harian antar hari transaksi = Δstok / gapDays
+3. EMA smoothing (alpha = 0.05)
+4. Regresi lag-1: Y = a + b·X
+5. Forecast stok: kurangi predictNextConsumption dari stok saat ini tiap hari
 ```
 
 ### Variabel Regresi
 
 | Variabel | Deskripsi |
 |---------|-----------|
-| `t` | Indeks hari relatif (0, 1, 2, …) |
-| `ΣC(t)` | Kumulatif konsumsi sampai hari t |
-| `b` | Laju konsumsi harian (avgDailyConsumption) |
+| `X` | Konsumsi EMA hari sebelumnya |
+| `Y` | Konsumsi EMA hari ini |
+| `b` | Slope konsumsi (pengaruh konsumsi kemarin) |
+| `a` | Intercept konsumsi |
 
-### Kenapa kumulatif konsumsi (bukan level stok / lag-1)?
+### Kenapa lag-1 pada konsumsi EMA (bukan level stok / kumulatif)?
 
-Training pada **level stok** rentan bias restock. Training lag-1 pada konsumsi smoothed cocok untuk deret rutin, tetapi sparepart intermittent lebih cocok diestimasi sebagai **laju harian** untuk early-warning stockout. OLS kumulatif memberikan estimasi `b` yang transparan dan forecast stok yang mudah diinterpretasi (`S0 / b` hari).
+Training pada **level stok** rentan bias restock. Model lag-1 pada konsumsi EMA cocok untuk deret konsumsi harian sparepart (rutin maupun intermittent); evaluasi in-sample menghasilkan R² pada selang 0..1 sehingga konsisten dengan nilai notebook/seminar. `avgDailyConsumption` dipakai sebagai indikator early-warning stockout.
 
 ### Endpoint
 
@@ -337,7 +339,7 @@ Training pada **level stok** rentan bias restock. Training lag-1 pada konsumsi s
 POST /api/predict
 Body (single): { transactions, currentQuantity, horizonDays, trainRatio }
 Body (batch):  { mode: 'batch', items, transactions, horizonDays, topN, recentDays }
-Response: { forecast, metrics: {mae, rmse, r2, available, nTrain, nTest}, stockoutDate, source }
+Response: { forecast, metrics: {mae, rmse, mape, r2, available, nTrain, nTest}, stockoutDate, source }
 Source: `lr-consumption-py` atau `lr-consumption-batch`
 ```
 
@@ -345,10 +347,10 @@ Source: `lr-consumption-py` atau `lr-consumption-batch`
 
 | Aspek | Nilai |
 |--------|-------|
-| Metode | OLS kumulatif konsumsi (`ΣC = a + bt`) |
+| Metode | Lag-1 regresi konsumsi EMA (`Y = a + bX`) |
 | Train ratio | 85/15 kronologis |
-| Metrik | MAE / RMSE / R² pada konsumsi holdout vs laju konstan `b` |
-| Catatan | R² = kestabilan laju; jika `nTest < 2` metrik tidak tersedia |
+| Metrik | MAE / RMSE / MAPE / R² pada konsumsi EMA vs `a + bX` (in-sample) |
+| Catatan | R² selalu pada selang 0..1 (tidak pernah minus) |
 
 ### Fallback
 

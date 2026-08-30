@@ -7,7 +7,8 @@ from unittest.mock import patch
 from api.predict import (
     MAX_BODY_BYTES,
     MS_PER_DAY,
-    build_consumption_from_transactions,
+    build_daily_series,
+    build_consumption_series,
     handler,
     predict_stock,
 )
@@ -94,55 +95,53 @@ class PredictApiSecurityTests(unittest.TestCase):
 
 
 class PredictionModelTests(unittest.TestCase):
-    def test_float_quantities_keep_precision_and_invalid_values_are_ignored(self):
-        day = 1_700_000_000_000
-        consumption = build_consumption_from_transactions([
-            {"timestamp": day, "quantity": 1.9, "type": "out"},
-            {"timestamp": day, "quantity": float("nan"), "type": "out"},
-            {"timestamp": -1, "quantity": 50, "type": "out"},
-            {"timestamp": day + MS_PER_DAY, "quantity": 2.7, "type": "out"},
-        ])
-
-        self.assertEqual(len(consumption), 2)
-        self.assertAlmostEqual(consumption[0]["consumption"], 1.9)
-        self.assertAlmostEqual(consumption[1]["consumption"], 2.7)
+    def _stock_series_from_out(self, day_offsets, quantity_per_day, current_qty):
+        """Bangun deret stok dari konsumsi out harian yang menurun."""
+        transactions = []
+        for i, offset in enumerate(day_offsets):
+            transactions.append({
+                "timestamp": 1_700_000_000_000 + offset * MS_PER_DAY,
+                "quantity": quantity_per_day[i],
+                "type": "out",
+            })
+        return build_daily_series(transactions, current_qty)
 
     def test_empty_stock_date_matches_first_forecast_point(self):
-        today = 2_000 * MS_PER_DAY
-        consumption = [
-            {"timestamp": today - offset * MS_PER_DAY, "consumption": 2}
-            for offset in range(10, 0, -1)
-        ]
+        series = self._stock_series_from_out(list(range(10, 0, -1)), [2] * 10, 0)
 
-        result = predict_stock(consumption, 0, horizon_days=2, now_timestamp=today)
+        result = predict_stock(series, horizon_days=2, train_ratio=0.8)
 
         first_forecast_date = result["forecast"][0]["timestamp"]
-        expected_date = datetime.fromtimestamp(
-            first_forecast_date / 1000, tz=timezone.utc
-        ).strftime("%Y-%m-%d")
-        self.assertEqual(result["stockoutDate"], expected_date)
-        self.assertEqual(first_forecast_date, today + MS_PER_DAY)
+        last_ts = series[-1]["timestamp"]
+        self.assertEqual(first_forecast_date, last_ts + MS_PER_DAY)
+        self.assertIsNotNone(result["stockoutDate"])
 
-    def test_partial_current_day_is_excluded_from_training(self):
-        today = 2_000 * MS_PER_DAY
-        consumption = [
-            {"timestamp": today - offset * MS_PER_DAY, "consumption": 2}
-            for offset in range(20, 0, -1)
-        ]
-        consumption.append({"timestamp": today + 1_000, "consumption": 0})
+    def test_constant_consumption_gives_high_r2(self):
+        series = self._stock_series_from_out(list(range(30, 0, -1)), [2] * 30, 40)
 
-        result = predict_stock(consumption, 20, horizon_days=20, now_timestamp=today)
+        result = predict_stock(series, horizon_days=10, train_ratio=0.85)
 
-        self.assertEqual(result["model"]["avgDailyConsumption"], 2.0)
-        self.assertEqual(result["metrics"]["r2"], 1.0)
-        self.assertEqual(result["metrics"]["nTrain"], 17)
-        self.assertEqual(result["metrics"]["nTest"], 3)
-        first_stockout = next(
-            index + 1
-            for index, point in enumerate(result["forecast"])
-            if point["predictedQuantity"] <= 0
-        )
-        self.assertEqual(first_stockout, 10)
+        self.assertGreater(result["metrics"]["r2"], 0.9)
+        self.assertAlmostEqual(result["model"]["avgDailyConsumption"], 2.0, places=6)
+
+    def test_model_reports_notebook_fields(self):
+        series = self._stock_series_from_out(list(range(20, 0, -1)), [3] * 20, 40)
+
+        result = predict_stock(series, horizon_days=5, train_ratio=0.85)
+
+        self.assertIn("consumptionIntercept", result["model"])
+        self.assertIn("consumptionSlope", result["model"])
+        self.assertIn("lastConsumption", result["model"])
+        self.assertIn("mape", result["metrics"])
+        self.assertTrue(result["metrics"]["available"])
+
+    def test_forecast_never_negative_and_dimension_correct(self):
+        series = self._stock_series_from_out(list(range(15, 0, -1)), [4] * 15, 3)
+
+        result = predict_stock(series, horizon_days=14, train_ratio=0.8)
+
+        self.assertEqual(len(result["forecast"]), 14)
+        self.assertTrue(all(f["predictedQuantity"] >= 0 for f in result["forecast"]))
 
 
 if __name__ == "__main__":

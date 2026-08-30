@@ -7,7 +7,7 @@ import { useFirebaseInventory, useFirebaseTransactions } from "@/hooks/use-fireb
 import { useAuth } from "@/components/auth-provider"
 import { firebaseHelpers } from "@/lib/firebase"
 import {
-  buildConsumptionFromTransactions,
+  buildDailySeriesFromTransactions,
   predictStock,
 } from "@/lib/stock-prediction"
 
@@ -71,30 +71,23 @@ function buildClientBatchRisks(
     if (!item.barcode || item.deleted) continue
     const itemTx = txByBarcode.get(item.barcode) ?? []
     const currentStock = Number(item.quantity) || 0
-    const consumptionData = buildConsumptionFromTransactions(
+    const stockSeries = buildDailySeriesFromTransactions(
       itemTx.map((tx) => ({
         timestamp: toTimestamp(tx.timestamp),
         quantity: Number(tx.quantity) || 0,
         type: tx.type as "in" | "out" | "adjustment" | undefined,
       })),
+      currentStock,
     )
-    if (consumptionData.length < 2) continue
+    if (stockSeries.length < 2) continue
 
     try {
-      const result = predictStock(consumptionData, currentStock, {
+      const result = predictStock(stockSeries, {
         horizonDays: PREDICTION_HORIZON_DAYS,
         trainRatio: PREDICTION_TRAIN_RATIO,
       })
       const predictedLowest = Math.min(...result.forecast.map((point) => point.predictedQuantity))
-      const stockoutIndex = result.forecast.findIndex((point) => point.predictedQuantity <= 0)
-      let daysToStockout: number | null = stockoutIndex === -1 ? null : stockoutIndex + 1
-      // Mirror server: extrapolate beyond horizon when b > 0
-      if (daysToStockout === null) {
-        const avgDaily = result.model.avgDailyConsumption
-        if (avgDaily > 0 && currentStock > 0) {
-          daysToStockout = Math.ceil(currentStock / avgDaily)
-        }
-      }
+      const daysToStockout = result.daysToStockout
 
       risks.push({
         itemId: item.id,
