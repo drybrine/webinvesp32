@@ -191,9 +191,6 @@ export default function DashboardPage() {
           prediction: {
             model: { slope: r.slope, avgDailyConsumption: r.avgDailyConsumption },
             forecast: r.forecast,
-            stockoutDate: r.daysToStockout !== null
-              ? new Date(Date.now() + r.daysToStockout * 24 * 60 * 60 * 1000)
-              : null,
           },
           predictedLowest: r.predictedLowest,
           daysToStockout: r.daysToStockout,

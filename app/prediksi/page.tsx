@@ -85,6 +85,25 @@ function fmt(ts: number): string {
   })
 }
 
+function fmtFull(ts: number): string {
+  return new Date(ts).toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
+
+function resolveStockoutDate(
+  forecast: Array<{ timestamp: number; predictedQuantity: number }>,
+  daysToStockout: number | null,
+): Date | null {
+  const stockoutPoint = forecast.find((point) => point.predictedQuantity <= 0)
+  if (stockoutPoint) return new Date(stockoutPoint.timestamp)
+  if (daysToStockout === null || Number.isNaN(daysToStockout) || forecast.length === 0) return null
+  const lastHistoryTs = forecast[0].timestamp - MS_PER_DAY
+  return new Date(lastHistoryTs + daysToStockout * MS_PER_DAY)
+}
+
 function getSummaryStatus(predictedLowest: number, minStock: number): SummaryStatus {
   if (predictedLowest <= 0) return "habis"
   if (predictedLowest < minStock) return "rendah"
@@ -156,10 +175,7 @@ function buildSummaryRows(items: InventoryItem[], risks: BatchPredictionRisk[]):
       avgDailyConsumption: toNumber(risk.avgDailyConsumption),
       predictedLowest,
       daysToStockout: daysToStockout === null || Number.isNaN(daysToStockout) ? null : daysToStockout,
-      stockoutDate:
-        daysToStockout === null || Number.isNaN(daysToStockout)
-          ? null
-          : new Date(Date.now() + daysToStockout * MS_PER_DAY),
+      stockoutDate: resolveStockoutDate(risk.forecast ?? [], daysToStockout),
       r2: risk.r2 == null || !Number.isFinite(Number(risk.r2)) ? null : Number(risk.r2),
       mae: risk.mae == null || !Number.isFinite(Number(risk.mae)) ? null : Number(risk.mae),
       rmse: risk.rmse == null || !Number.isFinite(Number(risk.rmse)) ? null : Number(risk.rmse),
@@ -652,7 +668,18 @@ export default function PrediksiPage() {
                         {row.predictedLowest === null ? "—" : row.predictedLowest.toFixed(1)}
                       </TableCell>
                        <TableCell className="text-right">
-                         {row.daysToStockout === null ? "—" : `Hari ke-${row.daysToStockout}`}
+                         {row.daysToStockout === null ? (
+                           "—"
+                         ) : (
+                           <div className="leading-relaxed">
+                             <div>Hari ke-{row.daysToStockout}</div>
+                             {row.stockoutDate && (
+                               <div className="text-xs text-muted-foreground">
+                                 {fmtFull(row.stockoutDate.getTime())}
+                               </div>
+                             )}
+                           </div>
+                         )}
                        </TableCell>
                       <TableCell className="text-right">
                         {row.r2 === null || row.mae === null || row.rmse === null ? (
@@ -745,7 +772,7 @@ export default function PrediksiPage() {
               hint={
                 forecastStockout
                   ? forecastStockout.daysFromForecastStart !== null
-                    ? `Titik habis pada tabel forecast (hari ke-${forecastStockout.daysFromForecastStart})`
+                    ? `${forecastStockout.date ? `${fmtFull(forecastStockout.date.getTime())} · ` : ""}Titik habis pada tabel forecast (hari ke-${forecastStockout.daysFromForecastStart})`
                     : `Di luar horizon ${horizonDays} hari forecast`
                   : `Tidak habis dalam ${horizonDays} hari forecast`
               }
