@@ -326,7 +326,12 @@ export function FirmwareOtaPanel({ registeredDevices }: { registeredDevices: Reg
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={dispatching}>Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={(event) => { event.preventDefault(); void dispatch() }} disabled={dispatching}>
+            <AlertDialogAction onClick={(event) => {
+              // Event Radix versi baru tidak punya preventDefault — guard agar
+              // dispatch tetap jalan dan dialog ditutup manual saat sukses.
+              if (event && typeof event.preventDefault === "function") event.preventDefault()
+              void dispatch()
+            }} disabled={dispatching}>
               {dispatching ? "Mengirim..." : "Kirim Update"}
             </AlertDialogAction>
           </AlertDialogFooter>
