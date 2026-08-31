@@ -80,6 +80,7 @@ export function FirmwareOtaPanel({ registeredDevices }: { registeredDevices: Reg
   const [targetVersion, setTargetVersion] = useState("")
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [dispatching, setDispatching] = useState(false)
+  const [dispatchError, setDispatchError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -132,6 +133,7 @@ export function FirmwareOtaPanel({ registeredDevices }: { registeredDevices: Reg
 
   const dispatch = async () => {
     setDispatching(true)
+    setDispatchError(null)
     try {
       const result = await dispatchFirmwareUpdate({ version: targetVersion, deviceIds: selectedIds })
       toast({ title: "Perintah update terkirim", description: `${result.dispatched} scanner akan memperbarui ke v${targetVersion} saat idle.` })
@@ -139,7 +141,10 @@ export function FirmwareOtaPanel({ registeredDevices }: { registeredDevices: Reg
       setConfirmOpen(false)
       setTimeout(() => { void refresh() }, 1500)
     } catch (error) {
-      toast({ title: "Gagal mengirim update", description: error instanceof Error ? error.message : undefined, variant: "destructive" })
+      const message = error instanceof Error ? error.message : "Kesalahan tidak diketahui"
+      console.error("[FirmwareOtaPanel] dispatch gagal:", error)
+      setDispatchError(message)
+      toast({ title: "Gagal mengirim update", description: message, variant: "destructive" })
     } finally {
       setDispatching(false)
     }
@@ -312,6 +317,11 @@ export function FirmwareOtaPanel({ registeredDevices }: { registeredDevices: Reg
             <AlertDialogDescription>
               {selectedIds.length} scanner akan diperintahkan memperbarui ke v{targetVersion}. Scanner hanya memasang update saat idle dan baterai ≥30%. Disarankan menguji satu scanner (canary) sebelum rollout penuh.
               <span className="mt-2 block font-mono text-xs break-all">{selectedIds.join(", ")}</span>
+              {dispatchError ? (
+                <span className="mt-2 block rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs font-medium text-destructive">
+                  Gagal: {dispatchError}
+                </span>
+              ) : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

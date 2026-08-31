@@ -35,7 +35,7 @@ async function adminRequest<T>(path: string, init: RequestInit = {}): Promise<T>
   if (response.status === 401 && isIdempotent) response = await send(true)
 
   const data = await response.json().catch(() => ({})) as ApiErrorBody & T
-  if (!response.ok) throw new Error(data.error || "Permintaan administrasi gagal")
+  if (!response.ok) throw new Error(data.error || `Permintaan administrasi gagal (HTTP ${response.status})`)
   return data
 }
 
@@ -143,6 +143,9 @@ export async function dispatchFirmwareUpdate(input: {version: string; deviceIds:
   return adminRequest("/api/admin/devices/ota", {
     method: "POST",
     body: JSON.stringify(input),
+    // 35s > maxDuration 30s di vercel.json: fetch tidak boleh menggantung lebih
+    // lama dari batas terpanjang function Vercel.
+    signal: AbortSignal.timeout(35000),
   })
 }
 
