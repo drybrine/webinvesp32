@@ -497,7 +497,7 @@ export default function PrediksiPage() {
       date: fmt(f.timestamp),
       timestamp: f.timestamp,
       actual: null as number | null,
-      predicted: Number(f.predictedQuantity.toFixed(2)),
+      predicted: f.predictedQuantity,
     }))
     return [...hist, ...fc]
   }, [history, prediction])
@@ -810,10 +810,10 @@ export default function PrediksiPage() {
                     >
                       <div className="text-muted-foreground">{fmt(f.timestamp)}</div>
                       <div className="font-semibold text-base">
-                        {f.predictedQuantity.toFixed(1)}
+                        {Math.round(f.predictedQuantity)}
                       </div>
                       <div className="text-muted-foreground">
-                        -{f.estimatedConsumption.toFixed(1)}/hari
+                        -{Math.round(f.estimatedConsumption)}/hari
                       </div>
                       {habis ? (
                         <Badge variant="destructive" className="text-[10px]">

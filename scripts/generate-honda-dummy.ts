@@ -1,10 +1,12 @@
 /**
- * Generator data realistis 1 tahun untuk 20 suku cadang motor Honda (AHASS).
+ * Generator data realistis 1 tahun untuk 20 suku cadang motor Honda.
+ * Produk asli dari katalog hondacengkareng.com (sama dengan notebook Colab).
  *
  * Pola:
  *  - OUT: pemakaian bengkel 1–3 unit/transaksi (bukan bulk)
- *  - IN: restock supplier per dus/box (reorderQty 20–100)
- *  - Weekend sepi, dead day ~8%, busy day ~5%
+ *  - IN: restock supplier per dus/box (reorderQty, jitter ±10%)
+ *  - Weekend sepi, dead day ~8%, busy day ~5%, efek gajian (25–31) +25%
+ *  - ADJ: stock opname berkala (koreksi ±1–2 unit)
  *  - Restock saat stok ≤ minStock & cooldown ≥ 7 hari
  *
  * Prediksi hanya belajar dari type=out → bulk IN tidak menggelembungkan konsumsi.
@@ -38,7 +40,8 @@ const DATABASE_URL =
 const WRITE_CHUNK = 400
 
 // =============================================================================
-//  DATASET 20 SUKU CADANG HONDA (AHASS)
+//  DATASET 20 SUKU CADANG HONDA (produk asli hondacengkareng.com — sama dengan
+//  notebook scripts/stock_forecast_colab.ipynb)
 // =============================================================================
 
 interface SparePart {
@@ -52,43 +55,65 @@ interface SparePart {
   minStock: number
 }
 
-const HONDA_PARTS: SparePart[] = [
-  // OLI & PELUMAS (paling laku)
-  { id: "ahm-oil-spx2-08231-m99-k2lat", name: "Oli AHM SPX2 SAE 10W-30 0.8L", barcode: "8992017013015", category: "Oli & Pelumas", initialStock: 80, avgDailyConsumption: 4.2, reorderQty: 100, minStock: 20 },
-  { id: "ahm-oil-mpx2-08232-m99-k2lat", name: "Oli AHM MPX2 SAE 10W-30 0.8L", barcode: "8992017013022", category: "Oli & Pelumas", initialStock: 70, avgDailyConsumption: 3.8, reorderQty: 100, minStock: 20 },
-  { id: "ahm-gear-oil-08234", name: "Oli Gear AHM Matic 0.12L", barcode: "8992017013039", category: "Oli & Pelumas", initialStock: 60, avgDailyConsumption: 2.5, reorderQty: 80, minStock: 15 },
+/** EAN-13 valid: hitung check digit dari 12 digit basis. */
+function ean13(base12: string): string {
+  let sum = 0
+  for (let i = 0; i < 12; i++) {
+    sum += Number(base12[i]) * (i % 2 === 0 ? 1 : 3)
+  }
+  return base12 + String((10 - (sum % 10)) % 10)
+}
 
-  // FILTER
-  { id: "filter-oli-15412-kvb-901", name: "Filter Oli 15412-KVB-901 (Beat/Vario)", barcode: "8992017020013", category: "Filter", initialStock: 50, avgDailyConsumption: 1.8, reorderQty: 60, minStock: 10 },
-  { id: "filter-udara-17210-kvb-900", name: "Filter Udara 17210-KVB-900 (Beat/Scoopy)", barcode: "8992017020020", category: "Filter", initialStock: 40, avgDailyConsumption: 1.5, reorderQty: 50, minStock: 10 },
-  { id: "filter-udara-17210-k46-n10", name: "Filter Udara 17210-K46-N10 (Vario 150)", barcode: "8992017020037", category: "Filter", initialStock: 35, avgDailyConsumption: 1.2, reorderQty: 50, minStock: 10 },
+/** Barcode internal gudang 8992017000NN + check digit EAN-13 valid. */
+function partBarcode(index: number): string {
+  return ean13(`8992017000${String(index).padStart(2, "0")}`)
+}
 
-  // KAMPAS REM
-  { id: "kampas-rem-depan-06455-k44", name: "Kampas Rem Depan 06455-K44-V01 (Vario)", barcode: "8992017030014", category: "Rem", initialStock: 30, avgDailyConsumption: 1.0, reorderQty: 40, minStock: 8 },
-  { id: "kampas-rem-belakang-06435-kzr", name: "Kampas Rem Belakang 06435-KZR-601 (Beat)", barcode: "8992017030021", category: "Rem", initialStock: 35, avgDailyConsumption: 1.2, reorderQty: 40, minStock: 8 },
-  { id: "minyak-rem-08233-m99-k1zlt", name: "Minyak Rem AHM DOT 4 0.1L", barcode: "8992017030038", category: "Rem", initialStock: 45, avgDailyConsumption: 1.4, reorderQty: 60, minStock: 10 },
+interface PartSeed {
+  name: string
+  slug: string
+  category: string
+  /** demand harian rata-rata (unit/hari) — dari notebook */
+  dailyDemand: number
+  /** kapasitas rak — dari notebook */
+  capacity: number
+  minStock: number
+}
 
-  // BUSI
-  { id: "busi-cpr8ea-9-31916", name: "Busi NGK CPR8EA-9 (Beat/Vario)", barcode: "8992017040015", category: "Busi", initialStock: 60, avgDailyConsumption: 2.0, reorderQty: 80, minStock: 15 },
-  { id: "busi-cpr9ea-9-31917", name: "Busi NGK CPR9EA-9 (Sport)", barcode: "8992017040022", category: "Busi", initialStock: 40, avgDailyConsumption: 0.8, reorderQty: 50, minStock: 10 },
-
-  // V-BELT (Matic)
-  { id: "vbelt-23100-k0g-901", name: "V-Belt 23100-K0G-901 (Beat/Scoopy)", barcode: "8992017050016", category: "Transmisi", initialStock: 25, avgDailyConsumption: 0.6, reorderQty: 30, minStock: 5 },
-  { id: "vbelt-23100-k46-n00", name: "V-Belt 23100-K46-N00 (Vario 150)", barcode: "8992017050023", category: "Transmisi", initialStock: 20, avgDailyConsumption: 0.5, reorderQty: 30, minStock: 5 },
-  { id: "roller-22130-k0g-901", name: "Roller Set CVT 22130-K0G-901", barcode: "8992017050030", category: "Transmisi", initialStock: 25, avgDailyConsumption: 0.4, reorderQty: 30, minStock: 5 },
-
-  // BAN
-  { id: "ban-fdr-80-90-14", name: "Ban FDR 80/90-14 Sport XR Evo (Depan)", barcode: "8992017060017", category: "Ban", initialStock: 15, avgDailyConsumption: 0.3, reorderQty: 20, minStock: 4 },
-  { id: "ban-fdr-90-90-14", name: "Ban FDR 90/90-14 Sport XR Evo (Belakang)", barcode: "8992017060024", category: "Ban", initialStock: 15, avgDailyConsumption: 0.3, reorderQty: 20, minStock: 4 },
-
-  // KELISTRIKAN
-  { id: "aki-gtz5s-31500", name: "Aki GS GTZ5S MF (Beat/Vario)", barcode: "8992017070018", category: "Kelistrikan", initialStock: 18, avgDailyConsumption: 0.35, reorderQty: 25, minStock: 5 },
-  { id: "bohlam-h6m-12v-35w", name: "Bohlam Depan H6M 12V 35W", barcode: "8992017070025", category: "Kelistrikan", initialStock: 40, avgDailyConsumption: 0.7, reorderQty: 50, minStock: 10 },
-
-  // MESIN
-  { id: "kampas-kopling-22535-kvg-900", name: "Kampas Kopling 22535-KVG-900 (Sport)", barcode: "8992017080019", category: "Mesin", initialStock: 12, avgDailyConsumption: 0.2, reorderQty: 20, minStock: 4 },
-  { id: "gasket-12251-kvb-900", name: "Gasket Cylinder Head 12251-KVB-900", barcode: "8992017080026", category: "Mesin", initialStock: 25, avgDailyConsumption: 0.5, reorderQty: 30, minStock: 6 },
+const PART_SEEDS: PartSeed[] = [
+  { name: "Seal Klep Honda BeAT FI", slug: "seal-klep-beat-fi", category: "Seal & Gasket", dailyDemand: 3.0, capacity: 40, minStock: 5 },
+  { name: "Karet Kampas Ganda Honda BeAT/Vario/Scoopy", slug: "karet-kampas-ganda", category: "Kampas & Kopling", dailyDemand: 4.0, capacity: 50, minStock: 8 },
+  { name: "Busi CPR9 NGK Honda Vario 150", slug: "busi-cpr9-ngk-vario-150", category: "Kelistrikan", dailyDemand: 5.5, capacity: 60, minStock: 10 },
+  { name: "Seal Kruk As Kiri Honda BeAT/Vario/Scoopy", slug: "seal-kruk-as-kiri", category: "Seal & Gasket", dailyDemand: 2.5, capacity: 30, minStock: 5 },
+  { name: "Baterai Remote Keyless CR2032", slug: "baterai-remote-cr2032", category: "Kelistrikan", dailyDemand: 6.0, capacity: 80, minStock: 10 },
+  { name: "Jalu Stang Honda PCX 150/160", slug: "jalu-stang-pcx", category: "Body & Frame", dailyDemand: 1.5, capacity: 20, minStock: 3 },
+  { name: "Ring Baut Oli 12MM Honda PCX 150", slug: "ring-baut-oli-12mm", category: "Baut & Ring", dailyDemand: 7.0, capacity: 100, minStock: 15 },
+  { name: "Karet Dudukan Stang CB150R/Verza", slug: "karet-dudukan-stang-cb150r", category: "Body & Frame", dailyDemand: 2.0, capacity: 30, minStock: 5 },
+  { name: "Kampas Rem Belakang Honda BeAT/Vario/Scoopy", slug: "kampas-rem-belakang", category: "Kampas & Kopling", dailyDemand: 5.0, capacity: 60, minStock: 10 },
+  { name: "Komstir Honda BeAT/Vario/Scoopy/PCX", slug: "komstir-matic", category: "Steering", dailyDemand: 2.0, capacity: 30, minStock: 5 },
+  { name: "Cover Cadangan Radiator Vario 125", slug: "cover-radiator-vario-125", category: "Body & Frame", dailyDemand: 1.0, capacity: 20, minStock: 3 },
+  { name: "Rubber Starter Pinion Honda BeAT FI", slug: "rubber-starter-pinion", category: "Mesin", dailyDemand: 3.5, capacity: 50, minStock: 8 },
+  { name: "Per Kampas Ganda Honda BeAT/Scoopy/Genio", slug: "per-kampas-ganda", category: "Kampas & Kopling", dailyDemand: 4.0, capacity: 50, minStock: 8 },
+  { name: "Seal Roda Belakang Honda BeAT eSP", slug: "seal-roda-belakang", category: "Seal & Gasket", dailyDemand: 3.0, capacity: 40, minStock: 5 },
+  { name: "Bosh Mounting Honda Vario Karburator", slug: "bosh-mounting-vario", category: "Mesin", dailyDemand: 1.5, capacity: 20, minStock: 3 },
+  { name: "Clip Reflektor Lampu Depan Honda BeAT FI", slug: "clip-reflektor-lampu", category: "Body & Frame", dailyDemand: 5.0, capacity: 80, minStock: 10 },
+  { name: "O-Ring Shock Depan Honda BeAT FI", slug: "o-ring-shock-depan", category: "Seal & Gasket", dailyDemand: 4.5, capacity: 60, minStock: 10 },
+  { name: "Spring Kick Starter Honda CB150R", slug: "spring-kick-starter-cb150r", category: "Mesin", dailyDemand: 1.5, capacity: 25, minStock: 3 },
+  { name: "Piece Slide Set Honda Vario 125 eSP", slug: "piece-slide-set-vario-125", category: "Mesin", dailyDemand: 2.0, capacity: 30, minStock: 5 },
+  { name: "Seal Tutup Oli O-Ring 18x3 Matic Honda", slug: "seal-tutup-oli-18x3", category: "Seal & Gasket", dailyDemand: 8.0, capacity: 100, minStock: 15 },
 ]
+
+const HONDA_PARTS: SparePart[] = PART_SEEDS.map((seed, i) => ({
+  id: `hc-${seed.slug}`,
+  name: seed.name,
+  barcode: partBarcode(i + 1),
+  category: seed.category,
+  // stok awal 60–95% kapasitas rak (deterministik per part)
+  initialStock: Math.round(seed.capacity * (0.6 + ((i * 37) % 36) / 100)),
+  avgDailyConsumption: seed.dailyDemand,
+  reorderQty: seed.capacity,
+  minStock: seed.minStock,
+}))
 
 const HONDA_IDS = new Set(HONDA_PARTS.map((p) => p.id))
 const HONDA_BARCODES = new Set(HONDA_PARTS.map((p) => p.barcode))
@@ -101,7 +126,7 @@ interface GeneratedTransaction {
   itemId: string
   productBarcode: string
   productName: string
-  type: "in" | "out"
+  type: "in" | "out" | "adjustment"
   quantity: number
   timestamp: number
   source: "scanner" | "dashboard"
@@ -141,13 +166,39 @@ function generateYearTransactions(part: SparePart, days: number): GeneratedTrans
 
   for (let day = 0; day < days; day++) {
     const dayTs = startTs + day * MS_PER_DAY
-    const dow = new Date(dayTs).getUTCDay() // 0=Sun
+    const date = new Date(dayTs)
+    const dow = date.getUTCDay() // 0=Sun
     const isWeekend = dow === 0 || dow === 6
-    const dayMultiplier = isWeekend ? 0.55 : 1.15
+    const dom = date.getUTCDate()
+
+    // Pola permintaan bengkel: weekday ramai, weekend sepi, gajian (25–31) naik
+    let dayMultiplier = isWeekend ? 0.55 : 1.15
+    if (dom >= 25) dayMultiplier *= 1.25
+
+    // Stock opname berkala (±1–2 unit, koreksi selisih hitung fisik)
+    if (day > 30 && rand() < 0.016) {
+      const delta = rand() < 0.5 ? -1 : 1
+      const opnameTs = dayTs + (17 + rand()) * 3600000
+      transactions.push({
+        itemId: part.id,
+        productBarcode: part.barcode,
+        productName: part.name,
+        type: "adjustment",
+        quantity: delta,
+        timestamp: Math.trunc(opnameTs),
+        source: "dashboard",
+        reason: "Stock opname",
+        operator: "Admin Gudang",
+        notes: `Koreksi selisih fisik ${delta > 0 ? "+" : ""}${delta} unit`,
+      })
+      currentStock = Math.max(0, currentStock + delta)
+    }
 
     // Restock pagi dulu (supplier datang pagi) agar stok tersedia untuk service hari itu
     const daysSinceRestock = day - lastRestockDay
     if (currentStock <= part.minStock && daysSinceRestock >= 7) {
+      // Jumlah dus bervariasi ±10% (supplier kadang kirim partial/bonus)
+      const restockQty = Math.max(1, Math.round(part.reorderQty * (0.9 + rand() * 0.2)))
       const restockHour = 7 + Math.floor(rand() * 2)
       const restockMinute = Math.floor(rand() * 60)
       const restockTs = dayTs + restockHour * 3600000 + restockMinute * 60000
@@ -156,14 +207,14 @@ function generateYearTransactions(part: SparePart, days: number): GeneratedTrans
         productBarcode: part.barcode,
         productName: part.name,
         type: "in",
-        quantity: part.reorderQty,
+        quantity: restockQty,
         timestamp: restockTs,
         source: "dashboard",
         reason: "Restock supplier",
         operator: "Admin Gudang",
-        notes: `Restock ${part.reorderQty} unit (1 dus/box)`,
+        notes: `Restock ${restockQty} unit (dus/box supplier)`,
       })
-      currentStock += part.reorderQty
+      currentStock += restockQty
       lastRestockDay = day
     }
 
@@ -202,7 +253,11 @@ function generateYearTransactions(part: SparePart, days: number): GeneratedTrans
 
 function finalStockFor(part: SparePart, txs: GeneratedTransaction[]): number {
   let stock = part.initialStock
-  for (const tx of txs) stock += tx.type === "in" ? tx.quantity : -tx.quantity
+  for (const tx of txs) {
+    if (tx.type === "in") stock += tx.quantity
+    else if (tx.type === "out") stock -= tx.quantity
+    else stock += tx.quantity // adjustment: signed delta
+  }
   return Math.max(0, stock)
 }
 
@@ -349,13 +404,16 @@ function printDistribution(txs: GeneratedTransaction[]) {
   const inQty = new Map<number, number>()
   let nIn = 0
   let nOut = 0
+  let nAdj = 0
   for (const tx of txs) {
     if (tx.type === "out") {
       nOut++
       outQty.set(tx.quantity, (outQty.get(tx.quantity) ?? 0) + 1)
-    } else {
+    } else if (tx.type === "in") {
       nIn++
       inQty.set(tx.quantity, (inQty.get(tx.quantity) ?? 0) + 1)
+    } else {
+      nAdj++
     }
   }
   const fmt = (m: Map<number, number>) =>
@@ -365,6 +423,7 @@ function printDistribution(txs: GeneratedTransaction[]) {
       .join(", ")
   console.log(`  OUT ${nOut} | qty hist: ${fmt(outQty)}`)
   console.log(`  IN  ${nIn} | qty hist: ${fmt(inQty)}`)
+  console.log(`  ADJ ${nAdj} (stock opname)`)
 }
 
 function testPrediction(part: SparePart, txs: GeneratedTransaction[], finalStock: number) {

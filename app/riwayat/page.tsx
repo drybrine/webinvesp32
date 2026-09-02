@@ -299,7 +299,7 @@ export default function TransaksiPage() {
       return
     }
     try {
-      const headers = ["ID", "Waktu", "Jenis", "Nama Produk", "Barcode", "Jumlah", "Alasan", "Operator", "Catatan"]
+      const headers = ["ID", "Waktu", "Jenis", "Nama Produk", "Barcode", "Jumlah", "Alasan", "Sumber", "Catatan"]
       const csvData = filteredTransactions.map(transaction => [
         transaction.id || '', formatDateTime(transaction.timestamp || ''), getTypeLabel(transaction.type || ''),
         transaction.productName || '', transaction.productBarcode || '', (transaction.quantity || 0).toString(),
@@ -517,7 +517,7 @@ export default function TransaksiPage() {
                     <TableHead className="w-[100px]">Jenis</TableHead>
                     <TableHead className="w-[200px]">Produk</TableHead>
                     <TableHead className="text-center w-[80px]">Jumlah</TableHead>
-                    <TableHead className="w-[100px]">Operator</TableHead>
+                    <TableHead className="w-[100px]">Sumber</TableHead>
                     <TableHead className="text-right w-[80px]">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>

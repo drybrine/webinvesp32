@@ -47,6 +47,8 @@ export interface RegressionModel {
   totalConsumption: number
   /** konsumsi per day-of-week [0=Mon..6=Sun] (untuk kompatibilitas UI; tidak dipakai model) */
   dowConsumption: number[]
+  /** alpha EMA yang dipakai model (hasil auto-tune atau default 0.05) */
+  emaAlpha?: number
 }
 
 export interface EvaluationMetrics {
@@ -76,14 +78,22 @@ export interface PredictionResult {
 }
 
 export const MS_PER_DAY = 24 * 60 * 60 * 1000
-const CONSUMPTION_EMA_ALPHA = 0.05
+/** Alpha EMA default (mirror notebook). Bisa di-tune per item via tuneEmaAlpha. */
+export const CONSUMPTION_EMA_ALPHA = 0.05
+/** Grid alpha EMA untuk auto-tuning per item (validasi kronologis). */
+const EMA_ALPHA_GRID = [0.05, 0.1, 0.15, 0.2, 0.3, 0.5]
+/** Minimal titik konsumsi raw agar tuning dijalankan. */
+const TUNE_MIN_POINTS = 10
+/** Clamp atas slope AR(1): |b| < 1 menjaga forecast iteratif tetap konvergen. */
+const CONSUMPTION_SLOPE_MAX = 0.95
 
 function dayTimestamp(timestamp = Date.now()): number {
   return Math.floor(timestamp / MS_PER_DAY) * MS_PER_DAY
 }
 
-function round1(value: number): number {
-  return Math.round(value * 10) / 10
+/** Stok barang selalu bilangan bulat. */
+function roundInt(value: number): number {
+  return Math.round(value)
 }
 
 function mean(values: number[]): number {
@@ -192,35 +202,81 @@ export function buildConsumptionSeries(stockSeries: StockDataPoint[]): DailyCons
   return consumption
 }
 
-/** EMA smoothing deret konsumsi (alpha = 0.05). Mirror `smooth_consumption_series`. */
-export function smoothConsumptionSeries(series: DailyConsumptionPoint[]): DailyConsumptionPoint[] {
+/** EMA smoothing deret konsumsi (default alpha 0.05). Mirror `smooth_consumption_series`. */
+export function smoothConsumptionSeries(
+  series: DailyConsumptionPoint[],
+  alpha: number = CONSUMPTION_EMA_ALPHA,
+): DailyConsumptionPoint[] {
   if (series.length === 0) return []
   let smoothed = series[0].consumption
   const result: DailyConsumptionPoint[] = []
   for (let i = 0; i < series.length; i++) {
     if (i > 0) {
-      smoothed = CONSUMPTION_EMA_ALPHA * series[i].consumption + (1 - CONSUMPTION_EMA_ALPHA) * smoothed
+      smoothed = alpha * series[i].consumption + (1 - alpha) * smoothed
     }
     result.push({ timestamp: series[i].timestamp, consumption: smoothed })
   }
   return result
 }
 
-/**
- * Fit Simple Linear Regression lag-1 pada konsumsi EMA terhadap nilai hari sebelumnya.
- * slope = consumptionSlope; avgDailyConsumption = rata-rata konsumsi raw.
- */
-export function fitRegressionModel(stockSeries: StockDataPoint[]): RegressionModel {
-  const sorted = [...stockSeries].sort((a, b) => a.timestamp - b.timestamp)
-  const rawConsumptionSeries = buildConsumptionSeries(sorted)
-  const consumptionSeries = smoothConsumptionSeries(rawConsumptionSeries)
-
+/** Pasangan lag-1 (X = konsumsi kemarin, Y = konsumsi hari ini) untuk regresi. */
+function buildLagPairs(consumptionSeries: DailyConsumptionPoint[]): { x: number[]; y: number[] } {
   const x: number[] = []
   const y: number[] = []
   for (let i = 1; i < consumptionSeries.length; i++) {
     x.push(consumptionSeries[i - 1].consumption)
     y.push(consumptionSeries[i].consumption)
   }
+  return { x, y }
+}
+
+/**
+ * Auto-tune alpha EMA per item: grid search dengan validasi kronologis
+ * (one-step-ahead MAE pada 20% akhir deret). Default 0.05 ikut di grid,
+ * sehingga tuning hanya mengubah alpha bila terbukti lebih baik di validasi.
+ */
+export function tuneEmaAlpha(stockSeries: StockDataPoint[]): number {
+  const raw = buildConsumptionSeries(stockSeries)
+  if (raw.length < TUNE_MIN_POINTS) return CONSUMPTION_EMA_ALPHA
+
+  let bestAlpha = CONSUMPTION_EMA_ALPHA
+  let bestMae = Infinity
+
+  for (const alpha of EMA_ALPHA_GRID) {
+    const { x, y } = buildLagPairs(smoothConsumptionSeries(raw, alpha))
+    const trainEnd = Math.max(4, Math.floor(x.length * 0.8))
+    const valCount = x.length - trainEnd
+    if (valCount < 2) continue
+
+    const { intercept, slope } = linearRegression(x.slice(0, trainEnd), y.slice(0, trainEnd))
+    let sumAbs = 0
+    for (let i = trainEnd; i < x.length; i++) {
+      const predicted = Math.max(0, intercept + slope * x[i])
+      sumAbs += Math.abs(y[i] - predicted)
+    }
+    const mae = sumAbs / valCount
+    if (mae < bestMae) {
+      bestMae = mae
+      bestAlpha = alpha
+    }
+  }
+
+  return bestAlpha
+}
+
+/**
+ * Fit Simple Linear Regression lag-1 pada konsumsi EMA terhadap nilai hari sebelumnya.
+ * slope = consumptionSlope; avgDailyConsumption = rata-rata konsumsi raw.
+ */
+export function fitRegressionModel(
+  stockSeries: StockDataPoint[],
+  options: { emaAlpha?: number } = {},
+): RegressionModel {
+  const emaAlpha = options.emaAlpha ?? CONSUMPTION_EMA_ALPHA
+  const sorted = [...stockSeries].sort((a, b) => a.timestamp - b.timestamp)
+  const rawConsumptionSeries = buildConsumptionSeries(sorted)
+  const consumptionSeries = smoothConsumptionSeries(rawConsumptionSeries, emaAlpha)
+  const { x, y } = buildLagPairs(consumptionSeries)
 
   const fallbackConsumption =
     rawConsumptionSeries.length > 0 ? rawConsumptionSeries[rawConsumptionSeries.length - 1].consumption : 0
@@ -229,7 +285,8 @@ export function fitRegressionModel(stockSeries: StockDataPoint[]): RegressionMod
   if (y.length > 0) {
     const { intercept: i0, slope: s0 } = linearRegression(x, y)
     intercept = i0
-    consumptionSlope = s0
+    // Stabilisasi AR(1): slope >= 1 membuat forecast iteratif divergen.
+    consumptionSlope = Math.min(s0, CONSUMPTION_SLOPE_MAX)
   } else {
     intercept = fallbackConsumption
     consumptionSlope = 0
@@ -250,6 +307,7 @@ export function fitRegressionModel(stockSeries: StockDataPoint[]): RegressionMod
     baseTimestamp: sorted.length > 0 ? sorted[0].timestamp : Date.now(),
     totalConsumption: rawConsumptionSeries.reduce((sum, p) => sum + p.consumption, 0),
     dowConsumption: [],
+    emaAlpha,
   }
 }
 
@@ -262,8 +320,15 @@ export function predictNextConsumption(model: RegressionModel, previousConsumpti
  * Evaluasi model pada deret stok penuh (in-sample): prediksi konsumsi lag-1 vs aktual EMA.
  * Mirror `evaluate_consumption` notebook.
  */
-export function evaluateModel(model: RegressionModel, stockSeries: StockDataPoint[]): EvaluationMetrics {
-  const consumptionSeries = smoothConsumptionSeries(buildConsumptionSeries(stockSeries))
+export function evaluateModel(
+  model: RegressionModel,
+  stockSeries: StockDataPoint[],
+  options: { emaAlpha?: number } = {},
+): EvaluationMetrics {
+  const consumptionSeries = smoothConsumptionSeries(
+    buildConsumptionSeries(stockSeries),
+    options.emaAlpha ?? model.emaAlpha ?? CONSUMPTION_EMA_ALPHA,
+  )
   if (consumptionSeries.length === 0) {
     return { mae: 0, rmse: 0, mape: 0, r2: 0, available: true }
   }
@@ -323,8 +388,9 @@ export function predictStock(
   const train = sorted.slice(0, splitIdx)
   const test = sorted.slice(splitIdx)
 
-  const model = fitRegressionModel(train)
-  const metrics = evaluateModel(model, sorted)
+  const emaAlpha = tuneEmaAlpha(sorted)
+  const model = fitRegressionModel(train, { emaAlpha })
+  const metrics = evaluateModel(model, sorted, { emaAlpha })
 
   const lastQty = sorted[sorted.length - 1].quantity
   const lastTs = sorted[sorted.length - 1].timestamp
@@ -339,8 +405,8 @@ export function predictStock(
     previousConsumption = predictedConsumption
     forecast.push({
       timestamp: Math.trunc(timestamp),
-      predictedQuantity: round1(currentQty),
-      estimatedConsumption: round1(predictedConsumption),
+      predictedQuantity: roundInt(currentQty),
+      estimatedConsumption: roundInt(predictedConsumption),
     })
   }
 

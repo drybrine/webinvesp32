@@ -451,7 +451,7 @@ export default function PredictionChart({ data, minStock }: Props) {
             )}
             {p.predictedY !== null && (
               <circle cx={p.x} cy={p.predictedY} r={3} fill="hsl(158 28% 48%)">
-                <title>{`${p.date} · prediksi: ${p.predicted?.toFixed(2)}`}</title>
+                <title>{`${p.date} · prediksi: ${formatValue(p.predicted)}`}</title>
               </circle>
             )}
           </g>

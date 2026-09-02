@@ -24,6 +24,9 @@ from datetime import datetime, timedelta, timezone
 
 MS_PER_DAY = 86400000
 CONSUMPTION_EMA_ALPHA = 0.05
+EMA_ALPHA_GRID = [0.05, 0.1, 0.15, 0.2, 0.3, 0.5]
+TUNE_MIN_POINTS = 10
+CONSUMPTION_SLOPE_MAX = 0.95
 MAX_BODY_BYTES = 1_500_000
 MAX_SINGLE_TRANSACTIONS = 10_000
 MAX_BATCH_TRANSACTIONS = 20_000
@@ -387,7 +390,7 @@ def build_consumption_series(stock_series):
     return consumption
 
 
-def smooth_consumption_series(series):
+def smooth_consumption_series(series, alpha=CONSUMPTION_EMA_ALPHA):
     if not series:
         return []
 
@@ -397,8 +400,8 @@ def smooth_consumption_series(series):
     for index, point in enumerate(series):
         if index > 0:
             smoothed = (
-                CONSUMPTION_EMA_ALPHA * point['consumption']
-                + (1 - CONSUMPTION_EMA_ALPHA) * smoothed
+                alpha * point['consumption']
+                + (1 - alpha) * smoothed
             )
 
         result.append({
@@ -409,20 +412,56 @@ def smooth_consumption_series(series):
     return result
 
 
-def fit_consumption_regression(stock_series):
-    stock_series = sorted(stock_series, key=lambda point: point['timestamp'])
-    raw_consumption_series = build_consumption_series(stock_series)
-    consumption_series = smooth_consumption_series(raw_consumption_series)
-
+def build_lag_pairs(consumption_series):
     x = []
     y = []
     for i in range(1, len(consumption_series)):
         x.append(consumption_series[i - 1]['consumption'])
         y.append(consumption_series[i]['consumption'])
+    return x, y
+
+
+def tune_ema_alpha(stock_series):
+    """Auto-tune alpha EMA per item via validasi kronologis one-step-ahead MAE."""
+    raw = build_consumption_series(stock_series)
+    if len(raw) < TUNE_MIN_POINTS:
+        return CONSUMPTION_EMA_ALPHA
+
+    best_alpha = CONSUMPTION_EMA_ALPHA
+    best_mae = float('inf')
+
+    for alpha in EMA_ALPHA_GRID:
+        x, y = build_lag_pairs(smooth_consumption_series(raw, alpha))
+        train_end = max(4, int(len(x) * 0.8))
+        val_count = len(x) - train_end
+        if val_count < 2:
+            continue
+
+        intercept, slope = linear_regression(x[:train_end], y[:train_end])
+        sum_abs = 0.0
+        for i in range(train_end, len(x)):
+            predicted = max(0.0, intercept + slope * x[i])
+            sum_abs += abs(y[i] - predicted)
+        mae = sum_abs / val_count
+        if mae < best_mae:
+            best_mae = mae
+            best_alpha = alpha
+
+    return best_alpha
+
+
+def fit_consumption_regression(stock_series, ema_alpha=CONSUMPTION_EMA_ALPHA):
+    stock_series = sorted(stock_series, key=lambda point: point['timestamp'])
+    raw_consumption_series = build_consumption_series(stock_series)
+    consumption_series = smooth_consumption_series(raw_consumption_series, ema_alpha)
+
+    x, y = build_lag_pairs(consumption_series)
 
     fallback_consumption = raw_consumption_series[-1]['consumption'] if raw_consumption_series else 0.0
     if y:
         intercept, consumption_slope = linear_regression(x, y)
+        # Stabilisasi AR(1): slope >= 1 membuat forecast iteratif divergen.
+        consumption_slope = min(consumption_slope, CONSUMPTION_SLOPE_MAX)
     else:
         intercept, consumption_slope = fallback_consumption, 0.0
 
@@ -437,6 +476,7 @@ def fit_consumption_regression(stock_series):
         'avgDailyConsumption': avg_daily,
         'n': max(1, len(consumption_series)),
         'lastConsumption': consumption_series[-1]['consumption'] if consumption_series else fallback_consumption,
+        'emaAlpha': ema_alpha,
     }
 
 
@@ -467,8 +507,8 @@ def calculate_metrics(actual, predicted):
     return {'mae': mae, 'rmse': rmse, 'mape': mape, 'r2': r2}
 
 
-def evaluate_consumption(model, stock_series):
-    consumption_series = smooth_consumption_series(build_consumption_series(stock_series))
+def evaluate_consumption(model, stock_series, alpha=CONSUMPTION_EMA_ALPHA):
+    consumption_series = smooth_consumption_series(build_consumption_series(stock_series), alpha)
     if not consumption_series:
         return {'mae': 0.0, 'rmse': 0.0, 'mape': 0.0, 'r2': 0.0}
 
@@ -533,8 +573,9 @@ def predict_stock(stock_series, horizon_days=14, train_ratio=0.85):
     train = stock_series[:split_idx]
     test = stock_series[split_idx:]
 
-    model = fit_consumption_regression(train)
-    metrics = evaluate_consumption(model, stock_series)
+    ema_alpha = tune_ema_alpha(stock_series)
+    model = fit_consumption_regression(train, ema_alpha)
+    metrics = evaluate_consumption(model, stock_series, ema_alpha)
 
     last_qty = stock_series[-1]['quantity']
     last_ts = stock_series[-1]['timestamp']
@@ -549,8 +590,8 @@ def predict_stock(stock_series, horizon_days=14, train_ratio=0.85):
         previous_consumption = predicted_consumption
         forecast.append({
             'timestamp': int(ts),
-            'predictedQuantity': round(current_qty, 1),
-            'estimatedConsumption': round(predicted_consumption, 1),
+            'predictedQuantity': int(round(current_qty)),
+            'estimatedConsumption': int(round(predicted_consumption)),
         })
 
     raw_consumption = build_consumption_series(stock_series)
@@ -566,6 +607,7 @@ def predict_stock(stock_series, horizon_days=14, train_ratio=0.85):
             'avgDailyConsumption': model['avgDailyConsumption'],
             'n': model['n'],
             'lastConsumption': model['lastConsumption'],
+            'emaAlpha': model['emaAlpha'],
             'baseTimestamp': stock_series[0]['timestamp'],
             'totalConsumption': sum(p['consumption'] for p in raw_consumption),
             'dowConsumption': [],
